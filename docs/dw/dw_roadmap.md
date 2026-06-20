@@ -67,7 +67,7 @@ timeouts, risk classifier, approval gates, audit, session allow rules.
   Real UAC prompt validated by user → MANUAL-4.
 **Complexity:** High.
 
-## Phase 4 — Perception Layer  ☐ not started
+## Phase 4 — Perception Layer  ◑ OCR done; UIA + loop-wiring open
 **Goal:** Help the AI understand the screen beyond raw pixels.
 **Scope:** OCR, **Windows UI Automation** (preferred), element detection with
 bounds + confidence + source attribution (uia/ocr/vision/heuristic).
@@ -78,9 +78,10 @@ bounds + confidence + source attribution (uia/ocr/vision/heuristic).
 **Target validation level:** 3–4.
 **Risks:** OCR accuracy; UIA coverage varies by app.
 **Done criteria:**
-- [ ] Identify visible text and common controls.
-- [ ] AI receives structured observation data + screenshot refs.
-- [ ] UIA preferred when available.
+- [~] Identify visible text and common controls — OCR text done; controls via UIA pending.
+- [~] AI receives structured observation data + screenshot refs — schema carries
+  `elements`; loop-wiring pending (DW-PERCEPTION-WIRE).
+- [ ] UIA preferred when available (DW-PERCEPTION-UIA).
 **Complexity:** High.
 
 ## Phase 5 — Browser & Desktop Workflows  ☐ not started

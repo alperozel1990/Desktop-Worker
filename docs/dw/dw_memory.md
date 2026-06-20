@@ -41,7 +41,10 @@ Source of truth: `docs/requirements.md`.
 - Phase 3 (Elevated CLI Broker): **complete** — DW-CLI-ELEVATE done (real
   per-command UAC elevation via `broker/elevation.py`, honesty invariant,
   auditor-approved). Real UAC prompt = user test MANUAL-4.
-- Phases 4–7: not started. Next = Phase 4 Perception (OCR then UIA).
+- Phase 4 (Perception): **OCR done** (DW-PERCEPTION-OCR — `perception/` package,
+  `Element` schema, `Perceiver`). Open: DW-PERCEPTION-UIA (the §7 *preferred*
+  path) + DW-PERCEPTION-WIRE (wire Perceiver into the loop). Real OCR = MANUAL-5.
+- Phases 5–7: not started.
 
 ## Operating model (since 2026-06-20)
 - Autonomous per-card execution. Each card gated by **Codex Auditor** (code) +

@@ -143,3 +143,36 @@ cannot kill an elevated child on timeout (documented; reported as timedOut).
 surface removed.
 
 **Next Action:** Phase 4 Perception — DW-PERCEPTION-OCR (then DW-PERCEPTION-UIA).
+
+---
+
+## 2026-06-20 | Execute | Task: DW-PERCEPTION-OCR
+
+**Task ID:** DW-PERCEPTION-OCR
+**Type:** Execute (Phase 4 start)
+**Status:** Complete
+
+**Files Created:** `src/desktop_worker/perception/{__init__,backends,perceiver}.py`,
+`tests/test_perception_ocr.py`.
+**Files Modified:** `src/desktop_worker/schema/observations.py` (Element + elements),
+`src/desktop_worker/schema/__init__.py`; continuity files + new backlog cards
+(DW-PERCEPTION-WIRE; UIA card gains "make source required").
+
+**Tests / Validations Run:** `python -m pytest` → **95 passed** (+8).
+
+**Validation Level Reached:** **3** — unit + local runtime. Real Tesseract OCR not
+machine-testable (engine + extra absent) → MANUAL-5.
+
+**Result:** Added the Perception layer's OCR path: structured `Element`
+(bounds/confidence/source) on the immutable `Observation`; an `OcrBackend` Protocol
+with a pure, fully-tested `data_to_elements` parser, a lazy `TesseractOcrBackend`,
+and a `Perceiver` that enriches a frozen observation (via `dataclasses.replace`) and
+refuses to OCR the Null backend's placeholder. Degrades honestly to zero elements
+without Tesseract. **Auditors:** Codex APPROVE, Northstar ALIGNED. Applied nits:
+contiguous emitted-element IDs + ragged/bad-input robustness tests.
+
+**Risks Introduced:** Elements not yet wired into the live loop (tracked
+DW-PERCEPTION-WIRE) — AI still sees raw coords until then. Real OCR unverified (MANUAL-5).
+**Risks Resolved:** None outstanding from prior cards.
+
+**Next Action:** DW-PERCEPTION-UIA (the §7 preferred path) + DW-PERCEPTION-WIRE.

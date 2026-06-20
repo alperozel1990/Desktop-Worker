@@ -32,6 +32,25 @@ misbehavior — dropped keys, wrong position) so DW-INPUT-HARDEN can target it.
 
 ---
 
+## MANUAL-5 — Install Tesseract + validate real OCR (DW-PERCEPTION-OCR)
+**Status:** [ ] Waiting
+**Blocking:** NO (OCR parsing logic is unit-tested; without Tesseract the system
+degrades to zero elements and keeps running)
+**Tool:** Terminal + the Tesseract OCR engine
+**Added by:** DW-PERCEPTION-OCR
+**Instructions:**
+1. Install the Tesseract engine (e.g. `winget install UB-Mannheim.TesseractOCR`)
+   and the Python extra: `python -m pip install -e ".[ocr,windows]"`.
+2. Take a real screenshot then run OCR over it, e.g.:
+   ```
+   python -c "from desktop_worker.perception import get_ocr_backend; from desktop_worker.observation.backends import get_desktop_backend; from pathlib import Path; b=get_desktop_backend(); p=Path('artifacts/ocr_test.png'); b.capture_screenshot(p); els=get_ocr_backend().detect(p); print('elements:',len(els)); [print(e.text, e.bounds, e.confidence) for e in els[:10]]"
+   ```
+3. Confirm `get_ocr_backend()` is now the Tesseract backend and that some visible
+   on-screen text is detected with plausible bounds + confidence.
+**What Claude needs back:** The element count + a few sample lines (or any error).
+
+---
+
 ## MANUAL-4 — Validate real UAC elevation (DW-CLI-ELEVATE)
 **Status:** [ ] Waiting
 **Blocking:** NO (broker logic is fully unit-tested via an injected fake elevator;

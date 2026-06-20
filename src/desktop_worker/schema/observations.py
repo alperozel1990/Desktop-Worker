@@ -32,6 +32,35 @@ class Cursor:
 
 
 @dataclass(frozen=True)
+class Element:
+    """A detected on-screen UI element (requirements section 7).
+
+    ``source`` attributes where the element came from: "uia" (Windows UI
+    Automation, preferred), "ocr", "vision", or "heuristic". ``bounds`` is
+    (left, top, right, bottom) in screen pixels.
+    """
+
+    id: str
+    type: str  # button, input, text, checkbox, link, ...
+    bounds: tuple[int, int, int, int]
+    source: str = "ocr"
+    text: Optional[str] = None
+    label: Optional[str] = None
+    confidence: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "bounds": list(self.bounds),
+            "source": self.source,
+            "text": self.text,
+            "label": self.label,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True)
 class ActiveWindow:
     title: str
     process: str
@@ -52,6 +81,9 @@ class Observation:
     timestamp: str = field(default_factory=utc_now_iso)
     # Visible windows (title list) — single-monitor MVP keeps this simple.
     windows: tuple[str, ...] = ()
+    # Detected UI elements (Perception layer, requirements §7). Empty until a
+    # perception backend (OCR/UIA) enriches the observation.
+    elements: tuple[Element, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -61,6 +93,7 @@ class Observation:
             "activeWindow": self.activeWindow.to_dict() if self.activeWindow else None,
             "screenshotRef": self.screenshotRef,
             "windows": list(self.windows),
+            "elements": [e.to_dict() for e in self.elements],
         }
 
     def summary(self) -> str:

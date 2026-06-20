@@ -109,7 +109,7 @@ stop safely; time/action/retry limits enforced and logged.
 
 ---
 
-## DW-PERCEPTION-OCR — OCR perception (Phase 4 start)  ☐
+## DW-PERCEPTION-OCR — OCR perception (Phase 4 start)  ✅ done (2026-06-20)
 **Purpose:** Give the AI visible-text understanding (requirements §7).
 **Scope:** New `perception/` package: OCR backend (pytesseract) producing
 structured elements (text, bounds, confidence, source="ocr"); Null OCR backend
@@ -133,9 +133,13 @@ elements with bounds/confidence; absent Tesseract, degrades to empty list.
 **Rollback plan:** `git checkout -- src/desktop_worker/perception src/desktop_worker/schema/observations.py`.
 **Diff budget:** 2 production files changed, 3 new files.
 **Done criteria:**
-- [ ] Structured OCR elements in observation schema.
-- [ ] Graceful degradation without Tesseract.
-- [ ] Source attribution = "ocr"; confidence present.
+- [x] Structured OCR elements in observation schema (`Element` + `elements` field).
+- [x] Graceful degradation without Tesseract (lazy import; NullOcrBackend fallback).
+- [x] Source attribution = "ocr"; confidence present (normalized 0..1).
+**Result:** `perception/` package (OcrBackend Protocol, pure `data_to_elements`,
+lazy TesseractOcrBackend, Perceiver enriches frozen Observation). Codex APPROVE,
+Northstar ALIGNED. 95 tests. Real Tesseract OCR = MANUAL-5. Follow-up: wire
+Perceiver into the loop (DW-PERCEPTION-WIRE) so elements reach the AI/audit.
 
 ---
 
@@ -160,6 +164,32 @@ results take precedence over OCR for the same region.
 **Done criteria:**
 - [ ] UIA element detection with bounds + confidence + source.
 - [ ] UIA-preferred merge with OCR.
+- [ ] Make `Element.source` a REQUIRED field (no default) so every backend
+  attributes honestly (Northstar guidance from DW-PERCEPTION-OCR review).
+
+---
+
+## DW-PERCEPTION-WIRE — Wire the Perceiver into the task loop  ☐
+**Purpose:** Make detected elements actually reach the AI prompt + audit (today
+`Observation.elements` is always empty in the live loop). Closes the §2/§7 gap
+flagged by both auditors on DW-PERCEPTION-OCR.
+**Scope:** Optionally enrich before/after observations in `TaskLoop` via a
+`Perceiver` (off by default until a real backend is available), so `elements`
+flow into `step.planned`/`step.completed` audit records.
+**Dependencies:** DW-PERCEPTION-OCR (done); ideally DW-PERCEPTION-UIA first.
+**Inspect before coding:** `loop/task_loop.py`, `observation/observer.py`,
+`perception/perceiver.py`.
+**Files allowed to edit:** `loop/task_loop.py` (or `observation/observer.py`), tests.
+**Files forbidden to edit:** `actions/`, `broker/`, `safety/`.
+**Expected behavior:** When a perceiver is provided, observations carry elements;
+when not, behavior is unchanged (no regression, no forced OCR dependency).
+**Tests / validation:** `python -m pytest` with a fake perceiver asserting
+elements appear in the audited observation.
+**Rollback plan:** `git checkout -- src/desktop_worker/loop/task_loop.py`.
+**Diff budget:** 1–2 production files changed.
+**Done criteria:**
+- [ ] Perceiver optionally wired; elements reach audit/prompt.
+- [ ] Default path unchanged (no new hard dependency).
 
 ---
 

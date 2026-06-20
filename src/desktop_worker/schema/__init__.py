@@ -9,6 +9,7 @@ from desktop_worker.schema.actions import (
 from desktop_worker.schema.observations import (
     ActiveWindow,
     Cursor,
+    Element,
     Observation,
     Screen,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "parse_action",
     "ActiveWindow",
     "Cursor",
+    "Element",
     "Observation",
     "Screen",
     "ActionResult",
