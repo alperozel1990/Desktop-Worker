@@ -138,6 +138,33 @@ line and whether the UAC prompt behaved as described.
 
 ---
 
+## H. MANUAL-7 — Real AI planner (Claude drives the loop, no API key)
+
+This uses your **existing `claude` login** (no API key, no extra billing setup) to
+let Claude decide each step. It actually controls the desktop, so watch the screen.
+
+1. Sanity-check your login (should already be fine):
+```powershell
+claude auth status
+```
+**Expected:** JSON with `"loggedIn": true`.
+
+2. Run a short AI-driven task (auto-approves steps for this demo — keep Notepad
+   focused if you want to see it type):
+```powershell
+python -c "from desktop_worker.app import Session; from desktop_worker.config import Config, Limits; from desktop_worker.safety.policy import PermissionPolicy, auto_approve; from desktop_worker.loop.claude_cli_planner import ClaudeCliPlanner; from desktop_worker.loop.task_loop import TaskLoop; s=Session(Config(session_id='ai',task_id='t'), policy=PermissionPolicy(approval_callback=auto_approve)); p=ClaudeCliPlanner(task='Type the word hello into the focused window then stop', broker=s.broker, cwd=r'C:\Desktop-Worker', audit=s.audit); loop=TaskLoop(task_id='t', planner=p, observer=s.observer, executor=s.executor, audit=s.audit, estop=s.estop, limits=Limits(max_actions_per_task=5)); print(loop.run().to_markdown())"
+```
+**Expected:** Claude plans a step (e.g. type "hello"), the loop executes it, verifies,
+and prints a **Task Report**. Every planned step + every Claude call is in the audit
+log under `artifacts/sessions/ai/t/`. **Panic button anytime:** open another terminal
+and run `python -m desktop_worker estop`.
+**Tell Claude:** the final report, and whether the steps made sense.
+
+> ⚠️ This demo AUTO-APPROVES actions. For real/risky tasks you'd swap in a prompt so
+> you confirm each risky step — that's a Phase 7 (UI) item.
+
+---
+
 ## What to send back to Claude
 
 For each manual test (D, E, F, G) just paste the printed result line(s) or any error.

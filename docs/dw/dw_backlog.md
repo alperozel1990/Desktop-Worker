@@ -205,27 +205,34 @@ elements appear in the audited observation.
 
 ---
 
-## DW-PLANNER-AI — Pluggable AI planner (Claude)  ☐
-**Purpose:** Drive the loop with an AI planner per requirements §1.
-**Scope:** Implement a `Planner` that turns observation + task text into the next
-structured `PlannedStep` via an LLM; strict schema validation of model output;
-provider-agnostic interface. Keep `ScriptedPlanner` for tests.
-**Non-goals:** Autonomy without approval gates (safety stays in place).
-**Dependencies:** Phase 2 loop, Phase 4 perception (better context).
+## DW-PLANNER-AI — Claude Code CLI planner, no API key  ✅ done (2026-06-20)
+**Purpose:** Drive the loop with an AI planner per requirements §1 — using the
+user's logged-in `claude` CLI (subscription), NOT the Anthropic/OpenAI SDK or any
+API-key provider (user constraint: no API billing). See [[desktop-worker-no-api-billing]].
+**Scope:** A `Planner` that asks the installed `claude` CLI for the next structured
+action JSON, routed through the Desktop-Worker **CLI broker** (no raw subprocess);
+strict schema validation; malformed output fails safe. Implemented as
+`loop/claude_cli_planner.py` (note: card originally said `ai_planner.py`).
+**Non-goals:** Autonomy without approval gates (safety stays in place); SDK/API providers.
+**Dependencies:** Phase 2 loop, Phase 4 perception.
 
-**Inspect before coding:** `src/desktop_worker/loop/task_loop.py` (Planner Protocol),
-`src/desktop_worker/schema/actions.py`.
-**Files allowed to edit:** new `src/desktop_worker/loop/ai_planner.py`, tests.
-**Files forbidden to edit:** `executor.py`, `safety/`, `broker/`.
-**Expected behavior:** Given a task + observation, returns a validated step or
-None; malformed model output is rejected, never executed.
-**Tests / validation:** `python -m pytest` with a stubbed model client.
-**Manual validation:** End-to-end task with a real model + human approval.
-**Rollback plan:** delete `ai_planner.py`.
-**Diff budget:** 1 new file.
+**Files edited:** `src/desktop_worker/loop/claude_cli_planner.py` (new), tests.
+**Files forbidden (untouched):** `executor.py`, `safety/`, `broker/`.
+**Expected behavior:** Given a task + observation, returns a validated `PlannedStep`
+or None; uses `claude -p --output-format json --max-turns 1 --tools ""` via stdin
+through the broker; `claude auth status` checks availability.
+**Tests / validation:** `python -m pytest` with a STUBBED CLI (injected `ask` + a
+fake broker; no real Claude calls). Plus a real end-to-end smoke confirmed:
+`claude_available=True` and a live call returned `keyboard.type(text='hello')`.
+**Manual validation:** MANUAL-7 — drive a real task end-to-end with the live CLI.
+**Rollback plan:** delete `loop/claude_cli_planner.py`.
+**Diff budget:** 1 new production file (+ tests).
 **Done criteria:**
-- [ ] Model output validated through `parse_action`.
-- [ ] Safety/approval unchanged and enforced.
+- [x] Model output validated through `parse_action` (STRICT) before any step.
+- [x] Safety/approval/estop/audit unchanged — planner only proposes; executor gates.
+- [x] No API key/SDK; uses subscription CLI via the broker; tools disabled, 1 turn.
+- [x] Malformed/unknown/error output fails safe (no step, no crash).
+**Result:** Codex APPROVE, Northstar ALIGNED. 125 tests. Real path verified.
 
 ---
 

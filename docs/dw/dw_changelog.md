@@ -268,3 +268,42 @@ unverified until MANUAL-1.
 **Risks Resolved:** Stuck-modifier-on-unknown-key avoided and now tested.
 
 **Next Action:** DW-PLANNER-AI — BLOCKED on a user decision (model/provider + API key).
+
+---
+
+## 2026-06-20 | Execute | Task: DW-PLANNER-AI
+
+**Task ID:** DW-PLANNER-AI
+**Type:** Execute (capstone — AI planner)
+**Status:** Complete
+
+**User decision:** No API billing. Use the logged-in `claude` CLI (subscription),
+not the Anthropic/OpenAI SDK. Routed through the broker.
+
+**Files Created:** `src/desktop_worker/loop/claude_cli_planner.py`,
+`tests/test_claude_cli_planner.py`. (Memory: `desktop-worker-no-api-billing`.)
+**Files Modified:** continuity files (state/memory/backlog/roadmap/tracker/manual_steps/capabilities).
+
+**Tests / Validations Run:** `python -m pytest` → **125 passed** (+17, stubbed CLI).
+Real end-to-end smoke: `claude auth status` → loggedIn; planner returned a valid
+`keyboard.type(text='hello')` for a sample task; both `claude` calls audited via broker.
+
+**Validation Level Reached:** **3** (unit) + **4** for the planner→broker→claude path
+(real model, real CLI, real broker). Full multi-step task on the desktop = MANUAL-7.
+
+**Result:** `ClaudeCliPlanner` asks the installed `claude` CLI for the next
+structured-action JSON (`claude -p --output-format json --max-turns 1 --tools ""`,
+prompt via stdin) through the CLI broker — no raw subprocess, no API key/SDK, no
+billing. Output is strictly validated by `parse_action`; malformed/unknown/error
+output yields no step (safe-stop) and never executes. The planner only PROPOSES;
+the executor still validates, approval-gates, estop-checks, and audits. Both auditors
+APPROVE/ALIGNED. Applied review nits: prefer the answer JSON object over stray prose;
+added `elevated=False`/stdin/`claude_available` tests; fixed `cli_dir=None` fallback.
+
+**Risks Introduced:** Planner's own `claude` call classifies LOW so it runs each step
+without approval (intended; still audited + estop-able). Real CLI flag/output contract
+pinned by smoke test, not unit tests.
+**Risks Resolved:** AI-control-ready core complete without API billing.
+
+**Next Action:** New cards for Phase 5 (browser/desktop workflows), Phase 6
+(multi-agent), Phase 7 (UI). All 7 original backlog cards are done.

@@ -32,6 +32,28 @@ misbehavior — dropped keys, wrong position) so DW-INPUT-HARDEN can target it.
 
 ---
 
+## MANUAL-7 — Drive a real task with the Claude CLI planner (DW-PLANNER-AI)
+**Status:** [ ] Waiting  (the planner→broker→claude path is already verified for a
+single step; this is the full multi-step loop on your real desktop)
+**Blocking:** NO
+**Tool:** Terminal + the logged-in `claude` CLI (already set up) + a visible app
+**Added by:** DW-PLANNER-AI
+**Instructions:**
+1. (Optional but recommended for a first run) keep an app like Notepad focused.
+2. Run a short AI-driven loop (it will ask Claude for each step and execute it):
+   ```
+   python -c "from desktop_worker.app import Session; from desktop_worker.config import Config; from desktop_worker.safety.policy import PermissionPolicy, auto_approve; from desktop_worker.loop.claude_cli_planner import ClaudeCliPlanner; from desktop_worker.loop.task_loop import TaskLoop; from desktop_worker.config import Limits; s=Session(Config(session_id='ai',task_id='t'), policy=PermissionPolicy(approval_callback=auto_approve)); p=ClaudeCliPlanner(task='Type the word hello into the focused window then stop', broker=s.broker, cwd=r'C:\Desktop-Worker', audit=s.audit); loop=TaskLoop(task_id='t', planner=p, observer=s.observer, executor=s.executor, audit=s.audit, estop=s.estop, limits=Limits(max_actions_per_task=5)); r=loop.run(); print(r.to_markdown())"
+   ```
+   NOTE: this AUTO-APPROVES actions for the demo. For real use, swap `auto_approve`
+   for a real prompt so you confirm risky steps.
+3. Watch: Claude plans each step (e.g. type "hello"), the loop executes + verifies,
+   and prints a final report. The audit log under `artifacts/sessions/ai/t/` records
+   every planned step + every `claude` call (via the broker).
+**What Claude needs back:** The final report + whether the actions made sense, or
+any error. Press the emergency stop any time: `python -m desktop_worker estop`.
+
+---
+
 ## MANUAL-6 — Install uiautomation + validate real UIA enumeration (DW-PERCEPTION-UIA)
 **Status:** [ ] Waiting
 **Blocking:** NO (mapping + merge logic unit-tested; without the lib it degrades to

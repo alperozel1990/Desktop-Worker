@@ -47,9 +47,13 @@ Source of truth: `docs/requirements.md`.
   Real OCR = MANUAL-5, real UIA = MANUAL-6.
 - Input hardened (DW-INPUT-HARDEN): pure `plan_hotkey`/`resolve_vk`/`should_paste`;
   long text pastes via Ctrl+V. Real motion = MANUAL-1.
-- Phases 5–7: not started. **DW-PLANNER-AI** (capstone) is BLOCKED on a user
-  decision: model/provider + API key (default rec: Claude via Anthropic SDK).
-  Don't implement until chosen. Planner/replan interfaces are ready.
+- **DW-PLANNER-AI DONE** — `loop/claude_cli_planner.py` drives the loop via the
+  logged-in `claude` CLI (subscription, NO API key) through the broker; strict
+  `parse_action` validation; fails safe; real path verified. See
+  [[desktop-worker-no-api-billing]]. Full task = MANUAL-7.
+- **All 7 backlog cards done. AI-control-ready core (§22) achieved.** Remaining:
+  Phase 5 (browser/desktop workflows), Phase 6 (multi-agent), Phase 7 (UI) — new
+  cards needed. Test guide for the user: `dw_test_guide.md`.
 
 ## Operating model (since 2026-06-20)
 - Autonomous per-card execution. Each card gated by **Codex Auditor** (code) +

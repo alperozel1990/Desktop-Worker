@@ -7,6 +7,9 @@
 - Run CLI commands through the broker (low-risk auto; high-risk gated).
 - Generate/maintain the ease-me workspace, roadmap, backlog, tracker.
 
+- **Drive the loop with a real AI planner** via the logged-in `claude` CLI
+  (subscription, no API key), routed through the broker — verified working.
+
 ## Things requiring user / manual action
 - Validating **real mouse/keyboard motion & drag** on a live desktop — Tool: Windows desktop session (MANUAL-1).
 - Installing the **`[windows]`** extra for real screenshots (`mss`) — Tool: terminal (MANUAL-2).
@@ -34,4 +37,5 @@
 - Blender: NO
 - Mobile device: NO
 - Firebase / Play Console: NO
-- External API credentials: NO (until DW-PLANNER-AI needs a model API key)
+- External API credentials: NO — the AI planner uses the logged-in `claude` CLI
+  subscription (no API key), per user constraint [[desktop-worker-no-api-billing]].
