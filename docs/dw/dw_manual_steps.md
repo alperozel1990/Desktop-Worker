@@ -32,6 +32,27 @@ misbehavior — dropped keys, wrong position) so DW-INPUT-HARDEN can target it.
 
 ---
 
+## MANUAL-4 — Validate real UAC elevation (DW-CLI-ELEVATE)
+**Status:** [ ] Waiting
+**Blocking:** NO (broker logic is fully unit-tested via an injected fake elevator;
+this validates the real ShellExecuteEx "runas" path which cannot run in CI)
+**Tool:** A genuine **non-admin** PowerShell/cmd (so UAC actually prompts)
+**Added by:** DW-CLI-ELEVATE
+**Instructions:**
+1. From `C:\Desktop-Worker` in a NON-admin shell, run a quick Python snippet that
+   drives the broker with a low-risk elevated command, e.g.:
+   ```
+   python -c "from desktop_worker.app import Session; from desktop_worker.config import Config; from desktop_worker.safety.policy import PermissionPolicy, auto_approve; s=Session(Config(session_id='uac',task_id='t'), policy=PermissionPolicy(approval_callback=auto_approve)); r=s.broker.run('whoami /groups', r'C:\\Desktop-Worker', elevated=True); print('elevated=',r.elevated,'exit=',r.exitCode); print(r.stdoutTail[:400])"
+   ```
+2. Confirm: (a) a UAC consent prompt appears; (b) after consenting, `elevated=True`
+   and the output is captured; (c) if you CANCEL the UAC prompt, it falls back to a
+   non-elevated run with `elevated=False` and a "elevation failed" note (not dropped);
+   (d) no leftover `dw_elev_*`/`dw_exit_*` files remain in `artifacts/.../cli/`.
+**What Claude needs back:** The printed `elevated=`/`exit=` line and whether the UAC
+prompt behaved as described (or any error / leftover files).
+
+---
+
 ## MANUAL-3 — Make the initial git commit  ✅ DONE
 **Status:** [x] Done
 **Blocking:** NO

@@ -48,7 +48,7 @@ observation capture, verification interface, retry limits, final report.
   bounded retries with re-observe, optional planner re-plan, time/action limits.
 **Complexity:** Medium.
 
-## Phase 3 — Elevated CLI Broker  ◑ foundation implemented; one card open
+## Phase 3 — Elevated CLI Broker  ✅ complete (real per-command UAC elevation)
 **Goal:** Safe elevated command execution.
 **Scope:** broker with preview, cwd handling, stdout/stderr/exit capture,
 timeouts, risk classifier, approval gates, audit, session allow rules.
@@ -62,8 +62,9 @@ timeouts, risk classifier, approval gates, audit, session allow rules.
 - [x] CLI runs only through the broker (no other shell path in repo).
 - [x] CLI results fully captured (stdout/stderr/exit/timeout artifacts).
 - [x] High-risk commands require approval (deny-by-default).
-- [~] Elevated execution logged — token state logged; **true per-command
-  re-elevation pending** (DW-CLI-ELEVATE).
+- [x] Elevated execution logged — true per-command UAC re-elevation with captured
+  output (DW-CLI-ELEVATE done); `elevated` flag never overstates privilege.
+  Real UAC prompt validated by user → MANUAL-4.
 **Complexity:** High.
 
 ## Phase 4 — Perception Layer  ☐ not started

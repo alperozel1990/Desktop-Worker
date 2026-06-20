@@ -38,9 +38,10 @@ Source of truth: `docs/requirements.md`.
 - Phase 1 (Local Control Foundation): **implemented + tested**.
 - Phase 2 (Structured Action Loop): **complete** — loop + DW-LOOP-RECOVERY
   (bounded retry/re-plan/safe-stop + time limit), auditor-approved.
-- Phase 3 (Elevated CLI Broker): **foundation implemented + tested**; true
-  per-command UAC re-elevation with captured output is the open card DW-CLI-ELEVATE.
-- Phases 4–7: not started.
+- Phase 3 (Elevated CLI Broker): **complete** — DW-CLI-ELEVATE done (real
+  per-command UAC elevation via `broker/elevation.py`, honesty invariant,
+  auditor-approved). Real UAC prompt = user test MANUAL-4.
+- Phases 4–7: not started. Next = Phase 4 Perception (OCR then UIA).
 
 ## Operating model (since 2026-06-20)
 - Autonomous per-card execution. Each card gated by **Codex Auditor** (code) +

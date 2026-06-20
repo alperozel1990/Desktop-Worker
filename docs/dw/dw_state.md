@@ -36,8 +36,8 @@ Gate and only implement when the selected card is explicitly approved.
 | Permission/risk policy + limits | complete |
 | Audit log (JSONL + redaction) | complete |
 | CLI risk classifier | complete |
-| Elevated CLI broker (capture/preview/approval/audit) | complete (foundation) |
-| Per-command UAC re-elevation w/ captured output | not started (DW-CLI-ELEVATE) |
+| Elevated CLI broker (capture/preview/approval/audit) | complete |
+| Per-command UAC re-elevation w/ captured output | complete (DW-CLI-ELEVATE); real UAC = MANUAL-4 |
 | Desktop observation backend (Windows + Null) | complete (single-monitor) |
 | Input backend (Windows SendInput + Null) | complete (needs hardening) |
 | Action executor | complete |
@@ -50,22 +50,22 @@ Gate and only implement when the selected card is explicitly approved.
 | AI planner integration (Claude) | not started (interface ready) |
 
 ## Last completed task
-- **Task:** DW-LOOP-RECOVERY — retry / re-plan / safe-stop + time limit in the loop.
+- **Task:** DW-CLI-ELEVATE — true per-command UAC elevation with captured output.
 - **Date:** 2026-06-20.
-- **Summary:** Added bounded retry (re-observe), optional planner re-plan, and
-  wall-clock limit (outer + in-recovery) with full audit events. Codex Auditor
-  APPROVE, Northstar ALIGNED. Phase 2 now complete. 80 tests pass (+9).
-- **Files:** `loop/task_loop.py`, `tests/test_loop_recovery.py`.
+- **Summary:** New `broker/elevation.py` (injectable `Elevator`, real
+  `WindowsElevator` via ShellExecuteEx runas + wrapper .bat capturing
+  stdout/stderr/exit). `elevated` flag now reflects ACTUAL elevation. Codex
+  APPROVE (after security fixes), Northstar ALIGNED. Phase 3 complete. 87 tests (+7).
+- **Files:** `broker/elevation.py` (new), `broker/cli_broker.py`, `tests/test_cli_broker.py`.
 
 ## Current task
 None in progress.
 
 ## Next recommended task
-**DW-CLI-ELEVATE** (Phase 3 completion) — real per-command UAC elevation with
-captured stdout/stderr. NOTE: implementable + mock-testable autonomously to
-Level 3, but **true UAC validation needs the user** (a real UAC prompt) — will be
-flagged as a manual test, not blocking implementation. Alternatives:
-DW-INPUT-HARDEN, DW-PERCEPTION-OCR. See `dw_backlog.md`.
+**Phase 4 — Perception** (both auditors flagged it as highest north-star value):
+**DW-PERCEPTION-OCR** then **DW-PERCEPTION-UIA**. Also available: **DW-INPUT-HARDEN**.
+All implementable to Level 3 autonomously; real OCR (Tesseract) and live input/UIA
+need user/hardware tests (will be flagged, non-blocking). See `dw_backlog.md`.
 
 ## Open risks
 | Risk | Severity | Mitigation |
@@ -83,15 +83,15 @@ DW-INPUT-HARDEN, DW-PERCEPTION-OCR. See `dw_backlog.md`.
 | 2 | UI: web dashboard vs native (Phase 7)? | No | Decide at Phase 7; CLI suffices until then. |
 | 3 | Make the initial git commit now? | No | DONE — committed `023b107` and pushed to GitHub (user requested). Commit/push now allowed for this project. |
 
-## Manual steps waiting
+## Manual steps waiting (user tests — none block further implementation)
 See `dw_manual_steps.md`: MANUAL-1 (validate real input on a desktop),
-MANUAL-2 (install `[windows]` extra for real screenshots), MANUAL-3 (optional
-initial git commit).
+MANUAL-2 (install `[windows]` extra for real screenshots), MANUAL-3 (DONE — git),
+**MANUAL-4 (validate real UAC elevation from a non-admin shell)**.
 
 ## Last validation results
 - **Date:** 2026-06-20.
-- **Type:** `python -m pytest` (80 tests) + demo run.
-- **Result:** 80 passed. Demo loop completed 5/5 steps. Real `observe` returned
+- **Type:** `python -m pytest` (87 tests) + demo run.
+- **Result:** 87 passed. Demo loop completed 5/5 steps. Real `observe` returned
   genuine cursor/window/screen data on the dev machine.
 - **Validation level reached:** **3** (unit + local runtime). Live-desktop input
   motion (Level 4) NOT yet run — see MANUAL-1.

@@ -108,3 +108,38 @@ retry/re-plan; time limit now actually enforced.
 
 **Next Action:** DW-CLI-ELEVATE — implementable autonomously to Level 3; true UAC
 validation will be flagged as a user test (not blocking).
+
+---
+
+## 2026-06-20 | Execute | Task: DW-CLI-ELEVATE
+
+**Task ID:** DW-CLI-ELEVATE
+**Type:** Execute (Phase 3 completion)
+**Status:** Complete
+
+**Files Created:** `src/desktop_worker/broker/elevation.py`.
+**Files Modified:** `src/desktop_worker/broker/cli_broker.py`, `tests/test_cli_broker.py`;
+continuity files (state, memory, roadmap, backlog, manual_steps, tracker).
+
+**Tests / Validations Run:** `python -m pytest` → **87 passed** (+7; 14 broker tests).
+
+**Validation Level Reached:** **3** — unit + local runtime. Real UAC "runas" path
+NOT machine-testable; needs human → MANUAL-4.
+
+**Result:** Added an injectable per-command elevation strategy. `WindowsElevator`
+re-launches a single command elevated via ShellExecuteEx "runas", wrapping it in an
+app-controlled (mkstemp, unpredictable-name) .bat that redirects stdout/stderr to the
+broker artifacts and writes the exit code to a sentinel; output + exit code recovered
+after the elevated child exits. Broker splits `_run_inline` / `_run_elevated`;
+`CliResult.elevated` now reflects ACTUAL elevation (honesty invariant) instead of mere
+process-token state. Approval/risk/audit gating unchanged and still precedes any
+elevation. **Auditors:** Codex APPROVE (after fixes: moved helper files off global
+%TEMP% to the app dir to close a TOCTOU/local-EoP surface, finally-cleanup on timeout,
+mbcs wrapper encoding, use_last_error); Northstar ALIGNED.
+
+**Risks Introduced:** Real elevation path unverified until MANUAL-4. Non-admin parent
+cannot kill an elevated child on timeout (documented; reported as timedOut).
+**Risks Resolved:** "Elevated by default" is now genuine + honest; TOCTOU temp-file
+surface removed.
+
+**Next Action:** Phase 4 Perception — DW-PERCEPTION-OCR (then DW-PERCEPTION-UIA).

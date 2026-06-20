@@ -28,9 +28,10 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from desktop_worker.audit.log import AuditLog
+from desktop_worker.broker.elevation import Elevator, get_elevator
 from desktop_worker.broker.risk import classify_command
 from desktop_worker.safety.emergency_stop import EmergencyStop
 from desktop_worker.safety.policy import ApprovalRequest, PermissionPolicy
@@ -38,6 +39,10 @@ from desktop_worker.schema.results import CliResult
 from desktop_worker.util import utc_now_iso
 
 _TAIL_CHARS = 2000  # how much stdout/stderr to inline in the result
+
+# Sentinel so callers can distinguish "auto-detect an elevator" (omit the arg)
+# from "explicitly no elevation strategy" (pass elevator=None).
+_AUTO_ELEVATOR = object()
 
 
 def is_process_elevated() -> bool:
@@ -65,12 +70,24 @@ class ElevatedCliBroker:
         cli_artifacts_dir: Path,
         estop: Optional[EmergencyStop] = None,
         default_timeout_ms: int = 120_000,
+        elevator: object = _AUTO_ELEVATOR,
+        is_elevated: Optional[Callable[[], bool]] = None,
     ) -> None:
         self.audit = audit
         self.policy = policy
         self.cli_dir = Path(cli_artifacts_dir)
         self.estop = estop
         self.default_timeout_ms = default_timeout_ms
+        # Per-command elevation strategy (DW-CLI-ELEVATE). Omitting the arg
+        # auto-detects the real UAC elevator (None on non-Windows). Passing
+        # elevator=None explicitly disables elevation, so the broker stays honest
+        # and runs inline non-elevated rather than pretending to elevate.
+        self.elevator: Optional[Elevator] = (
+            get_elevator() if elevator is _AUTO_ELEVATOR else elevator  # type: ignore[assignment]
+        )
+        # Injectable admin-detection so the elevated path is deterministically
+        # testable regardless of the test runner's actual token.
+        self._is_elevated = is_elevated or is_process_elevated
         self._counter = 0
         self.history: list[CliResult] = []
         # Session-scoped allow rules: commands the user approved "for this
@@ -145,38 +162,27 @@ class ElevatedCliBroker:
 
         timeout_s = (timeout_ms or self.default_timeout_ms) / 1000.0
         started = utc_now_iso()
-        exit_code: Optional[int] = None
-        timed_out = False
-        stdout_text = ""
-        stderr_text = ""
 
-        try:
-            # shell=True routes through cmd.exe so the AI can use normal command
-            # strings. This is acceptable *because* it is gated by classify +
-            # approval + audit above; it is not an open passthrough.
-            proc = subprocess.run(
-                command,
-                cwd=str(cwd_path),
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout_s,
-                env=env,
+        already_admin = bool(self._is_elevated())
+        # Use the elevator only when elevation is requested AND we are not already
+        # admin AND a strategy exists. If already admin, the inline run inherits
+        # the elevated token. If elevation is requested but impossible, we run
+        # inline non-elevated and report elevated=False (never overstate).
+        use_elevator = bool(elevated) and not already_admin and self.elevator is not None
+
+        if use_elevator:
+            exit_code, timed_out, stdout_text, stderr_text, actually_elevated = (
+                self._run_elevated(command, str(cwd_path), stdout_ref, stderr_ref,
+                                   timeout_s=timeout_s, env=env)
             )
-            exit_code = proc.returncode
-            stdout_text = proc.stdout or ""
-            stderr_text = proc.stderr or ""
-        except subprocess.TimeoutExpired as exc:
-            timed_out = True
-            stdout_text = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
-            stderr_text = (exc.stderr or "") if isinstance(exc.stderr, str) else ""
-            stderr_text += f"\n[broker] command timed out after {timeout_s:.0f}s"
-        except OSError as exc:
-            stderr_text = f"[broker] failed to launch command: {exc}"
+        else:
+            exit_code, timed_out, stdout_text, stderr_text = self._run_inline(
+                command, str(cwd_path), stdout_ref, stderr_ref,
+                timeout_s=timeout_s, env=env,
+            )
+            actually_elevated = bool(elevated) and already_admin
 
         ended = utc_now_iso()
-        stdout_ref.write_text(stdout_text, encoding="utf-8")
-        stderr_ref.write_text(stderr_text, encoding="utf-8")
 
         result = CliResult(
             command=command,
@@ -186,7 +192,7 @@ class ElevatedCliBroker:
             exitCode=exit_code,
             stdoutRef=str(stdout_ref),
             stderrRef=str(stderr_ref),
-            elevated=bool(elevated) and is_process_elevated(),
+            elevated=actually_elevated,
             riskLevel=risk.value,
             approvedByUser=approved,
             timedOut=timed_out,
@@ -201,6 +207,62 @@ class ElevatedCliBroker:
                       "approved": approved},
         )
         return result
+
+    # --- execution paths ----------------------------------------------
+    def _run_inline(
+        self, command: str, cwd: str, stdout_ref: Path, stderr_ref: Path,
+        *, timeout_s: float, env: Optional[dict[str, str]],
+    ) -> tuple[Optional[int], bool, str, str]:
+        """Run in the current security context, capturing output to files.
+
+        shell=True routes through cmd.exe so the AI can use normal command
+        strings. This is acceptable *because* it is gated by classify + approval
+        + audit upstream; it is not an open passthrough.
+        """
+        exit_code: Optional[int] = None
+        timed_out = False
+        stdout_text = ""
+        stderr_text = ""
+        try:
+            proc = subprocess.run(
+                command, cwd=cwd, shell=True, capture_output=True,
+                text=True, timeout=timeout_s, env=env,
+            )
+            exit_code = proc.returncode
+            stdout_text = proc.stdout or ""
+            stderr_text = proc.stderr or ""
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            stdout_text = exc.stdout if isinstance(exc.stdout, str) else ""
+            stderr_text = exc.stderr if isinstance(exc.stderr, str) else ""
+            stderr_text += f"\n[broker] command timed out after {timeout_s:.0f}s"
+        except OSError as exc:
+            stderr_text = f"[broker] failed to launch command: {exc}"
+        stdout_ref.write_text(stdout_text, encoding="utf-8")
+        stderr_ref.write_text(stderr_text, encoding="utf-8")
+        return exit_code, timed_out, stdout_text, stderr_text
+
+    def _run_elevated(
+        self, command: str, cwd: str, stdout_ref: Path, stderr_ref: Path,
+        *, timeout_s: float, env: Optional[dict[str, str]],
+    ) -> tuple[Optional[int], bool, str, str, bool]:
+        """Run elevated via the injected strategy; the strategy writes the files."""
+        run = self.elevator.run_elevated(
+            command, cwd, stdout_ref, stderr_ref, timeout_s=timeout_s, env=env,
+        )
+        if not run.launched:
+            # Elevation failed/declined: fall back to an honest inline run so the
+            # command is not silently dropped, and report elevated=False.
+            note = f"[broker] elevation failed ({run.error}); ran without elevation"
+            ec, to, out, err = self._run_inline(
+                command, cwd, stdout_ref, stderr_ref, timeout_s=timeout_s, env=env,
+            )
+            err = (err + "\n" + note).strip()
+            stderr_ref.write_text(err, encoding="utf-8")
+            return ec, to, out, err, False
+        out = stdout_ref.read_text(encoding="utf-8") if stdout_ref.exists() else ""
+        err = stderr_ref.read_text(encoding="utf-8") if stderr_ref.exists() else ""
+        return run.exit_code, run.timed_out, out, err, True
 
     # --- helpers -------------------------------------------------------
     def _blocked(

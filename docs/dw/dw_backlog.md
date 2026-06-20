@@ -8,7 +8,7 @@ Status legend: ☐ todo · ◑ partial · ✅ done
 
 ---
 
-## DW-CLI-ELEVATE — True per-command UAC elevation with captured output  ☐
+## DW-CLI-ELEVATE — True per-command UAC elevation with captured output  ✅ done (2026-06-20)
 **Purpose:** Make "elevated by default" real even when Desktop-Worker starts from
 a non-admin context, without losing stdout/stderr/exit capture.
 **Scope:** Add an elevation strategy to the broker that re-launches a single
@@ -37,9 +37,13 @@ confirm the UAC prompt + captured output (MANUAL step to be added).
 **Rollback plan:** `git checkout -- src/desktop_worker/broker/`.
 **Diff budget:** 2 production files changed, 1 new file.
 **Done criteria:**
-- [ ] Elevated child output + exit code captured to artifacts.
-- [ ] `elevated` flag never overstates privilege.
-- [ ] Tests green; manual UAC step documented.
+- [x] Elevated child output + exit code captured to artifacts (wrapper .bat redirect + exit sentinel).
+- [x] `elevated` flag never overstates privilege (honesty invariant; auditor-verified).
+- [x] Tests green (14 broker tests, injected FakeElevator); manual UAC step = MANUAL-4.
+**Result:** Implemented `broker/elevation.py` (injectable `Elevator`, real `WindowsElevator`
+via ShellExecuteEx runas). Codex APPROVE (after security fixes: app-controlled mkstemp
+helper files, finally-cleanup, mbcs encoding, use_last_error), Northstar ALIGNED.
+Real UAC path needs human validation → MANUAL-4.
 
 ---
 
