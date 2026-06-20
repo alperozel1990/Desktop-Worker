@@ -50,4 +50,6 @@
 ## User preferences for this repo
 - Requirements doc is source of truth; stay aligned to AI-control-ready north star.
 - Small, testable, structured; UI Automation preferred over image-only.
-- No commit/push without explicit permission.
+- **Git workflow is active.** Remote: `origin` → github.com/alperozel1990/Desktop-Worker.
+  User wants to use git on this project; committing and pushing are allowed.
+  Keep commits scoped per card; end commit messages with the Co-Authored-By line.

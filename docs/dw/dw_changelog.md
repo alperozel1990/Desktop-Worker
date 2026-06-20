@@ -48,3 +48,29 @@ DW-CLI-ELEVATE). See `dw_state.md` Open risks.
 
 **Next Action:** DW-CLI-ELEVATE (or DW-INPUT-HARDEN / DW-PERCEPTION-OCR) — see
 `dw_backlog.md`. Approval required before implementing.
+
+---
+
+## 2026-06-20 | Continue | Task: GIT-INIT
+
+**Task ID:** GIT-INIT
+**Type:** Continue (repo/version-control setup)
+**Status:** Complete
+
+**Files Created:** none (git history).
+**Files Modified:** `dw_state.md`, `dw_manual_steps.md`, `dw_project_profile.md`,
+`dw_changelog.md` (continuity updates for the commit/remote).
+
+**Tests / Validations Run:** none beyond BOOTSTRAP-1 (no code change).
+
+**Validation Level Reached:** 0 — docs/state updated; version control established.
+
+**Result:** User created GitHub repo and authorized git workflow. Added remote
+`origin` (github.com/alperozel1990/Desktop-Worker), renamed branch to `main`,
+committed the bootstrap as `023b107`, and pushed to `origin/main`. Updated
+continuity files; commit + push are now allowed for this project.
+
+**Risks Introduced:** None.
+**Risks Resolved:** MANUAL-3 (initial commit) closed.
+
+**Next Action:** DW-CLI-ELEVATE — see `dw_backlog.md` (approval required before implementing).

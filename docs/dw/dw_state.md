@@ -7,8 +7,9 @@
 - **Last updated:** 2026-06-20
 - **Repo path:** `C:\Desktop-Worker`
 - **Workspace path:** `C:\Desktop-Worker\docs\dw`
-- **Current branch:** `master` (git initialized this session; no commit yet)
-- **Last commit hash:** none yet (initial commit pending — see Manual steps)
+- **Current branch:** `main`
+- **Remote:** `origin` → https://github.com/alperozel1990/Desktop-Worker.git
+- **Last commit hash:** `023b107` (Bootstrap Desktop-Worker; pushed to origin/main)
 
 ## Implementation allowed
 **YES — scoped.** User explicitly authorized building the Phase 1 minimal
@@ -74,7 +75,7 @@ DW-INPUT-HARDEN, DW-PERCEPTION-OCR. See `dw_backlog.md`.
 |---|---|---|---|
 | 1 | Which AI provider/model drives the planner? | No | Default: Claude (per requirements agent model). Interface is provider-agnostic. |
 | 2 | UI: web dashboard vs native (Phase 7)? | No | Decide at Phase 7; CLI suffices until then. |
-| 3 | Make the initial git commit now? | No | Left to user (policy: no commit without explicit ask). |
+| 3 | Make the initial git commit now? | No | DONE — committed `023b107` and pushed to GitHub (user requested). Commit/push now allowed for this project. |
 
 ## Manual steps waiting
 See `dw_manual_steps.md`: MANUAL-1 (validate real input on a desktop),

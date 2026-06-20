@@ -32,13 +32,11 @@ misbehavior — dropped keys, wrong position) so DW-INPUT-HARDEN can target it.
 
 ---
 
-## MANUAL-3 — (Optional) Make the initial git commit
-**Status:** [ ] Waiting
+## MANUAL-3 — Make the initial git commit  ✅ DONE
+**Status:** [x] Done
 **Blocking:** NO
 **Tool:** Terminal
 **Added by:** BOOTSTRAP-1
-**Instructions:**
-1. Review staged files: `git status`
-2. If satisfied: `git commit -m "Bootstrap Desktop-Worker Phase 1 foundation"`
-**What Claude needs back:** Nothing — or tell Claude to commit and it will (commit
-requires your explicit go-ahead per project policy).
+**Resolution:** User created GitHub repo and authorized push. Committed `023b107`
+and pushed to `origin/main` (https://github.com/alperozel1990/Desktop-Worker.git).
+Commit + push are now allowed for this project going forward.
