@@ -43,7 +43,7 @@ class Element:
     id: str
     type: str  # button, input, text, checkbox, link, ...
     bounds: tuple[int, int, int, int]
-    source: str = "ocr"
+    source: str  # REQUIRED: "uia" (preferred) | "ocr" | "vision" | "heuristic"
     text: Optional[str] = None
     label: Optional[str] = None
     confidence: float = 0.0

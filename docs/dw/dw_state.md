@@ -44,7 +44,7 @@ Gate and only implement when the selected card is explicitly approved.
 | Observe-plan-act-verify-log loop | complete (scripted planner) |
 | Loop recovery / retry / re-plan / time limit | complete (DW-LOOP-RECOVERY) |
 | Perception — OCR (elements, schema, Perceiver) | complete (DW-PERCEPTION-OCR); real OCR = MANUAL-5 |
-| Perception — UI Automation | not started (DW-PERCEPTION-UIA) |
+| Perception — UI Automation (elements, UIA-preferred merge) | complete (DW-PERCEPTION-UIA); real UIA = MANUAL-6 |
 | Perception — loop wiring (elements → audit/AI) | not started (DW-PERCEPTION-WIRE) |
 | Browser/desktop workflows | not started (Phase 5) |
 | Multi-agent orchestration | not started (Phase 6) |
@@ -52,23 +52,23 @@ Gate and only implement when the selected card is explicitly approved.
 | AI planner integration (Claude) | not started (interface ready) |
 
 ## Last completed task
-- **Task:** DW-PERCEPTION-OCR — OCR perception (Phase 4 start).
+- **Task:** DW-PERCEPTION-UIA — Windows UI Automation elements + UIA-preferred merge.
 - **Date:** 2026-06-20.
-- **Summary:** New `perception/` package: `OcrBackend` Protocol, pure
-  `data_to_elements`, lazy `TesseractOcrBackend`, `Perceiver` enriching a frozen
-  `Observation` with `Element`s (bounds/confidence/source). Codex APPROVE,
-  Northstar ALIGNED. 95 tests (+8). Real Tesseract OCR = MANUAL-5.
-- **Files:** `schema/observations.py`, `schema/__init__.py`, `perception/*` (new),
-  `tests/test_perception_ocr.py`.
+- **Summary:** `perception/uia_backend.py` (pure `control_to_type` + `merge_elements`,
+  `UiaBackend` Protocol, NullUiaBackend, lazy WindowsUiaBackend). Perceiver now
+  prefers UIA, merges OCR into gaps. Made `Element.source` required. Codex APPROVE,
+  Northstar ALIGNED. 101 tests (+6). Real UIA enumeration = MANUAL-6.
+- **Files:** `perception/uia_backend.py` (new), `perception/perceiver.py`,
+  `perception/__init__.py`, `schema/observations.py`, `tests/test_perception_uia.py`.
 
 ## Current task
 None in progress.
 
 ## Next recommended task
-**DW-PERCEPTION-UIA** — Windows UI Automation elements (the §7 *preferred* path;
-both auditors call it the headline next card). Then **DW-PERCEPTION-WIRE** (wire
-the Perceiver into the loop so elements reach audit/AI). Also: **DW-INPUT-HARDEN**.
-Implementable to Level 3 autonomously; live UIA/input need user tests (non-blocking).
+**DW-PERCEPTION-WIRE** — wire the Perceiver into `TaskLoop` so UIA+OCR elements
+reach the audit/AI prompt (closes the Phase 4 wiring gap). Then **DW-INPUT-HARDEN**
+and **DW-PLANNER-AI** (the capstone; needs a model/provider choice — likely a user
+decision). Implementable to Level 3 autonomously; live UIA/input = user tests.
 
 ## Open risks
 | Risk | Severity | Mitigation |
@@ -90,12 +90,13 @@ Implementable to Level 3 autonomously; live UIA/input need user tests (non-block
 See `dw_manual_steps.md`: MANUAL-1 (validate real input on a desktop),
 MANUAL-2 (install `[windows]` extra for real screenshots), MANUAL-3 (DONE — git),
 **MANUAL-4 (validate real UAC elevation from a non-admin shell)**,
-**MANUAL-5 (install Tesseract + `[ocr]` and validate real OCR)**.
+**MANUAL-5 (install Tesseract + `[ocr]` and validate real OCR)**,
+**MANUAL-6 (install `uiautomation` and validate real UIA enumeration)**.
 
 ## Last validation results
 - **Date:** 2026-06-20.
-- **Type:** `python -m pytest` (95 tests) + demo run.
-- **Result:** 95 passed. Demo loop completed 5/5 steps. Real `observe` returned
+- **Type:** `python -m pytest` (101 tests) + demo run.
+- **Result:** 101 passed. Demo loop completed 5/5 steps. Real `observe` returned
   genuine cursor/window/screen data on the dev machine.
 - **Validation level reached:** **3** (unit + local runtime). Live-desktop input
   motion (Level 4) NOT yet run — see MANUAL-1.

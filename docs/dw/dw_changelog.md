@@ -176,3 +176,37 @@ DW-PERCEPTION-WIRE) — AI still sees raw coords until then. Real OCR unverified
 **Risks Resolved:** None outstanding from prior cards.
 
 **Next Action:** DW-PERCEPTION-UIA (the §7 preferred path) + DW-PERCEPTION-WIRE.
+
+---
+
+## 2026-06-20 | Execute | Task: DW-PERCEPTION-UIA
+
+**Task ID:** DW-PERCEPTION-UIA
+**Type:** Execute (Phase 4 — the §7 preferred path)
+**Status:** Complete
+
+**Files Created:** `src/desktop_worker/perception/uia_backend.py`,
+`tests/test_perception_uia.py`.
+**Files Modified:** `perception/perceiver.py` (UIA-preferred merge),
+`perception/__init__.py` (exports), `schema/observations.py` (`Element.source`
+now required); continuity files.
+
+**Tests / Validations Run:** `python -m pytest` → **101 passed** (+6).
+
+**Validation Level Reached:** **3** — unit + local runtime. Real UIA enumeration
+needs the `uiautomation` lib + a live window → MANUAL-6.
+
+**Result:** Implemented the §7 preferred perception path. Pure, tested
+`control_to_type` (UIA ControlType → element type) and `merge_elements` (keep all
+UIA; OCR only fills spatial gaps → UIA genuinely preferred). `UiaBackend` Protocol,
+NullUiaBackend, lazy `WindowsUiaBackend`. Perceiver now gathers UIA first (even with
+no screenshot) and merges OCR. Made `Element.source` a required field so attribution
+is never silently defaulted. **Auditors:** Codex APPROVE, Northstar ALIGNED. Applied:
+removed dead imports; fixed the live API to GetForegroundWindow+ControlFromHandle
+(Codex F2 — real path was likely a silent no-op); zero-area skip now `or`.
+
+**Risks Introduced:** Real UIA API names unverified until MANUAL-6 (degrades to []
+if wrong, never crashes). Elements still not wired into the live loop (DW-PERCEPTION-WIRE).
+**Risks Resolved:** Attribution honesty enforced (source required).
+
+**Next Action:** DW-PERCEPTION-WIRE — wire the Perceiver into the loop.

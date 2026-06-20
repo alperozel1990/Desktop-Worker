@@ -143,7 +143,7 @@ Perceiver into the loop (DW-PERCEPTION-WIRE) so elements reach the AI/audit.
 
 ---
 
-## DW-PERCEPTION-UIA — Windows UI Automation elements (Phase 4)  ☐
+## DW-PERCEPTION-UIA — Windows UI Automation elements (Phase 4)  ✅ done (2026-06-20)
 **Purpose:** Prefer UIA over image-only automation (requirements §7 key rule).
 **Scope:** UIA backend (`uiautomation`/comtypes) enumerating controls (button,
 input, checkbox, etc.) with bounds + source="uia"; merge with OCR results
@@ -162,10 +162,13 @@ results take precedence over OCR for the same region.
 **Rollback plan:** `git checkout -- src/desktop_worker/perception`.
 **Diff budget:** 2 new files, 1 changed.
 **Done criteria:**
-- [ ] UIA element detection with bounds + confidence + source.
-- [ ] UIA-preferred merge with OCR.
-- [ ] Make `Element.source` a REQUIRED field (no default) so every backend
-  attributes honestly (Northstar guidance from DW-PERCEPTION-OCR review).
+- [x] UIA element detection with bounds + confidence + source (lazy `WindowsUiaBackend`).
+- [x] UIA-preferred merge with OCR (`merge_elements`: keep all UIA, OCR only fills gaps).
+- [x] `Element.source` now REQUIRED (no default) — honest attribution everywhere.
+**Result:** `perception/uia_backend.py` (pure `control_to_type` + `merge_elements`,
+`UiaBackend` Protocol, NullUiaBackend, lazy WindowsUiaBackend); Perceiver now prefers
+UIA + merges OCR. Codex APPROVE, Northstar ALIGNED. 101 tests. Fixed live API to
+GetForegroundWindow+ControlFromHandle. Real UIA enumeration = MANUAL-6.
 
 ---
 

@@ -15,25 +15,49 @@ from pathlib import Path
 from typing import Optional
 
 from desktop_worker.perception.backends import OcrBackend, get_ocr_backend
+from desktop_worker.perception.uia_backend import (
+    UiaBackend,
+    get_uia_backend,
+    merge_elements,
+)
 from desktop_worker.schema.observations import Element, Observation
+
+_IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp")
 
 
 class Perceiver:
-    def __init__(self, ocr: Optional[OcrBackend] = None) -> None:
+    """Builds structured elements, preferring UIA and falling back to OCR (§7)."""
+
+    def __init__(
+        self,
+        ocr: Optional[OcrBackend] = None,
+        uia: Optional[UiaBackend] = None,
+    ) -> None:
         self.ocr = ocr or get_ocr_backend()
+        self.uia = uia or get_uia_backend()
 
     def detect(self, image_path: Path) -> list[Element]:
+        """OCR-detect elements in a specific image (used standalone)."""
         return list(self.ocr.detect(Path(image_path)))
 
     def perceive(self, observation: Observation) -> Observation:
-        """Return a copy of ``observation`` with detected elements attached."""
+        """Return a copy of ``observation`` enriched with detected elements.
+
+        UIA elements (preferred) are gathered first; OCR runs only on a real
+        screenshot image and is merged in to fill gaps UIA did not cover.
+        """
+        uia_elements = list(self.uia.detect())
+
+        ocr_elements: list[Element] = []
         ref = observation.screenshotRef
-        if not ref:
+        if ref:
+            path = Path(ref)
+            # The Null desktop backend writes a .txt placeholder, not a real
+            # image; only OCR actual images so we never feed junk to Tesseract.
+            if path.exists() and path.suffix.lower() in _IMAGE_SUFFIXES:
+                ocr_elements = list(self.ocr.detect(path))
+
+        if not uia_elements and not ocr_elements:
             return observation
-        path = Path(ref)
-        # The Null desktop backend writes a .txt placeholder, not a real image;
-        # only run OCR on actual image files so we never feed junk to Tesseract.
-        if not path.exists() or path.suffix.lower() not in (".png", ".jpg", ".jpeg", ".bmp"):
-            return observation
-        elements = tuple(self.ocr.detect(path))
+        elements = tuple(merge_elements(uia_elements, ocr_elements))
         return dataclasses.replace(observation, elements=elements)

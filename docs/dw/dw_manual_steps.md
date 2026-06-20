@@ -32,6 +32,27 @@ misbehavior — dropped keys, wrong position) so DW-INPUT-HARDEN can target it.
 
 ---
 
+## MANUAL-6 — Install uiautomation + validate real UIA enumeration (DW-PERCEPTION-UIA)
+**Status:** [ ] Waiting
+**Blocking:** NO (mapping + merge logic unit-tested; without the lib it degrades to
+zero UIA elements and OCR still works)
+**Tool:** Terminal + a real foreground window (e.g. Notepad, Chrome)
+**Added by:** DW-PERCEPTION-UIA
+**Instructions:**
+1. `python -m pip install -e ".[windows]"` (includes `uiautomation`).
+2. Open a window (e.g. Notepad), keep it focused, then run:
+   ```
+   python -c "from desktop_worker.perception import get_uia_backend; b=get_uia_backend(); els=b.detect(); print(type(b).__name__, 'elements:', len(els)); [print(e.type, e.text, e.bounds) for e in els[:15]]"
+   ```
+3. Confirm the backend is `WindowsUiaBackend`, that controls are enumerated with
+   sensible types (button/input/menu…) and bounds. NOTE for Claude: if this returns
+   0 with the lib installed, the live `uiautomation` API names may need adjusting
+   (Codex flagged `GetForegroundWindow`+`ControlFromHandle`/`WalkControl` as the
+   verify points) — report the exact error so DW can fix the real path.
+**What Claude needs back:** Backend name + element count + a few sample lines, or any error.
+
+---
+
 ## MANUAL-5 — Install Tesseract + validate real OCR (DW-PERCEPTION-OCR)
 **Status:** [ ] Waiting
 **Blocking:** NO (OCR parsing logic is unit-tested; without Tesseract the system
