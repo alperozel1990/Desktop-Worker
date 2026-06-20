@@ -36,10 +36,17 @@ Source of truth: `docs/requirements.md`.
 
 ## Current roadmap position
 - Phase 1 (Local Control Foundation): **implemented + tested**.
-- Phase 2 (Structured Action Loop): **skeleton implemented + tested** (scripted planner).
+- Phase 2 (Structured Action Loop): **complete** — loop + DW-LOOP-RECOVERY
+  (bounded retry/re-plan/safe-stop + time limit), auditor-approved.
 - Phase 3 (Elevated CLI Broker): **foundation implemented + tested**; true
   per-command UAC re-elevation with captured output is the open card DW-CLI-ELEVATE.
 - Phases 4–7: not started.
+
+## Operating model (since 2026-06-20)
+- Autonomous per-card execution. Each card gated by **Codex Auditor** (code) +
+  **Northstar Auditor** (direction) subagent sign-off, then commit + push.
+- Pause ONLY for things the user must physically test (live mouse/keyboard, UAC
+  prompt, real browser, Tesseract install). Batch those as a "test this" list.
 
 ## Current next action
 Pick from `dw_backlog.md`. Recommended: **DW-CLI-ELEVATE** (real per-command

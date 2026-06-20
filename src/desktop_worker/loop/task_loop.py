@@ -11,8 +11,9 @@ a fixed list of steps — enough to prove the loop end-to-end and to test it.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
-from typing import Any, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 from desktop_worker.actions.executor import ActionExecutor
 from desktop_worker.audit.log import AuditLog
@@ -130,6 +131,7 @@ class TaskLoop:
         audit: AuditLog,
         estop: EmergencyStop,
         limits: Optional[Limits] = None,
+        now: Optional[Callable[[], float]] = None,
     ) -> None:
         self.task_id = task_id
         self.planner = planner
@@ -138,6 +140,39 @@ class TaskLoop:
         self.audit = audit
         self.estop = estop
         self.limits = limits or Limits()
+        # Injectable monotonic clock (seconds) so the time limit is testable.
+        self._now = now or time.monotonic
+
+    # Action families that are safe to re-execute on failure without
+    # accumulating side effects (requirements §15 "retry safe actions").
+    # Excluded (NOT retried): keyboard.type (would duplicate text), mouse.drag
+    # (partial drag), mouse.down/up (unbalanced), cli.run (side effects).
+    # NOTE: only action types the executor can actually dispatch are listed.
+    # window.focus and verify are handled by higher layers (not the executor)
+    # today, so retrying them would just fail repeatedly — they are excluded
+    # until a higher layer executes them.
+    _RETRYABLE = frozenset({
+        "mouse.move", "mouse.moveRelative", "mouse.click", "mouse.doubleClick",
+        "mouse.rightClick", "mouse.scroll", "keyboard.press", "keyboard.hotkey",
+        "clipboard.set", "clipboard.get", "wait",
+    })
+
+    def _is_retryable(self, action: Action) -> bool:
+        return action.type in self._RETRYABLE
+
+    def _try_replan(
+        self, failed: PlannedStep, observation: Observation, history: list[ActionResult]
+    ) -> Optional[PlannedStep]:
+        """Ask the planner for a revised step, if it supports re-planning.
+
+        Planners may optionally implement ``replan(failed_step, observation,
+        history) -> Optional[PlannedStep]``. Planners without it (e.g. the
+        ScriptedPlanner) simply cannot re-plan, so the loop safe-stops.
+        """
+        replan = getattr(self.planner, "replan", None)
+        if callable(replan):
+            return replan(failed, observation, history)
+        return None
 
     def run(self) -> TaskReport:
         started = utc_now_iso()
@@ -148,11 +183,18 @@ class TaskLoop:
         stop_reason = ""
 
         self.audit.record("task.started", event_task=self.task_id)
+        start_mono = self._now()
 
         while True:
             # Action-count limit (requirements section 12).
             if len(records) >= self.limits.max_actions_per_task:
                 stop_reason = f"reached max actions ({self.limits.max_actions_per_task})"
+                break
+
+            # Time limit (requirements section 12).
+            if self._now() - start_mono >= self.limits.max_task_seconds:
+                stop_reason = f"reached max task time ({self.limits.max_task_seconds}s)"
+                self.audit.record("task.timeout", reason=stop_reason)
                 break
 
             # Emergency stop guard.
@@ -181,15 +223,59 @@ class TaskLoop:
                 before_ref=before.screenshotRef,
             )
 
-            # ACT.
-            result = self.executor.execute(step.action)
-            history.append(result)
-            successes += int(result.success)
-            failures += int(not result.success)
+            # ACT → VERIFY with recovery: retry safe actions up to max_retries,
+            # then ask the planner to re-plan, then safe-stop (requirements §15).
+            attempts = 0
+            replans = 0
+            time_exceeded = False
+            while True:
+                result = self.executor.execute(step.action)
+                after = self.observer.observe("after")
+                verification = self._verify(step, after, result)
+                ok = result.success and (verification is None or verification.passed)
+                if ok:
+                    break
 
-            # OBSERVE (after) + VERIFY.
-            after = self.observer.observe("after")
-            verification = self._verify(step, after, result)
+                # Time guard inside recovery: do not spend further retries/replans
+                # once the task wall-clock limit is reached (requirements §12).
+                if self._now() - start_mono >= self.limits.max_task_seconds:
+                    time_exceeded = True
+                    break
+
+                # Retry the same (safe) action after re-observing.
+                if self._is_retryable(step.action) and attempts < self.limits.max_retries:
+                    attempts += 1
+                    self.audit.record(
+                        "step.retry",
+                        result=result.to_dict(),
+                        verification=verification.to_dict() if verification else None,
+                        retry={"attempt": attempts, "max": self.limits.max_retries},
+                    )
+                    continue
+
+                # Retries exhausted or action unsafe to retry: try a revised plan.
+                # Check the bound BEFORE asking the planner so we never make an
+                # extra (potentially expensive AI) re-plan call past the limit.
+                if replans < self.limits.max_retries:
+                    revised = self._try_replan(step, after, history)
+                    if revised is not None:
+                        replans += 1
+                        self.audit.record(
+                            "step.replanned",
+                            planned={"description": revised.description,
+                                     "action": revised.action.to_dict(),
+                                     "expected": revised.expected},
+                        )
+                        step = revised
+                        attempts = 0
+                        continue
+
+                break  # give up — safe-stop handled below
+
+            result.retries = attempts
+            history.append(result)
+            successes += int(ok)
+            failures += int(not ok)
 
             self.audit.record(
                 "step.completed",
@@ -201,15 +287,20 @@ class TaskLoop:
             records.append({
                 "description": step.description,
                 "action": str(step.action),
-                "success": result.success,
+                "success": ok,
+                "retries": attempts,
                 "error": result.error,
                 "verificationPassed": verification.passed if verification else None,
             })
 
-            # Stop on unrecoverable failure (Phase 2 keeps recovery minimal;
-            # retry/re-plan logic is a dedicated card, DW-LOOP-RECOVERY).
-            if not result.success:
-                stop_reason = f"step failed: {result.error}"
+            if not ok:
+                if time_exceeded:
+                    stop_reason = f"reached max task time ({self.limits.max_task_seconds}s) during step"
+                    self.audit.record("task.timeout", reason=stop_reason)
+                elif not result.success:
+                    stop_reason = f"step failed after {attempts} retr{'y' if attempts == 1 else 'ies'}: {result.error}"
+                else:
+                    stop_reason = f"verification failed after {attempts} retr{'y' if attempts == 1 else 'ies'}"
                 break
 
         ended = utc_now_iso()

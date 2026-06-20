@@ -74,7 +74,7 @@ manual desktop test for real motion (MANUAL-1).
 
 ---
 
-## DW-LOOP-RECOVERY — Retry / re-plan / safe-stop in the loop  ☐
+## DW-LOOP-RECOVERY — Retry / re-plan / safe-stop in the loop  ✅ done (2026-06-20)
 **Purpose:** Satisfy requirements §15 (error handling & recovery) beyond safe-stop.
 **Scope:** In `TaskLoop`, on failed action or failed verification: re-observe,
 retry safe actions up to `Limits.max_retries`, then ask planner for a revised
@@ -97,9 +97,11 @@ stop safely; time/action/retry limits enforced and logged.
 **Rollback plan:** `git checkout -- src/desktop_worker/loop/task_loop.py`.
 **Diff budget:** 1 production file changed.
 **Done criteria:**
-- [ ] Retry honored up to max_retries with re-observe.
-- [ ] Re-plan path invoked before stop.
-- [ ] Time limit enforced; all transitions audited.
+- [x] Retry honored up to max_retries with re-observe (bounded; tested).
+- [x] Re-plan path invoked before stop (optional `Planner.replan`; bounded; tested).
+- [x] Time limit enforced (outer + in-recovery guard); all transitions audited
+  (`step.retry` / `step.replanned` / `task.timeout`).
+**Result:** Implemented; Codex Auditor APPROVE, Northstar ALIGNED. 80 tests pass.
 
 ---
 

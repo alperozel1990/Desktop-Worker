@@ -74,3 +74,37 @@ continuity files; commit + push are now allowed for this project.
 **Risks Resolved:** MANUAL-3 (initial commit) closed.
 
 **Next Action:** DW-CLI-ELEVATE — see `dw_backlog.md` (approval required before implementing).
+
+---
+
+## 2026-06-20 | Execute | Task: DW-LOOP-RECOVERY
+
+**Task ID:** DW-LOOP-RECOVERY
+**Type:** Execute (Phase 2 completion)
+**Status:** Complete
+
+**Files Created:** `tests/test_loop_recovery.py` (10 tests).
+**Files Modified:** `src/desktop_worker/loop/task_loop.py`; continuity files
+(`dw_state.md`, `dw_memory.md`, `dw_roadmap.md`, `dw_backlog.md`, `dw_tracker.html`).
+
+**Tests / Validations Run:** `python -m pytest` → **80 passed** (+9).
+
+**Validation Level Reached:** **3** — unit + local runtime. No human test required
+for this card (pure loop logic; clock injected for determinism).
+
+**Result:** Replaced the "fail → stop" stub with the full §15 recovery ladder:
+re-observe after failure, bounded retry of *safe* actions only (non-idempotent
+actions excluded), optional planner `replan()` (bounded), and a wall-clock task
+limit enforced both at the outer loop and inside the recovery loop. All
+transitions emit audit events (`step.retry`, `step.replanned`, `task.timeout`).
+**Auditors:** Codex Auditor → APPROVE (after fixing: removed unexecutable
+`window.focus`/`verify` from the retryable set, added in-recovery time guard,
+fixed a re-plan off-by-one that made an extra planner call past the bound);
+Northstar Auditor → ALIGNED.
+
+**Risks Introduced:** None new. Re-plan bound reuses `max_retries` (documented).
+**Risks Resolved:** Loop no longer stops on first transient failure; no unbounded
+retry/re-plan; time limit now actually enforced.
+
+**Next Action:** DW-CLI-ELEVATE — implementable autonomously to Level 3; true UAC
+validation will be flagged as a user test (not blocking).

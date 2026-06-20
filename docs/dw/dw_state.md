@@ -9,7 +9,10 @@
 - **Workspace path:** `C:\Desktop-Worker\docs\dw`
 - **Current branch:** `main`
 - **Remote:** `origin` → https://github.com/alperozel1990/Desktop-Worker.git
-- **Last commit hash:** `023b107` (Bootstrap Desktop-Worker; pushed to origin/main)
+- **Last commit hash:** pushed to origin/main (see `dw_changelog.md` for hashes)
+- **Operating model:** autonomous per-card execution gated by **Codex Auditor**
+  (code) + **Northstar Auditor** (direction) sign-off; pause only for items the
+  user must physically test (live input, UAC, browser, Tesseract).
 
 ## Implementation allowed
 **YES — scoped.** User explicitly authorized building the Phase 1 minimal
@@ -39,7 +42,7 @@ Gate and only implement when the selected card is explicitly approved.
 | Input backend (Windows SendInput + Null) | complete (needs hardening) |
 | Action executor | complete |
 | Observe-plan-act-verify-log loop | complete (scripted planner) |
-| Loop recovery / retry / re-plan | minimal (DW-LOOP-RECOVERY) |
+| Loop recovery / retry / re-plan / time limit | complete (DW-LOOP-RECOVERY) |
 | Perception (OCR / UI Automation) | not started (Phase 4) |
 | Browser/desktop workflows | not started (Phase 5) |
 | Multi-agent orchestration | not started (Phase 6) |
@@ -47,18 +50,21 @@ Gate and only implement when the selected card is explicitly approved.
 | AI planner integration (Claude) | not started (interface ready) |
 
 ## Last completed task
-- **Task:** BOOTSTRAP-1 — project bootstrap + Phase 1 foundation.
+- **Task:** DW-LOOP-RECOVERY — retry / re-plan / safe-stop + time limit in the loop.
 - **Date:** 2026-06-20.
-- **Summary:** Created Python package (8 layers), 71 passing unit tests, CLI
-  (`status/observe/demo/estop/clear-stop`), ease-me workspace, launchers.
-- **Files:** see `dw_changelog.md` entry for BOOTSTRAP-1.
+- **Summary:** Added bounded retry (re-observe), optional planner re-plan, and
+  wall-clock limit (outer + in-recovery) with full audit events. Codex Auditor
+  APPROVE, Northstar ALIGNED. Phase 2 now complete. 80 tests pass (+9).
+- **Files:** `loop/task_loop.py`, `tests/test_loop_recovery.py`.
 
 ## Current task
 None in progress.
 
 ## Next recommended task
 **DW-CLI-ELEVATE** (Phase 3 completion) — real per-command UAC elevation with
-captured stdout/stderr. Approval needed before implementing. Alternatives:
+captured stdout/stderr. NOTE: implementable + mock-testable autonomously to
+Level 3, but **true UAC validation needs the user** (a real UAC prompt) — will be
+flagged as a manual test, not blocking implementation. Alternatives:
 DW-INPUT-HARDEN, DW-PERCEPTION-OCR. See `dw_backlog.md`.
 
 ## Open risks
@@ -84,9 +90,8 @@ initial git commit).
 
 ## Last validation results
 - **Date:** 2026-06-20.
-- **Type:** `python -m pytest` (71 tests) + manual CLI runs (`status`, `observe`,
-  `demo`).
-- **Result:** 71 passed. Demo loop completed 5/5 steps. Real `observe` returned
+- **Type:** `python -m pytest` (80 tests) + demo run.
+- **Result:** 80 passed. Demo loop completed 5/5 steps. Real `observe` returned
   genuine cursor/window/screen data on the dev machine.
 - **Validation level reached:** **3** (unit + local runtime). Live-desktop input
   motion (Level 4) NOT yet run — see MANUAL-1.

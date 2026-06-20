@@ -31,7 +31,7 @@ screenshots need `[windows]` extra (MANUAL-2).
 - [x] User can stop execution immediately (estop, file + in-process).
 **Complexity:** Medium.
 
-## Phase 2 — Structured Action Loop  ✅ skeleton implemented + tested
+## Phase 2 — Structured Action Loop  ✅ complete (loop + recovery)
 **Goal:** Establish the observe-plan-act-verify loop.
 **Scope:** structured observation object, structured executor, before/after
 observation capture, verification interface, retry limits, final report.
@@ -44,8 +44,8 @@ observation capture, verification interface, retry limits, final report.
 **Done criteria:**
 - [x] A simple task runs as a sequence of structured actions (demo + tests).
 - [x] Each action has a result record.
-- [~] Failed verification causes retry/re-plan/safe stop — currently **safe stop**
-  only; retry/re-plan is DW-LOOP-RECOVERY.
+- [x] Failed verification causes retry/re-plan/safe stop (DW-LOOP-RECOVERY done):
+  bounded retries with re-observe, optional planner re-plan, time/action limits.
 **Complexity:** Medium.
 
 ## Phase 3 — Elevated CLI Broker  ◑ foundation implemented; one card open

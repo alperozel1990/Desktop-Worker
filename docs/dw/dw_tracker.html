@@ -42,12 +42,12 @@ const DATA = {
   repo: "C:\\Desktop-Worker",
   workspace: "C:\\Desktop-Worker\\docs\\dw",
   updated: "2026-06-20",
-  implementationAllowed: "YES (scoped: Phase 1 foundation authorized)",
-  validationLevel: "3 — unit (71 tests) + local runtime; live-desktop input (4) pending",
-  cardsDone: 1, cardsTotal: 7,
+  implementationAllowed: "YES (autonomous; auditor-gated)",
+  validationLevel: "3 — unit (80 tests) + local runtime; live-desktop input (4) pending",
+  cardsDone: 2, cardsTotal: 7,
   phases: [
     {id:"P1", name:"Local Control Foundation", status:"done"},
-    {id:"P2", name:"Structured Action Loop", status:"prog"},
+    {id:"P2", name:"Structured Action Loop", status:"done"},
     {id:"P3", name:"Elevated CLI Broker", status:"prog"},
     {id:"P4", name:"Perception (OCR/UIA)", status:"todo"},
     {id:"P5", name:"Browser & Desktop Workflows", status:"todo"},
@@ -56,15 +56,15 @@ const DATA = {
   ],
   cards: [
     {id:"BOOTSTRAP-1", t:"Bootstrap + Phase 1 foundation", s:"done"},
+    {id:"DW-LOOP-RECOVERY", t:"Retry / re-plan / safe-stop + time limit", s:"done"},
     {id:"DW-CLI-ELEVATE", t:"True per-command UAC elevation w/ captured output", s:"todo", next:true},
     {id:"DW-INPUT-HARDEN", t:"Input reliability hardening (SendInput batch)", s:"todo"},
-    {id:"DW-LOOP-RECOVERY", t:"Retry / re-plan / safe-stop in loop", s:"todo"},
     {id:"DW-PERCEPTION-OCR", t:"OCR perception (Phase 4 start)", s:"todo"},
     {id:"DW-PERCEPTION-UIA", t:"Windows UI Automation elements", s:"todo"},
     {id:"DW-PLANNER-AI", t:"Pluggable AI planner (Claude)", s:"todo"},
   ],
   current: "none in progress",
-  nextCard: "DW-CLI-ELEVATE — real per-command UAC elevation (approval required)",
+  nextCard: "DW-CLI-ELEVATE — real per-command UAC elevation (autonomous; UAC needs a user test)",
   risks: [
     ["Broker shell=True runs cmd.exe strings","Medium","Gated by classify+approval+audit; no passthrough API"],
     ["'Elevated by default' not yet true per-command from non-admin","Medium","Broker reports actual token; DW-CLI-ELEVATE closes gap"],
@@ -88,9 +88,10 @@ const DATA = {
   doNotTouch: ["docs/requirements.md (read-only source of truth)","artifacts/ (generated)",
     "*/backends.py Protocol signatures"],
   changelog: [
-    "2026-06-20 BOOTSTRAP-1 — Python foundation across 8 layers; 71 tests pass; loop runs end-to-end; real observation works; ease-me workspace + launchers."
+    "2026-06-20 DW-LOOP-RECOVERY — bounded retry/re-plan/safe-stop + time limit; Codex APPROVE, Northstar ALIGNED; 80 tests; Phase 2 complete.",
+    "2026-06-20 BOOTSTRAP-1 — Python foundation across 8 layers; 71 tests; loop end-to-end; real observation; ease-me workspace + launchers."
   ],
-  nextPrompt: "/ease-me continue  Repo: C:\\Desktop-Worker  Workspace: docs\\dw. Read dw_memory.md + dw_state.md. Next card: DW-CLI-ELEVATE (ask approval before implementing)."
+  nextPrompt: "/ease-me continue  Repo: C:\\Desktop-Worker  Workspace: docs\\dw. Read dw_memory.md + dw_state.md. Next card: DW-CLI-ELEVATE (autonomous; auditor-gated; flag UAC as a user test)."
 };
 
 const SB = {done:["Done","b-done"],prog:["In progress","b-prog"],todo:["Not started","b-todo"],
