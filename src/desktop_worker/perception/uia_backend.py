@@ -103,36 +103,66 @@ class WindowsUiaBackend:
         import uiautomation as auto
 
         elements: list[Element] = []
+        roots = []
         try:
-            # Resolve the foreground window's UIA control. GetForegroundWindow
-            # (Win32) + ControlFromHandle are stable across uiautomation versions.
             hwnd = ctypes.windll.user32.GetForegroundWindow()
-            root = auto.ControlFromHandle(hwnd) if hwnd else None
+            fg = auto.ControlFromHandle(hwnd) if hwnd else None
+            if fg is not None:
+                roots.append(fg)
         except Exception:
-            return []
-        if root is None:
+            fg = None
+
+        # Also include any OPEN context-menu / popup windows (class "#32768") so
+        # the AI can see transient right-click menu items (New, Rename, ...). These
+        # are top-level windows, not children of the foreground window.
+        try:
+            desktop = auto.GetRootControl()
+            for child in desktop.GetChildren():
+                try:
+                    cls = child.ClassName or ""
+                    ctn = child.ControlTypeName or ""
+                    if "#32768" in cls or "Menu" in ctn:
+                        roots.append(child)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        if not roots:
             return []
 
         count = 0
-        for control, depth in auto.WalkControl(root, includeTop=True, maxDepth=self.max_depth):
-            if count >= self.max_elements:
-                break
-            try:
-                rect = control.BoundingRectangle
-                # Skip controls with no real area (either dimension <= 0).
-                if rect is None or rect.width() <= 0 or rect.height() <= 0:
+        for root in roots:
+            for control, _depth in auto.WalkControl(root, includeTop=True, maxDepth=self.max_depth):
+                if count >= self.max_elements:
+                    break
+                try:
+                    rect = control.BoundingRectangle
+                    if rect is None or rect.width() <= 0 or rect.height() <= 0:
+                        continue
+                    bounds = (int(rect.left), int(rect.top), int(rect.right), int(rect.bottom))
+                    etype = control_to_type(control.ControlTypeName)
+                    name = control.Name or None
+                    text = name
+                    # For editable controls, also read the current VALUE so the AI
+                    # can SEE what it has typed (feedback that input landed).
+                    if etype in ("input", "dropdown"):
+                        try:
+                            v = control.GetValuePattern().Value
+                            if v:
+                                text = f"{name}: {v}" if name else v
+                        except Exception:
+                            pass
+                    # Skip unnamed, valueless generic panes/text (noise).
+                    if text is None and etype in ("pane", "unknown", "window", "text"):
+                        continue
+                    elements.append(Element(
+                        id=f"uia-{count}", type=etype, bounds=bounds,
+                        source="uia", text=text, label=name, confidence=0.99,
+                    ))
+                    count += 1
+                except Exception:
                     continue
-                bounds = (int(rect.left), int(rect.top), int(rect.right), int(rect.bottom))
-                etype = control_to_type(control.ControlTypeName)
-                name = control.Name or None
-                elements.append(Element(
-                    id=f"uia-{count}", type=etype, bounds=bounds,
-                    source="uia", text=name, label=name, confidence=0.99,
-                ))
-                count += 1
-            except Exception:
-                # Never let a single flaky control abort the whole enumeration.
-                continue
         return elements
 
 

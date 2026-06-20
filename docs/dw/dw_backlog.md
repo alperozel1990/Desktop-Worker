@@ -255,6 +255,32 @@ tests. **Forbidden (untouched):** `safety/`, `broker/` core, `schema/`.
 - [x] Verified on disk; never fakes success; fails safe with clear error.
 - [x] Unicode (Turkish) input correct. Codex APPROVE, Northstar ALIGNED.
 
+## DW-AGENT-DO — Genuine live AI desktop control (`do "<task>"`)  ✅ done (2026-06-20)
+**Purpose:** The user's core ask + the §22 capstone: a live AI agent (like the
+Chrome Claude extension) that takes a plain-language task and decides+performs each
+action itself — NOT a script. Designed in alignment with Codex + Northstar.
+**Scope:** `python -m desktop_worker do "<task>"` runs the loop: observe → perceive
+(UIA elements + open context menus + editable values, OCR) → Claude (logged-in CLI,
+NO API key) picks the next structured action by elementId → safety-gated executor
+performs it → verify → repeat; each AI decision printed live + audited.
+**Files:** `__main__.py` (`_cmd_do`, console approver, env_context),
+`loop/claude_cli_planner.py` (elementId→coords [mouse-only, stale rejected],
+reasoning, last_outcome, env_context), `loop/task_loop.py` (perceiver wiring,
+settle_s, on_step, stall_guard, done-vs-failure, visibleText verify),
+`perception/uia_backend.py` (context-menu popups + ValuePattern), `broker/risk.py`
+(format false-positive fix), `tests/test_ai_loop.py`.
+**Forbidden (untouched):** executor/broker/safety CORE behavior (all safety stays
+below the planner; AI cannot bypass gates).
+**Tests / validation:** `python -m pytest` (138) + **real desktop run VERIFIED**
+(AI opened Notepad via Run dialog and typed merhaba, self-verified, 4/4 steps).
+Manual watch test = MANUAL-9.
+**Done criteria:**
+- [x] AI decides at runtime from live perception (no scripted fallback in `do`).
+- [x] Every action validated/approval-gated/estop/audited; broker-only CLI.
+- [x] Each AI decision + reasoning printed and audited (observable it's the AI).
+- [x] Safe failure: stale id rejected, planner-failure not mislabeled as success,
+  no-progress stall guard. Codex APPROVE, Northstar ALIGNED.
+
 ## Excluded from this backlog
 | Item | Reason |
 |---|---|

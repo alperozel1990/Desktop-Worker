@@ -140,6 +140,9 @@ class TaskLoop:
         limits: Optional[Limits] = None,
         now: Optional[Callable[[], float]] = None,
         perceiver: Optional["_PerceiverLike"] = None,
+        settle_s: float = 0.0,
+        on_step: Optional[Callable[[PlannedStep], None]] = None,
+        stall_guard: bool = False,
     ) -> None:
         self.task_id = task_id
         self.planner = planner
@@ -155,13 +158,32 @@ class TaskLoop:
         # AI/audit see attributable elements, not just raw coordinates. Off by
         # default — no perception dependency is forced on the loop.
         self.perceiver = perceiver
+        # Settle delay before each observation so transient UI (context menus,
+        # opening windows) is fully rendered before the AI perceives it.
+        self.settle_s = settle_s
+        # Optional callback invoked with each planned step (explain-before-execute
+        # for the `do` command). Must not raise.
+        self.on_step = on_step
+        # No-progress guard (AI loop only): stop if desktop state is unchanged
+        # across several actions. Off for deterministic/scripted loops whose
+        # observation may legitimately be constant (e.g. Null backend).
+        self.stall_guard = stall_guard
 
     def _observe(self, label: str):
         """Capture an observation, enriching it with elements if a perceiver is set."""
+        if self.settle_s:
+            time.sleep(self.settle_s)
         obs = self.observer.observe(label)
         if self.perceiver is not None:
             obs = self.perceiver.perceive(obs)
         return obs
+
+    @staticmethod
+    def _obs_signature(obs) -> str:
+        """A cheap signature of desktop state to detect no-progress loops."""
+        aw = obs.activeWindow.title if obs.activeWindow else ""
+        els = "|".join(f"{e.type}:{e.text}" for e in obs.elements[:30])
+        return f"{aw}#{len(obs.elements)}#{els}"
 
     # Action families that are safe to re-execute on failure without
     # accumulating side effects (requirements §15 "retry safe actions").
@@ -204,6 +226,8 @@ class TaskLoop:
 
         self.audit.record("task.started", event_task=self.task_id)
         start_mono = self._now()
+        last_sig = None
+        stale_count = 0
 
         while True:
             # Action-count limit (requirements section 12).
@@ -229,11 +253,38 @@ class TaskLoop:
             # OBSERVE (before) — enriched with perception elements if available.
             before = self._observe("before")
 
+            # No-progress guard (AI loop): if the desktop state hasn't changed
+            # across several actions, the AI is stuck — stop safely vs loop forever.
+            if self.stall_guard:
+                sig = self._obs_signature(before)
+                if sig == last_sig:
+                    stale_count += 1
+                else:
+                    stale_count = 0
+                    last_sig = sig
+                if stale_count >= 3:
+                    stop_reason = "no progress: desktop state unchanged across 3 actions"
+                    self.audit.record("task.stalled", reason=stop_reason)
+                    break
+
             # PLAN.
             step = self.planner.next_step(before, history)
             if step is None:
-                completed = True
+                # Distinguish "planner says task done" from "planner failed/blocked"
+                # (e.g. the AI call errored) so we don't mislabel failure as success.
+                outcome = getattr(self.planner, "last_outcome", "done")
+                if outcome == "done":
+                    completed = True
+                else:
+                    stop_reason = f"planner produced no action ({outcome})"
+                    self.audit.record("task.planner_failed", reason=stop_reason)
                 break
+
+            if self.on_step is not None:
+                try:
+                    self.on_step(step)
+                except Exception:
+                    pass
 
             self.audit.record(
                 "step.planned",
@@ -366,10 +417,24 @@ class TaskLoop:
                 observed={"text": got},
             )
 
-        # Unknown expectation kinds (e.g. visibleTextContains) need perception;
-        # mark as not-yet-verifiable rather than silently passing.
+        if "visibleTextContains" in expected:
+            # Now that perception is wired, check perceived element text + the
+            # active window title for the expected substring (requirements §14).
+            want = str(expected["visibleTextContains"]).lower()
+            haystack = " ".join(
+                (e.text or "") + " " + (e.label or "") for e in after.elements
+            ).lower()
+            if after.activeWindow:
+                haystack += " " + after.activeWindow.title.lower()
+            passed = want in haystack
+            return VerificationResult(
+                passed=passed, method="visibleText",
+                expected={"visibleTextContains": expected["visibleTextContains"]},
+                observed={"elementCount": len(after.elements)},
+            )
+
         return VerificationResult(
             passed=False, method="unsupported",
             expected=expected, observed={},
-            note="verification method requires the Perception layer (Phase 4)",
+            note="no supported verification key (activeWindowContains / visibleTextContains / clipboardEquals)",
         )

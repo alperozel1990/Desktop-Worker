@@ -4,7 +4,25 @@ Actions Claude cannot fully perform/validate itself.
 
 ---
 
-## MANUAL-8 — ⭐ Run the create-file demo and watch (PRIMARY working-demo test)
+## MANUAL-9 — ⭐⭐ Run the GENUINE live-AI demo (the real AI control)
+**Status:** [ ] Waiting  (Claude verified end-to-end: the AI opened Notepad via the
+Run dialog and typed text, deciding each step itself)
+**Blocking:** NO
+**Tool:** PowerShell + your `claude` login (no API key) + your desktop
+**Added by:** DW-AGENT-DO
+**Instructions:**
+1. `cd C:\Desktop-Worker` ; (first time) `python -m pip install -e ".[windows]"`
+2. `python -m desktop_worker do "Open Notepad using the Run dialog, then type merhaba"`
+3. Watch the AI print its reasoning + chosen action each step and drive the desktop
+   until done. Try your own: `do "open Calculator and compute 12 times 9"`.
+   Stop anytime: `python -m desktop_worker estop` (another window).
+**What Claude needs back:** did it complete? If it stalled/misclicked, paste the
+printed [AI] steps so I can tune it. Honest limit: best on normal Win apps; some
+Electron/Chromium apps hide their UI from accessibility.
+
+---
+
+## MANUAL-8 — ⭐ Run the create-file demo and watch (deterministic, scripted)
 **Status:** [ ] Waiting  (Claude already verified it end-to-end on disk; this is
 your watch-it-happen run)
 **Blocking:** NO

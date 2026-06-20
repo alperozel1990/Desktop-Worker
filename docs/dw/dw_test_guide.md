@@ -1,10 +1,46 @@
-# Desktop-Worker — How to run the working demo
+# Desktop-Worker — How to run the demos
 
-You asked for a real, working app: the agent creates a text file on your desktop,
-types "başlıyoruz" inside, and saves it — while you just watch. **That is one
-command.** This is the test that matters.
+## ⭐⭐ GENUINE live AI control (MANUAL-9) — the real thing
 
-## ⭐ The main demo (MANUAL-8)
+This is true dynamic AI control, like the Chrome Claude extension: you give a
+plain-language task and **the AI decides and performs each step itself**, live —
+no pre-written script. It uses your existing `claude` login (no API key/billing).
+
+```powershell
+cd C:\Desktop-Worker
+python -m pip install -e ".[windows]"     # first time
+python -m desktop_worker do "Open Notepad using the Run dialog, then type merhaba"
+```
+
+**What you'll see:** for each step the AI prints its reasoning and the action it
+chose, e.g.:
+```
+[AI] Desktop is idle; open the Run dialog with WIN+R.
+  -> keyboard.hotkey(keys=['WIN', 'R'])
+[AI] Run dialog open; type 'notepad'.
+  -> keyboard.type(text='notepad')
+...
+```
+The AI keeps observing → deciding → acting → verifying until the task is done, then
+stops on its own. **Try your own tasks**, e.g.:
+```powershell
+python -m desktop_worker do "open the Calculator and compute 12 times 9"
+python -m desktop_worker do "create a new text file on the desktop and write a haiku in it"
+```
+**Stop anytime:** `python -m desktop_worker estop` (another window).
+**Honest limits:** works best on normal Windows apps (Notepad, Calculator,
+Settings, File Explorer). Apps that hide their UI from Windows accessibility
+(some Electron/Chromium apps) expose little, so the AI sees less there. If a run
+stalls or misclicks, tell me the printed steps and I'll tune it.
+
+---
+
+## ⭐ Deterministic demo (MANUAL-8) — always-reliable, scripted (NOT AI-driven)
+
+This one runs a fixed sequence (no AI deciding) — use it when you want a guaranteed
+result. The agent creates a desktop text file containing "başlıyoruz".
+
+### Run it
 
 1. Open **PowerShell** and go to the project:
    ```powershell

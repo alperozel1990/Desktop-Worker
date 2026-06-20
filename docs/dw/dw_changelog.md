@@ -352,3 +352,55 @@ console Unicode crash.
 
 **Next Action:** Optional — extend workflows (browser/forms, Phase 5 cont.), or
 let the AI planner orchestrate workflows. None blocking.
+
+---
+
+## 2026-06-20 | Execute | Task: DW-AGENT-DO — GENUINE live AI desktop control
+
+**Task ID:** DW-AGENT-DO
+**Type:** Execute (the §22 capstone realized) — user-requested "real AI control"
+**Status:** Complete — VERIFIED on the real desktop (Validation Level 4)
+
+**User goal:** not a script — a live AI agent (like the Chrome Claude extension)
+that takes a plain-language task and decides+performs each action itself.
+Designed in alignment with Codex + Northstar (both gave DESIGN verdicts first).
+
+**Command:** `python -m desktop_worker do "<task>"`. Loop: observe → perceive
+(UIA elements + context menus + values, OCR) → ask Claude (logged-in CLI, NO API
+key) for the next structured action → safety-gated executor performs it → verify
+→ repeat. Each AI decision + reasoning is printed live and audited.
+
+**Files Created:** `tests/test_ai_loop.py`.
+**Files Modified:** `__main__.py` (`do` command + console approver + env_context),
+`loop/claude_cli_planner.py` (elementId→coords resolution [mouse-only; stale id
+rejected], reasoning + last_outcome, env_context), `loop/task_loop.py` (perceiver
+wiring, settle_s, on_step, stall_guard, done-vs-failure outcome, visibleTextContains
+verify), `perception/uia_backend.py` (context-menu popups + editable-control VALUES
+so the AI sees what it typed), `broker/risk.py` (fixed `--output-format`→`format`
+false positive that blocked the AI's own claude call); continuity files.
+
+**Tests / Validations Run:** `python -m pytest` → **138 passed** (+8). **Real
+end-to-end:** `do "Open Notepad using the Run dialog, then type merhaba"` → the AI
+autonomously did WIN+R → type notepad → ENTER → type merhaba, self-verified by
+reading Notepad's content, returned done. Completed=True, 4/4 steps, each decision
+printed + audited.
+
+**Validation Level Reached:** **4** (real desktop, live AI, verified).
+
+**Result:** Desktop-Worker is now genuinely AI-control-ready (§22): the AI is the
+decision-maker in the loop, improvising structured actions against live perception,
+while ALL safety stays below the planner (executor validates/approves/estop/audits;
+broker-only CLI; high-risk prompts on TTY / denied headless). **Auditors:** Codex
+APPROVE, Northstar ALIGNED. Applied review fix: stale/unknown elementId is rejected
+(no misclick). The deterministic `create-file` workflow remains as a separate
+reliable command; `do` never silently delegates to it.
+
+**Risks Introduced:** Reliability depends on UIA quality — UIA-poor apps
+(Electron/Chromium/custom-drawn) expose few elements, degrading to OCR/coords.
+The model must follow guidance to not `cli.run` GUI apps (env_context steers it).
+**Risks Resolved:** classifier false positive; AI misclick on stale id; no-feedback
+typing loop (value-capture); failure-mislabeled-as-success.
+
+**Next Action:** Optional — expose deterministic workflows as AI-callable tools
+(brain+hands, Northstar's next increment); vision fallback for UIA-poor apps;
+Phase 6 multi-agent; Phase 7 UI with live approve/deny. User test = MANUAL-9.

@@ -37,6 +37,11 @@ from desktop_worker.schema.results import ActionResult
 # Flags: print mode, single turn, tools disabled, JSON envelope output.
 _CLAUDE_FLAGS = '-p --output-format json --max-turns 1 --tools ""'
 
+# Mouse action types that accept x/y (so an elementId can be resolved to coords).
+_COORD_ACTIONS = frozenset({
+    "mouse.move", "mouse.click", "mouse.doubleClick", "mouse.rightClick",
+})
+
 
 # --- pure helpers --------------------------------------------------------
 
@@ -118,44 +123,56 @@ def _action_catalog() -> str:
 
 def build_planner_prompt(
     task: str, observation: Observation, history: list[ActionResult],
-    *, failed_note: str = "",
+    *, failed_note: str = "", env_context: str = "",
 ) -> str:
     """Build the instruction asking Claude for the next structured action."""
+    env = f"\nEnvironment:\n{env_context}" if env_context else ""
     elements = ""
     if observation.elements:
+        # Number elements by id so the AI targets a REAL element (no invented
+        # coordinates): it returns "elementId" and we resolve it to the element's
+        # center against THIS observation.
         elements = "\n".join(
-            f"  [{e.source}] {e.type} {e.text!r} {list(e.bounds)}"
-            for e in observation.elements[:25]
+            f"  {e.id}: {e.type} {e.text!r} {list(e.bounds)} [{e.source}]"
+            for e in observation.elements[:40]
         )
-        elements = f"\nDetected UI elements (UIA preferred, OCR fallback):\n{elements}"
+        elements = f"\nVisible UI elements (target these by elementId):\n{elements}"
 
     hist = ""
     if history:
-        recent = history[-3:]
+        recent = history[-4:]
         hist = "\nRecent results:\n" + "\n".join(
             f"  {r.action_type}: {'ok' if r.success else 'FAILED ' + (r.error or '')}"
             for r in recent
         )
 
-    fail = f"\nThe previous step FAILED: {failed_note}\nPropose a corrected next step." if failed_note else ""
+    fail = f"\nThe previous step FAILED: {failed_note}\nRe-observe and propose a corrected next step." if failed_note else ""
 
-    return f"""You are the planner for Desktop-Worker, controlling a Windows desktop.
-TASK: {task}
+    return f"""You are the planner for Desktop-Worker, an AI agent controlling a real Windows desktop.
+TASK: {task}{env}
 
 Current desktop observation:
   {observation.summary()}{elements}{hist}{fail}
 
-Decide the SINGLE next action. Respond with ONLY a JSON object, no prose, no
-markdown fences. Either signal completion:
-  {{"done": true}}
+Decide the SINGLE next action that moves the task forward, then stop. Respond with
+ONLY a JSON object (no prose, no markdown fences). Either signal completion:
+  {{"done": true, "reasoning": "<why the task is complete>"}}
 or give the next step:
-  {{"done": false, "action": <ACTION>, "description": "<short>", "expectedResult": {{...}}}}
-where <ACTION> is exactly one of these structured actions (use these types/fields):
+  {{"done": false, "reasoning": "<one line: what you see and why this action>",
+    "action": <ACTION>, "description": "<short>", "expectedResult": {{...}},
+    "elementId": "<id from the list, when clicking an element>"}}
+
+To CLICK a visible element, set "elementId" to its id above and use action
+{{"type":"mouse.click"}} (or "mouse.doubleClick"/"mouse.rightClick"); we resolve
+the id to its on-screen position — do NOT guess pixel coordinates. For typing use
+{{"type":"keyboard.type","text":"..."}}; for shortcuts {{"type":"keyboard.hotkey","keys":["CTRL","S"]}}.
+<ACTION> must be exactly one of these structured actions:
 {_action_catalog()}
 
-Rules: output valid JSON only; pick coordinates from the observation/elements when
-possible; prefer one small, verifiable step; set expectedResult when you can (e.g.
-{{"activeWindowContains": "Chrome"}} or {{"visibleTextContains": "Done"}})."""
+Rules: output valid JSON only; prefer clicking elements by elementId over raw
+coordinates; take one small verifiable step; set expectedResult when you can
+(e.g. {{"activeWindowContains":"Notepad"}} or {{"visibleTextContains":"Done"}});
+say done:true only when the task is actually achieved."""
 
 
 # --- availability check --------------------------------------------------
@@ -209,53 +226,105 @@ class ClaudeCliPlanner:
         ask: Optional[AskFn] = None,
         claude_path: str = "claude",
         audit: Any = None,
+        env_context: str = "",
     ) -> None:
         self.task = task
         self.broker = broker
         self.cwd = cwd
         self.claude_path = claude_path
         self.audit = audit
+        self.env_context = env_context
         # Injectable for tests; default routes through the broker.
         self._ask: AskFn = ask or self._ask_via_broker
+        # Last decision (for explain-before-execute printing by the `do` command).
+        self.last_reasoning: str = ""
+        self.last_done_reason: str = ""
+        # Why the last _plan returned None: "done" | "error" | "invalid" | "step".
+        # Lets the loop tell genuine completion from a failed/blocked AI call.
+        self.last_outcome: str = "done"
 
     # Planner protocol -------------------------------------------------
     def next_step(self, observation: Observation, history: list[ActionResult]) -> Optional[PlannedStep]:
-        return self._plan(build_planner_prompt(self.task, observation, history))
+        prompt = build_planner_prompt(self.task, observation, history,
+                                      env_context=self.env_context)
+        return self._plan(prompt, observation)
 
     def replan(self, failed: PlannedStep, observation: Observation,
                history: list[ActionResult]) -> Optional[PlannedStep]:
         note = f"{failed.action} ({failed.description})"
-        return self._plan(build_planner_prompt(self.task, observation, history, failed_note=note))
+        prompt = build_planner_prompt(self.task, observation, history,
+                                      failed_note=note, env_context=self.env_context)
+        return self._plan(prompt, observation)
 
     # internals --------------------------------------------------------
-    def _plan(self, prompt: str) -> Optional[PlannedStep]:
+    def _resolve_element(self, obj: dict, action_data: dict, observation: Observation):
+        """If the AI targeted an element by id, inject its center coordinates.
+
+        Resolves against THIS observation's elements (no invented coordinates).
+        Returns the updated action_data, or None if an elementId was given for a
+        mouse action but doesn't match any current element (stale/hallucinated) —
+        so the caller rejects it instead of clicking at the wrong place.
+        """
+        eid = obj.get("elementId")
+        atype = action_data.get("type")
+        # Only mouse actions accept x/y; never inject coords into keyboard/etc.
+        if not eid or atype not in _COORD_ACTIONS or "x" in action_data:
+            return action_data
+        for el in observation.elements:
+            if el.id == eid:
+                left, top, right, bottom = el.bounds
+                action_data = dict(action_data)
+                action_data["x"] = (left + right) // 2
+                action_data["y"] = (top + bottom) // 2
+                return action_data
+        return None  # unknown/stale elementId — reject rather than misclick
+
+    def _plan(self, prompt: str, observation: Observation) -> Optional[PlannedStep]:
+        self.last_reasoning = ""
         try:
             raw = self._ask(prompt)
         except Exception as exc:  # noqa: BLE001 — a planner I/O failure must not crash the loop
+            self.last_outcome = "error"
             self._log("planner.error", error=f"ask failed: {exc}")
             return None
 
         try:
             obj = parse_planner_output(raw)
         except ValueError as exc:
+            self.last_outcome = "invalid"
             self._log("planner.invalid", error=str(exc))
             return None
 
+        self.last_reasoning = str(obj.get("reasoning", "")).strip()
+
         if obj.get("done") is True:
-            self._log("planner.done")
+            self.last_outcome = "done"
+            self.last_done_reason = self.last_reasoning
+            self._log("planner.done", reasoning=self.last_reasoning)
             return None
 
         action_data = obj.get("action")
         if not isinstance(action_data, dict):
+            self.last_outcome = "invalid"
             self._log("planner.invalid", error="missing 'action' object")
+            return None
+
+        action_data = self._resolve_element(obj, action_data, observation)
+        if action_data is None:
+            self.last_outcome = "invalid"
+            self._log("planner.invalid", error=f"unknown elementId: {obj.get('elementId')!r}")
             return None
 
         try:
             action = parse_action(action_data)  # STRICT schema validation
         except ActionValidationError as exc:
+            self.last_outcome = "invalid"
             self._log("planner.invalid", error=f"action rejected: {exc}")
             return None
 
+        self.last_outcome = "step"
+        self._log("planner.step", reasoning=self.last_reasoning,
+                  planned={"action": action.to_dict(), "elementId": obj.get("elementId")})
         return PlannedStep(
             action=action,
             description=str(obj.get("description", action.summary)),

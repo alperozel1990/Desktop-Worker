@@ -51,11 +51,17 @@ Source of truth: `docs/requirements.md`.
   logged-in `claude` CLI (subscription, NO API key) through the broker; strict
   `parse_action` validation; fails safe; real path verified. See
   [[desktop-worker-no-api-billing]]. Full task = MANUAL-7.
-- **AI-control-ready core (§22) achieved.** Phase 5 STARTED: first real desktop
-  workflow shipped — `workflows/desktop_file.py` (+`desktop_ui.py`): visibly create
-  a desktop .txt with content via `python -m desktop_worker create-file`. Drives
-  structured actions through the executor; UIA-located targets; verified on disk
-  (never fakes success). VERIFIED on the real desktop (Level 4).
+- **GENUINE live AI control shipped (§22 realized).** `python -m desktop_worker
+  do "<task>"` — the AI decides+performs each action live (like the Chrome
+  extension): observe → perceive (UIA elements + context menus + values, OCR) →
+  Claude (logged-in CLI, NO API key) picks next structured action by elementId →
+  safety-gated executor → verify → repeat; each decision printed + audited.
+  VERIFIED real desktop (AI opened Notepad via Run dialog + typed, self-verified).
+  Key files: `__main__.py` `_cmd_do`, `loop/claude_cli_planner.py`, `loop/task_loop.py`.
+  Reliability depends on UIA richness (Electron/Chromium apps expose little → degrades).
+  Deterministic `create-file` workflow stays separate; `do` never delegates to it.
+- Phase 5 also has: deterministic `workflows/desktop_file.py` (+`desktop_ui.py`):
+  `create-file` builds a desktop .txt visibly, verified on disk.
 - **CRITICAL input fix:** `windows_input.type_text` now uses **SendInput** (16-bit
   wScan + surrogate pairs) for Unicode — keybd_event truncated codepoints >255
   (Turkish ş/ı were corrupted). VK map now has full A-Z/0-9 (Ctrl+S was a no-op).

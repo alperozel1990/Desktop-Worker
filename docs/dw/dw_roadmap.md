@@ -84,6 +84,11 @@ bounds + confidence + source attribution (uia/ocr/vision/heuristic).
 - [x] UIA preferred when available (DW-PERCEPTION-UIA; `merge_elements` UIA-first).
 **Complexity:** High.
 
+## §22 AI-CONTROL-READY — ✅ REALIZED (live AI agent: `do "<task>"`)
+The AI now drives the loop end-to-end: observe → perceive → AI-decide → gated-act
+→ verify → continue. Genuine dynamic control (DW-AGENT-DO), verified on the real
+desktop, all safety below the planner. This was the product north star.
+
 ## Phase 5 — Browser & Desktop Workflows  ◑ started (create-desktop-file shipped)
 **Goal:** Real user workflows in Chrome and common Windows UI.
 **Scope:** Chrome navigation, form fill, file upload via picker, downloads, file

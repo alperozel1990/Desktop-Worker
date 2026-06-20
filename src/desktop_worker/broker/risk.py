@@ -21,7 +21,9 @@ from desktop_worker.safety.policy import RiskLevel
 # High-risk signatures. Substring/regex match against the lowercased command.
 _HIGH_PATTERNS: tuple[re.Pattern[str], ...] = tuple(re.compile(p) for p in (
     r"\bdel\b", r"\berase\b", r"\brd\b", r"\brmdir\b", r"\brm\b",
-    r"remove-item", r"\bformat\b",
+    r"remove-item",
+    # 'format' only as a command token (avoid matching '--output-format' etc.)
+    r"(?:^|[\s&|(;])format\b",
     r"\breg\b\s+(add|delete|import)", r"regedit",
     r"\bsc\b\s+(delete|stop|config|create)", r"set-service", r"stop-service",
     r"new-service", r"sc\.exe",

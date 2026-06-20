@@ -124,6 +124,87 @@ def _cmd_create_file(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
+def _console_approver(request) -> bool:
+    """Interactive approval for high-risk actions; deny if not a TTY (headless)."""
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            return False
+        print(f"\n[APPROVAL NEEDED] risk={request.risk.value} :: {request.summary}")
+        return input("  Allow this action? [y/N] ").strip().lower() in ("y", "yes")
+    except Exception:
+        return False
+
+
+def _cmd_do(args: argparse.Namespace) -> int:
+    """Live AI-driven task: Claude decides each action; the agent performs it.
+
+    Genuine dynamic control — no scripted steps. Claude (your logged-in CLI, no
+    API key) chooses the next structured action from the perceived screen each
+    step; the safety-gated executor performs it; the loop verifies and continues.
+    """
+    from desktop_worker.config import Limits
+    from desktop_worker.loop.claude_cli_planner import ClaudeCliPlanner, claude_available
+    from desktop_worker.loop.task_loop import TaskLoop
+    from desktop_worker.perception import Perceiver, get_ocr_backend, get_uia_backend
+    from desktop_worker.safety.policy import PermissionPolicy, RiskLevel
+
+    real = not args.null
+    cfg = Config(session_id="ai-do", task_id="task")
+    # Low/medium actions run so you can WATCH; HIGH-risk (e.g. dangerous CLI) asks.
+    policy = PermissionPolicy(approval_callback=_console_approver,
+                              approval_threshold=RiskLevel.HIGH)
+    session = Session(cfg, policy=policy, prefer_real_backends=real)
+
+    cwd = str(cfg.artifacts_root.parent)
+    if real and not claude_available(session.broker, cwd):
+        print("ERROR: the `claude` CLI is not logged in. Run `claude auth status`.")
+        return 2
+
+    from desktop_worker.workflows.desktop_ui import get_desktop_dir
+
+    screen = session.desktop_backend.screen()
+    desktop_dir = get_desktop_dir()
+    env_context = (
+        f"- OS: Windows. Screen size: {screen.width}x{screen.height} "
+        f"(empty desktop center is about {screen.width // 2},{screen.height // 2}).\n"
+        f"- Desktop folder: {desktop_dir}\n"
+        f"- Valid working directory for cli.run: {cwd}\n"
+        "- You control the desktop with mouse + keyboard. To open an app, prefer the "
+        "keyboard (e.g. hotkey WIN+R then type the app name then ENTER) or clicking a "
+        "visible element by elementId.\n"
+        "- cli.run is ONLY for short non-interactive commands and BLOCKS until they "
+        "exit — NEVER use it to launch GUI apps (notepad, chrome). Its cwd must exist.\n"
+        "- To create a desktop text file you can right-click an empty desktop spot, "
+        "choose New then Text Document; menu items appear as elements to click by id."
+    )
+    perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))
+    planner = ClaudeCliPlanner(task=args.task, broker=session.broker, cwd=cwd,
+                               audit=session.audit, env_context=env_context)
+
+    def show_step(step) -> None:
+        if planner.last_reasoning:
+            print(f"\n[AI] {planner.last_reasoning}")
+        print(f"  -> {step.action}  ({step.description})")
+
+    loop = TaskLoop(
+        task_id=cfg.task_id, planner=planner, observer=session.observer,
+        executor=session.executor, audit=session.audit, estop=session.estop,
+        perceiver=perceiver, settle_s=0.6, on_step=show_step, stall_guard=True,
+        limits=Limits(max_actions_per_task=args.max_actions,
+                      max_task_seconds=args.max_seconds),
+    )
+
+    print(f"TASK: {args.task}")
+    print("Claude decides each step live. Emergency stop: `python -m desktop_worker estop` "
+          "(in another window).\n")
+    report = loop.run()
+    print("\n" + report.to_markdown())
+    if planner.last_done_reason:
+        print(f"AI final note: {planner.last_done_reason}")
+    print(f"Audit log: {cfg.audit_file}")
+    return 0 if report.completed else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="desktop-worker", description=__doc__)
     p.add_argument("--null", action="store_true",
@@ -153,6 +234,12 @@ def build_parser() -> argparse.ArgumentParser:
     cf.add_argument("--name", default="dw-demo", help="file name (without .txt)")
     cf.add_argument("--desktop", default=None, help="override the desktop directory")
     cf.set_defaults(func=_cmd_create_file)
+
+    do = sub.add_parser("do", help="give a natural-language task; the AI drives it live")
+    do.add_argument("task", help="the task in plain language, e.g. \"open Notepad and type hi\"")
+    do.add_argument("--max-actions", type=int, default=15, help="max actions before stopping")
+    do.add_argument("--max-seconds", type=int, default=300, help="max task time")
+    do.set_defaults(func=_cmd_do)
     return p
 
 
