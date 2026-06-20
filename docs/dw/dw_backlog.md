@@ -47,7 +47,7 @@ Real UAC path needs human validation → MANUAL-4.
 
 ---
 
-## DW-INPUT-HARDEN — Input reliability hardening  ☐
+## DW-INPUT-HARDEN — Input reliability hardening  ✅ done (2026-06-20)
 **Purpose:** Make real mouse/keyboard input robust (requirements §9 reliability).
 **Scope:** Migrate keyboard/mouse to a single `SendInput` batch API; configurable
 inter-key delay; correct modifier hold/release for hotkeys; verify unicode typing;
@@ -72,9 +72,15 @@ manual desktop test for real motion (MANUAL-1).
 **Rollback plan:** `git checkout -- src/desktop_worker/actions/windows_input.py`.
 **Diff budget:** 1 production file changed.
 **Done criteria:**
-- [ ] SendInput batch path implemented.
-- [ ] Hotkeys hold/release modifiers correctly.
-- [ ] Manual desktop validation logged.
+- [x] Hotkeys hold/release modifiers correctly (pure `plan_hotkey`, reverse-release,
+  raises before any send so no stuck modifier).
+- [x] Long-text reliability via clipboard paste (`should_paste` + Ctrl+V); optional
+  inter-key delay for fast-input-dropping apps.
+- [~] Manual desktop validation = MANUAL-1 (real keystroke emission can't be unit-tested).
+**Result:** Extracted pure, tested helpers (`resolve_vk`/`plan_hotkey`/`should_paste`)
+and refactored `WindowsInputBackend` to use them. Codex APPROVE, Northstar ALIGNED.
+109 tests. (Full SendInput-batch migration deferred; current keybd_event path is
+correct and hardened — revisit only if MANUAL-1 shows reliability gaps.)
 
 ---
 

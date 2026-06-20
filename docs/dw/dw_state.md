@@ -39,7 +39,7 @@ Gate and only implement when the selected card is explicitly approved.
 | Elevated CLI broker (capture/preview/approval/audit) | complete |
 | Per-command UAC re-elevation w/ captured output | complete (DW-CLI-ELEVATE); real UAC = MANUAL-4 |
 | Desktop observation backend (Windows + Null) | complete (single-monitor) |
-| Input backend (Windows SendInput + Null) | complete (needs hardening) |
+| Input backend (Windows + Null) | complete + hardened (DW-INPUT-HARDEN); real motion = MANUAL-1 |
 | Action executor | complete |
 | Observe-plan-act-verify-log loop | complete (scripted planner) |
 | Loop recovery / retry / re-plan / time limit | complete (DW-LOOP-RECOVERY) |
@@ -52,22 +52,23 @@ Gate and only implement when the selected card is explicitly approved.
 | AI planner integration (Claude) | not started (interface ready) |
 
 ## Last completed task
-- **Task:** DW-PERCEPTION-WIRE — wire the Perceiver into the task loop.
+- **Task:** DW-INPUT-HARDEN — input reliability (pure planning helpers).
 - **Date:** 2026-06-20.
-- **Summary:** `TaskLoop` gained an optional `perceiver`; before/after observations
-  go through `_observe` (observe → perceive-if-set); `step.planned` audit now
-  carries `elements`. Default path unchanged (no perceiver → no elements, no hard
-  dep). Codex APPROVE, Northstar ALIGNED. 103 tests (+2). **Phase 4 complete.**
-- **Files:** `loop/task_loop.py`, `tests/test_loop_perception_wire.py`.
+- **Summary:** Extracted pure `resolve_vk` / `plan_hotkey` (reverse-release, raises
+  before send → no stuck modifier) / `should_paste`; refactored the Windows backend
+  to paste long text via Ctrl+V and support an inter-key delay. Codex APPROVE,
+  Northstar ALIGNED. 109 tests (+6). Real keystroke emission = MANUAL-1.
+- **Files:** `actions/windows_input.py`, `tests/test_input_hardening.py`.
 
 ## Current task
 None in progress.
 
 ## Next recommended task
-**DW-INPUT-HARDEN** — input reliability (SendInput batch, modifier hold/release,
-inter-key delay). Implementable to Level 3 autonomously; real motion = MANUAL-1.
-Then **DW-PLANNER-AI** (the capstone) — needs a model/provider + API-key decision,
-which is a **user decision** (stop and ask). See `dw_backlog.md`.
+**DW-PLANNER-AI** (the capstone — turns the loop into a real AI agent). **BLOCKED
+on a user decision:** which model/provider drives the planner and where does the
+API key come from? Default recommendation: Claude via the Anthropic SDK
+(`claude-opus-4-8` / `claude-sonnet-4-6`). The `Planner`/`replan` interfaces are
+ready. Do NOT implement until the user chooses. See `dw_backlog.md` DW-PLANNER-AI.
 
 ## Open risks
 | Risk | Severity | Mitigation |
@@ -94,8 +95,8 @@ MANUAL-2 (install `[windows]` extra for real screenshots), MANUAL-3 (DONE — gi
 
 ## Last validation results
 - **Date:** 2026-06-20.
-- **Type:** `python -m pytest` (103 tests) + demo run.
-- **Result:** 103 passed. Demo loop completed 5/5 steps. Real `observe` returned
+- **Type:** `python -m pytest` (109 tests) + demo run.
+- **Result:** 109 passed. Demo loop completed 5/5 steps. Real `observe` returned
   genuine cursor/window/screen data on the dev machine.
 - **Validation level reached:** **3** (unit + local runtime). Live-desktop input
   motion (Level 4) NOT yet run — see MANUAL-1.

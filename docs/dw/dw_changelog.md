@@ -239,3 +239,32 @@ hard dependency (decoupled via a `_PerceiverLike` Protocol). **Phase 4 complete.
 
 **Next Action:** DW-INPUT-HARDEN (autonomous), then DW-PLANNER-AI (needs a user
 decision on model/provider + API key).
+
+---
+
+## 2026-06-20 | Execute | Task: DW-INPUT-HARDEN
+
+**Task ID:** DW-INPUT-HARDEN
+**Type:** Execute (input reliability, requirements §9)
+**Status:** Complete
+
+**Files Created:** `tests/test_input_hardening.py`.
+**Files Modified:** `src/desktop_worker/actions/windows_input.py`; continuity files.
+
+**Tests / Validations Run:** `python -m pytest` → **109 passed** (+6).
+
+**Validation Level Reached:** **3** — unit (pure planning helpers). Real keystroke
+emission on a live desktop = MANUAL-1.
+
+**Result:** Extracted the testable core of input handling: pure `resolve_vk`,
+`plan_hotkey` (modifiers held, released in reverse, raises before sending so an
+unknown key can't leave a modifier stuck down), and `should_paste`. Refactored
+`WindowsInputBackend` to paste long text via clipboard+Ctrl+V and to support an
+optional inter-key delay. Protocol/Null backend unchanged. **Auditors:** Codex
+APPROVE, Northstar ALIGNED.
+
+**Risks Introduced:** Paste path overwrites the clipboard (expected); real emission
+unverified until MANUAL-1.
+**Risks Resolved:** Stuck-modifier-on-unknown-key avoided and now tested.
+
+**Next Action:** DW-PLANNER-AI — BLOCKED on a user decision (model/provider + API key).

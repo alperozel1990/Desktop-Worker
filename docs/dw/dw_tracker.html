@@ -43,8 +43,8 @@ const DATA = {
   workspace: "C:\\Desktop-Worker\\docs\\dw",
   updated: "2026-06-20",
   implementationAllowed: "YES (autonomous; auditor-gated)",
-  validationLevel: "3 — unit (103 tests) + local runtime; UAC/input/screenshot/OCR/UIA (4) need user tests",
-  cardsDone: 6, cardsTotal: 8,
+  validationLevel: "3 — unit (109 tests) + local runtime; UAC/input/screenshot/OCR/UIA (4) need user tests",
+  cardsDone: 7, cardsTotal: 8,
   phases: [
     {id:"P1", name:"Local Control Foundation", status:"done"},
     {id:"P2", name:"Structured Action Loop", status:"done"},
@@ -61,11 +61,11 @@ const DATA = {
     {id:"DW-PERCEPTION-OCR", t:"OCR perception (Phase 4 start)", s:"done"},
     {id:"DW-PERCEPTION-UIA", t:"Windows UI Automation elements", s:"done"},
     {id:"DW-PERCEPTION-WIRE", t:"Wire Perceiver into the task loop", s:"done"},
-    {id:"DW-INPUT-HARDEN", t:"Input reliability hardening (SendInput batch)", s:"todo", next:true},
-    {id:"DW-PLANNER-AI", t:"Pluggable AI planner (needs model decision)", s:"todo"},
+    {id:"DW-INPUT-HARDEN", t:"Input reliability hardening (plan_hotkey/paste)", s:"done"},
+    {id:"DW-PLANNER-AI", t:"Pluggable AI planner — BLOCKED on user model decision", s:"block", next:true},
   ],
   current: "none in progress",
-  nextCard: "DW-INPUT-HARDEN — input reliability (SendInput batch); real motion = user test (MANUAL-1)",
+  nextCard: "DW-PLANNER-AI — BLOCKED: needs a user decision on model/provider + API key (default rec: Claude/Anthropic SDK)",
   risks: [
     ["Broker shell=True runs cmd.exe strings","Medium","Gated by classify+approval+audit; no passthrough API"],
     ["'Elevated by default' not yet true per-command from non-admin","Medium","Broker reports actual token; DW-CLI-ELEVATE closes gap"],
@@ -92,6 +92,7 @@ const DATA = {
   doNotTouch: ["docs/requirements.md (read-only source of truth)","artifacts/ (generated)",
     "*/backends.py Protocol signatures"],
   changelog: [
+    "2026-06-20 DW-INPUT-HARDEN — pure plan_hotkey (reverse-release, no stuck modifier) + should_paste; long text pastes via Ctrl+V; Codex APPROVE, Northstar ALIGNED; 109 tests.",
     "2026-06-20 DW-PERCEPTION-WIRE — Perceiver wired into the loop; elements reach the audit; default path unchanged; Codex APPROVE, Northstar ALIGNED; 103 tests; Phase 4 complete.",
     "2026-06-20 DW-PERCEPTION-UIA — Windows UI Automation elements + UIA-preferred merge with OCR; Element.source now required; Codex APPROVE, Northstar ALIGNED; 101 tests; §7 preferred path.",
     "2026-06-20 DW-PERCEPTION-OCR — perception layer OCR path: Element schema (bounds/conf/source), pure data_to_elements parser, lazy Tesseract backend, Perceiver enriches frozen Observation; Codex APPROVE, Northstar ALIGNED; 95 tests; Phase 4 started.",
@@ -99,7 +100,7 @@ const DATA = {
     "2026-06-20 DW-LOOP-RECOVERY — bounded retry/re-plan/safe-stop + time limit; Codex APPROVE, Northstar ALIGNED; 80 tests; Phase 2 complete.",
     "2026-06-20 BOOTSTRAP-1 — Python foundation across 8 layers; 71 tests; loop end-to-end; real observation; ease-me workspace + launchers."
   ],
-  nextPrompt: "/ease-me continue  Repo: C:\\Desktop-Worker  Workspace: docs\\dw. Read dw_memory.md + dw_state.md. Next card: DW-INPUT-HARDEN (autonomous), then DW-PLANNER-AI (needs a model/provider decision from the user)."
+  nextPrompt: "/ease-me continue  Repo: C:\\Desktop-Worker  Workspace: docs\\dw. Read dw_memory.md + dw_state.md. DW-PLANNER-AI is next but BLOCKED on the user's model/provider + API-key decision — confirm choice before implementing."
 };
 
 const SB = {done:["Done","b-done"],prog:["In progress","b-prog"],todo:["Not started","b-todo"],

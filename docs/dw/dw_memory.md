@@ -45,8 +45,11 @@ Source of truth: `docs/requirements.md`.
   Element schema (source required), OcrBackend + UiaBackend, Perceiver (UIA-preferred
   merge + OCR fallback); `TaskLoop(perceiver=...)` feeds elements into the audit.
   Real OCR = MANUAL-5, real UIA = MANUAL-6.
-- Phases 5–7: not started. Next: DW-INPUT-HARDEN (autonomous), then DW-PLANNER-AI
-  (capstone — needs a user decision on model/provider + API key).
+- Input hardened (DW-INPUT-HARDEN): pure `plan_hotkey`/`resolve_vk`/`should_paste`;
+  long text pastes via Ctrl+V. Real motion = MANUAL-1.
+- Phases 5–7: not started. **DW-PLANNER-AI** (capstone) is BLOCKED on a user
+  decision: model/provider + API key (default rec: Claude via Anthropic SDK).
+  Don't implement until chosen. Planner/replan interfaces are ready.
 
 ## Operating model (since 2026-06-20)
 - Autonomous per-card execution. Each card gated by **Codex Auditor** (code) +

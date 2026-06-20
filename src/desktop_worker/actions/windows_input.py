@@ -27,9 +27,43 @@ _VK = {
     "L": 0x4C, "C": 0x43, "V": 0x56, "A": 0x41,
 }
 
+# Default: paste text longer than this many chars via the clipboard instead of
+# synthesizing each keystroke (faster + far more reliable for long strings).
+DEFAULT_PASTE_THRESHOLD = 200
+
+
+def resolve_vk(key: str) -> int | None:
+    """Resolve a key name (case-insensitive) to its virtual-key code, or None."""
+    return _VK.get((key or "").upper())
+
+
+def plan_hotkey(keys: list[str]) -> list[tuple[int, str]]:
+    """Plan a key-combination as an ordered (vk, "down"|"up") event list.
+
+    Modifiers/keys are pressed in the given order and released in REVERSE order,
+    so a combo like Ctrl+L holds Ctrl down across the L press (requirements §9).
+    Raises KeyError if any key name is unknown — callers must not send a
+    partially-resolved combo (which could leave a modifier stuck down).
+    """
+    vks: list[int] = []
+    for k in keys:
+        vk = resolve_vk(k)
+        if vk is None:
+            raise KeyError(f"unknown key in hotkey: {k!r}")
+        vks.append(vk)
+    plan: list[tuple[int, str]] = [(vk, "down") for vk in vks]
+    plan += [(vk, "up") for vk in reversed(vks)]
+    return plan
+
+
+def should_paste(text: str, threshold: int = DEFAULT_PASTE_THRESHOLD) -> bool:
+    """Whether long text should be entered via clipboard paste rather than typed."""
+    return len(text) > threshold
+
 
 class WindowsInputBackend:
-    def __init__(self) -> None:
+    def __init__(self, *, inter_key_delay_s: float = 0.0,
+                 paste_threshold: int = DEFAULT_PASTE_THRESHOLD) -> None:
         import sys
 
         if not sys.platform.startswith("win"):
@@ -38,6 +72,10 @@ class WindowsInputBackend:
 
         self.ctypes = ctypes
         self.user32 = ctypes.windll.user32
+        # Small delay between synthesized keystrokes improves reliability in apps
+        # that drop input when it arrives too fast (requirements §9).
+        self.inter_key_delay_s = inter_key_delay_s
+        self.paste_threshold = paste_threshold
 
     # --- mouse ---------------------------------------------------------
     def move(self, x: int, y: int) -> None:
@@ -96,11 +134,17 @@ class WindowsInputBackend:
 
     # --- keyboard ------------------------------------------------------
     def type_text(self, text: str) -> None:
-        ctypes = self.ctypes
+        # For long text, paste via clipboard (Ctrl+V) — much faster and far more
+        # reliable than synthesizing thousands of keystrokes (requirements §9).
+        if should_paste(text, self.paste_threshold):
+            self.clipboard_set(text)
+            self.hotkey(["CTRL", "V"])
+            return
         for ch in text:
             # KEYEVENTF_UNICODE lets us emit any character regardless of layout.
             self._unicode_key(ord(ch))
-        _ = ctypes  # keep reference clear
+            if self.inter_key_delay_s:
+                time.sleep(self.inter_key_delay_s)
 
     def _unicode_key(self, codepoint: int) -> None:
         KEYEVENTF_UNICODE = 0x0004
@@ -119,13 +163,16 @@ class WindowsInputBackend:
         self.user32.keybd_event(vk, 0, 0x0002, 0)
 
     def hotkey(self, keys: list[str]) -> None:
-        vks = [_VK.get(k.upper()) for k in keys]
-        if any(v is None for v in vks):
+        # plan_hotkey raises on an unknown key BEFORE any event is sent, so we
+        # never leave a modifier stuck down from a partially-resolved combo.
+        try:
+            plan = plan_hotkey(keys)
+        except KeyError:
             return
-        for vk in vks:
-            self.user32.keybd_event(vk, 0, 0, 0)
-        for vk in reversed(vks):
-            self.user32.keybd_event(vk, 0, 0x0002, 0)
+        KEYEVENTF_KEYUP = 0x0002
+        for vk, action in plan:
+            flags = KEYEVENTF_KEYUP if action == "up" else 0
+            self.user32.keybd_event(vk, 0, flags, 0)
 
     # --- clipboard -----------------------------------------------------
     def clipboard_set(self, text: str) -> None:
