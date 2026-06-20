@@ -138,13 +138,28 @@ def build_planner_prompt(
         )
         elements = f"\nVisible UI elements (target these by elementId):\n{elements}"
 
+    # Memory: what you already TRIED and what RESULTED. This is how you avoid
+    # repeating actions that don't work — reason over your own action/outcome trace.
     hist = ""
     if history:
-        recent = history[-4:]
-        hist = "\nRecent results:\n" + "\n".join(
-            f"  {r.action_type}: {'ok' if r.success else 'FAILED ' + (r.error or '')}"
-            for r in recent
-        )
+        lines = []
+        for r in history[-8:]:
+            d = r.detail or {}
+            what = d.get("actionStr", r.action_type)
+            why = d.get("reasoning", "")
+            if not r.success:
+                effect = f"ERROR: {r.error}"
+            elif d.get("screenChanged") is False:
+                effect = "ran but the screen did NOT change (no visible effect)"
+            elif d.get("screenChanged") is True:
+                effect = "screen changed"
+            else:
+                effect = "ok"
+            why_txt = f" [you reasoned: {why}]" if why else ""
+            lines.append(f"  - {what}{why_txt} => {effect}")
+        hist = ("\nActions you ALREADY tried this task (oldest first) — if an action "
+                "had no effect or errored, do NOT repeat it, try a different approach:\n"
+                + "\n".join(lines))
 
     fail = f"\nThe previous step FAILED: {failed_note}\nRe-observe and propose a corrected next step." if failed_note else ""
 
@@ -329,6 +344,7 @@ class ClaudeCliPlanner:
             action=action,
             description=str(obj.get("description", action.summary)),
             expected=obj.get("expectedResult", {}) if isinstance(obj.get("expectedResult"), dict) else {},
+            reasoning=self.last_reasoning,
         )
 
     def _ask_via_broker(self, prompt: str) -> str:

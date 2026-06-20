@@ -33,6 +33,7 @@ class PlannedStep:
     action: Action
     description: str = ""
     expected: dict[str, Any] = field(default_factory=dict)  # verification spec
+    reasoning: str = ""  # the AI's stated reason — fed back as memory next step
 
 
 class Planner(Protocol):
@@ -253,17 +254,20 @@ class TaskLoop:
             # OBSERVE (before) — enriched with perception elements if available.
             before = self._observe("before")
 
-            # No-progress guard (AI loop): if the desktop state hasn't changed
-            # across several actions, the AI is stuck — stop safely vs loop forever.
+            # Signature of the pre-action state — used both to record whether each
+            # action actually changes the screen (fed back to the AI as memory) and
+            # as a final safety backstop if the AI can't make progress at all.
+            before_sig = self._obs_signature(before)
             if self.stall_guard:
-                sig = self._obs_signature(before)
-                if sig == last_sig:
+                if before_sig == last_sig:
                     stale_count += 1
                 else:
                     stale_count = 0
-                    last_sig = sig
-                if stale_count >= 3:
-                    stop_reason = "no progress: desktop state unchanged across 3 actions"
+                    last_sig = before_sig
+                # Backstop only: the AI sees its action/outcome memory and should
+                # self-correct; stop hard only if it truly can't progress at all.
+                if stale_count >= 6:
+                    stop_reason = "no progress: desktop state unchanged across 6 actions"
                     self.audit.record("task.stalled", reason=stop_reason)
                     break
 
@@ -344,7 +348,15 @@ class TaskLoop:
 
                 break  # give up — safe-stop handled below
 
+            # Record this action's MEMORY for the AI: what was attempted and
+            # whether it actually changed the screen. This is what lets the AI
+            # notice "that action had no effect" and try something different,
+            # instead of being told so by a heuristic.
             result.retries = attempts
+            result.detail["actionStr"] = str(step.action)
+            result.detail["screenChanged"] = self._obs_signature(after) != before_sig
+            if step.reasoning:
+                result.detail["reasoning"] = step.reasoning
             history.append(result)
             successes += int(ok)
             failures += int(not ok)

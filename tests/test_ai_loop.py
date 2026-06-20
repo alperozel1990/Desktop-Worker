@@ -88,6 +88,19 @@ def test_prompt_includes_env_context_and_element_ids():
     assert "elementId" in prompt          # instructed to target by id
 
 
+def test_prompt_shows_action_outcome_memory():
+    # The AI must SEE that a past action had no visible effect (so it won't repeat).
+    from desktop_worker.schema.results import ActionResult
+    tried = ActionResult(
+        action_type="keyboard.hotkey", success=True, startedAt="a", endedAt="b",
+        detail={"actionStr": "keyboard.hotkey(keys=['CTRL', 'A'])", "screenChanged": False},
+    )
+    prompt = build_planner_prompt("t", _obs_with_element(), [tried])
+    assert "CTRL" in prompt                       # what was tried is shown
+    assert "no visible effect" in prompt          # and that it did nothing
+    assert "do NOT repeat" in prompt or "different approach" in prompt
+
+
 # --- loop integration (stubbed planner) ----------------------------------
 
 class StubPlanner:

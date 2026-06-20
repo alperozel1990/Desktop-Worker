@@ -404,3 +404,38 @@ typing loop (value-capture); failure-mislabeled-as-success.
 **Next Action:** Optional — expose deterministic workflows as AI-callable tools
 (brain+hands, Northstar's next increment); vision fallback for UIA-poor apps;
 Phase 6 multi-agent; Phase 7 UI with live approve/deny. User test = MANUAL-9.
+
+---
+
+## 2026-06-20 | Execute | Task: DW-AGENT-MEMORY — action/outcome memory (fix loop)
+
+**Task ID:** DW-AGENT-MEMORY
+**Type:** Execute (refine DW-AGENT-DO) — user feedback: "AI doesn't notice its own
+mistakes; it should remember what it tried and the results — don't write heuristics."
+**Status:** Complete — VERIFIED on the real desktop (Level 4)
+
+**Problem:** The AI looped sending CTRL+A in the Run dialog. Root cause: the planner's
+history was only "keyboard.hotkey: ok" — so 3 ineffective CTRL+A's all looked like
+success; the AI had no memory of *effects*. An earlier heuristic ("you're stuck"
+hint injected by the loop) was the wrong fix (user rightly rejected it).
+
+**Fix:** Removed the heuristic entirely. Added genuine action/outcome memory: the
+loop records per step `actionStr`, `screenChanged` (observation-signature diff
+before vs after), and the AI's own `reasoning`; `build_planner_prompt` shows the
+last 8 as "what you tried [you reasoned: ...] => effect" (ERROR / no visible effect
+/ screen changed), instructing the AI not to repeat ineffective actions. The
+stall-stop is kept only as a final safety backstop (6 unchanged observations).
+
+**Files Modified:** `loop/task_loop.py` (record memory; PlannedStep.reasoning;
+backstop), `loop/claude_cli_planner.py` (render memory; removed progress_note),
+`tests/test_ai_loop.py`; continuity files.
+
+**Tests / Validations:** `python -m pytest` → **139 passed**. **Real run VERIFIED:**
+`do "open the Calculator and compute 12 times 9"` — the AI did WIN+R → CTRL+A →
+then (NO loop) reasoned "'notepad' is selected, type 'calc'" → launched Calculator
+→ typed 12*9= → self-verified "Display is 108". Completed, 5/5, correct (108).
+
+**Result:** Genuine agent memory — the AI reasons over its own action/result trace
+and self-corrects, no heuristic spoon-feeding. Codex APPROVE, Northstar ALIGNED.
+
+**Next Action:** Optional, as above. None blocking.

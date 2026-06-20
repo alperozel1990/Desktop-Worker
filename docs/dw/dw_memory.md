@@ -60,6 +60,11 @@ Source of truth: `docs/requirements.md`.
   Key files: `__main__.py` `_cmd_do`, `loop/claude_cli_planner.py`, `loop/task_loop.py`.
   Reliability depends on UIA richness (Electron/Chromium apps expose little → degrades).
   Deterministic `create-file` workflow stays separate; `do` never delegates to it.
+- **AI has action/outcome MEMORY** (DW-AGENT-MEMORY): each step the loop records
+  what was tried + whether the screen changed + the AI's reasoning, and feeds the
+  last 8 back so the AI self-corrects (won't repeat ineffective actions). This
+  replaced an earlier "you're stuck" heuristic the user rejected. Principle: give
+  the AI good information and let it reason — don't spoon-feed heuristics.
 - Phase 5 also has: deterministic `workflows/desktop_file.py` (+`desktop_ui.py`):
   `create-file` builds a desktop .txt visibly, verified on disk.
 - **CRITICAL input fix:** `windows_input.type_text` now uses **SendInput** (16-bit
