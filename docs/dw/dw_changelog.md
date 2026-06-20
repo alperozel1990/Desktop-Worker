@@ -210,3 +210,32 @@ if wrong, never crashes). Elements still not wired into the live loop (DW-PERCEP
 **Risks Resolved:** Attribution honesty enforced (source required).
 
 **Next Action:** DW-PERCEPTION-WIRE — wire the Perceiver into the loop.
+
+---
+
+## 2026-06-20 | Execute | Task: DW-PERCEPTION-WIRE
+
+**Task ID:** DW-PERCEPTION-WIRE
+**Type:** Execute (Phase 4 completion)
+**Status:** Complete
+
+**Files Created:** `tests/test_loop_perception_wire.py`.
+**Files Modified:** `src/desktop_worker/loop/task_loop.py`; continuity files.
+
+**Tests / Validations Run:** `python -m pytest` → **103 passed** (+2).
+
+**Validation Level Reached:** **3** — unit + local runtime.
+
+**Result:** Wired perception into the loop. `TaskLoop` takes an optional
+`perceiver`; a new `_observe(label)` helper observes then enriches (UIA-preferred +
+OCR) when a perceiver is present; before/after observations use it; `step.planned`
+audit now carries `elements`. Default path (no perceiver) is unchanged with no new
+hard dependency (decoupled via a `_PerceiverLike` Protocol). **Phase 4 complete.**
+**Auditors:** Codex APPROVE, Northstar ALIGNED.
+
+**Risks Introduced:** A misbehaving injected perceiver could raise (contract:
+`perceive -> Observation`); default path unaffected.
+**Risks Resolved:** §7/§2 gap closed — structured elements now reach the audit/AI.
+
+**Next Action:** DW-INPUT-HARDEN (autonomous), then DW-PLANNER-AI (needs a user
+decision on model/provider + API key).

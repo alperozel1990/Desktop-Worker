@@ -172,7 +172,7 @@ GetForegroundWindow+ControlFromHandle. Real UIA enumeration = MANUAL-6.
 
 ---
 
-## DW-PERCEPTION-WIRE — Wire the Perceiver into the task loop  ☐
+## DW-PERCEPTION-WIRE — Wire the Perceiver into the task loop  ✅ done (2026-06-20)
 **Purpose:** Make detected elements actually reach the AI prompt + audit (today
 `Observation.elements` is always empty in the live loop). Closes the §2/§7 gap
 flagged by both auditors on DW-PERCEPTION-OCR.
@@ -191,8 +191,11 @@ elements appear in the audited observation.
 **Rollback plan:** `git checkout -- src/desktop_worker/loop/task_loop.py`.
 **Diff budget:** 1–2 production files changed.
 **Done criteria:**
-- [ ] Perceiver optionally wired; elements reach audit/prompt.
-- [ ] Default path unchanged (no new hard dependency).
+- [x] Perceiver optionally wired (`TaskLoop(perceiver=...)`, `_observe` helper);
+  elements reach the `step.planned` audit record.
+- [x] Default path unchanged (perceiver=None → identical behavior, no hard dep).
+**Result:** Codex APPROVE, Northstar ALIGNED. 103 tests. Phase 4 complete
+(OCR + UIA + wiring). Session-level default wiring is a trivial app.py follow-up.
 
 ---
 

@@ -41,11 +41,12 @@ Source of truth: `docs/requirements.md`.
 - Phase 3 (Elevated CLI Broker): **complete** — DW-CLI-ELEVATE done (real
   per-command UAC elevation via `broker/elevation.py`, honesty invariant,
   auditor-approved). Real UAC prompt = user test MANUAL-4.
-- Phase 4 (Perception): **OCR + UIA done** (`perception/`: Element schema,
-  OcrBackend + UiaBackend, Perceiver = UIA-preferred merge + OCR fallback).
-  `Element.source` is required. Open: DW-PERCEPTION-WIRE (wire Perceiver into the
-  loop so elements reach audit/AI). Real OCR = MANUAL-5, real UIA = MANUAL-6.
-- Phases 5–7: not started. After WIRE: DW-INPUT-HARDEN, then DW-PLANNER-AI (capstone).
+- Phase 4 (Perception): **complete** — OCR + UIA + loop-wiring. `perception/`:
+  Element schema (source required), OcrBackend + UiaBackend, Perceiver (UIA-preferred
+  merge + OCR fallback); `TaskLoop(perceiver=...)` feeds elements into the audit.
+  Real OCR = MANUAL-5, real UIA = MANUAL-6.
+- Phases 5–7: not started. Next: DW-INPUT-HARDEN (autonomous), then DW-PLANNER-AI
+  (capstone — needs a user decision on model/provider + API key).
 
 ## Operating model (since 2026-06-20)
 - Autonomous per-card execution. Each card gated by **Codex Auditor** (code) +

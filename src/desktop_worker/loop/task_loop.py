@@ -42,6 +42,13 @@ class Planner(Protocol):
         ...
 
 
+class _PerceiverLike(Protocol):
+    """Anything that can enrich an observation with structured elements."""
+
+    def perceive(self, observation: Observation) -> Observation:
+        ...
+
+
 class ScriptedPlanner:
     """Replays a fixed list of steps. Used for tests and the demo task."""
 
@@ -132,6 +139,7 @@ class TaskLoop:
         estop: EmergencyStop,
         limits: Optional[Limits] = None,
         now: Optional[Callable[[], float]] = None,
+        perceiver: Optional["_PerceiverLike"] = None,
     ) -> None:
         self.task_id = task_id
         self.planner = planner
@@ -142,6 +150,18 @@ class TaskLoop:
         self.limits = limits or Limits()
         # Injectable monotonic clock (seconds) so the time limit is testable.
         self._now = now or time.monotonic
+        # Optional perception (DW-PERCEPTION-WIRE). When set, observations are
+        # enriched with structured elements (UIA-preferred, OCR fallback) so the
+        # AI/audit see attributable elements, not just raw coordinates. Off by
+        # default — no perception dependency is forced on the loop.
+        self.perceiver = perceiver
+
+    def _observe(self, label: str):
+        """Capture an observation, enriching it with elements if a perceiver is set."""
+        obs = self.observer.observe(label)
+        if self.perceiver is not None:
+            obs = self.perceiver.perceive(obs)
+        return obs
 
     # Action families that are safe to re-execute on failure without
     # accumulating side effects (requirements §15 "retry safe actions").
@@ -206,8 +226,8 @@ class TaskLoop:
                 self.audit.record("task.halted", reason=stop_reason)
                 break
 
-            # OBSERVE (before).
-            before = self.observer.observe("before")
+            # OBSERVE (before) — enriched with perception elements if available.
+            before = self._observe("before")
 
             # PLAN.
             step = self.planner.next_step(before, history)
@@ -221,6 +241,7 @@ class TaskLoop:
                          "action": step.action.to_dict(),
                          "expected": step.expected},
                 before_ref=before.screenshotRef,
+                elements=[e.to_dict() for e in before.elements],
             )
 
             # ACT → VERIFY with recovery: retry safe actions up to max_retries,
@@ -230,7 +251,7 @@ class TaskLoop:
             time_exceeded = False
             while True:
                 result = self.executor.execute(step.action)
-                after = self.observer.observe("after")
+                after = self._observe("after")
                 verification = self._verify(step, after, result)
                 ok = result.success and (verification is None or verification.passed)
                 if ok:
