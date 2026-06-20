@@ -100,6 +100,30 @@ def _cmd_clear_stop(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_create_file(args: argparse.Namespace) -> int:
+    """Visibly create a desktop text file with content (Phase 5 workflow)."""
+    from desktop_worker.workflows import create_desktop_text_file
+    from desktop_worker.workflows.desktop_ui import get_desktop_dir, get_desktop_ui
+
+    cfg = Config(session_id="workflow", task_id="create-file")
+    session = Session(cfg, prefer_real_backends=not args.null)
+    ui = get_desktop_ui(prefer_real=not args.null)
+    screen = session.desktop_backend.screen()
+    desktop_dir = args.desktop or get_desktop_dir()
+
+    print(f"Creating {args.name}.txt on {desktop_dir} with text {args.text!r} ...")
+    print("Watch your screen. Emergency stop: run `python -m desktop_worker estop`.")
+    result = create_desktop_text_file(
+        args.text, executor=session.executor, ui=ui,
+        desktop_dir=desktop_dir, screen_size=(screen.width, screen.height),
+        filename=args.name,
+    )
+    print(result.to_markdown())
+    cfg.report_file.write_text(result.to_markdown(), encoding="utf-8")
+    print(f"Audit log: {cfg.audit_file}")
+    return 0 if result.success else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="desktop-worker", description=__doc__)
     p.add_argument("--null", action="store_true",
@@ -122,10 +146,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     c = sub.add_parser("clear-stop", help="clear emergency stop")
     c.set_defaults(func=_cmd_clear_stop)
+
+    cf = sub.add_parser("create-file",
+                        help="visibly create a desktop text file with content")
+    cf.add_argument("--text", default="başlıyoruz", help="content to type into the file")
+    cf.add_argument("--name", default="dw-demo", help="file name (without .txt)")
+    cf.add_argument("--desktop", default=None, help="override the desktop directory")
+    cf.set_defaults(func=_cmd_create_file)
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The Windows console is often cp1252; make stdout/stderr tolerate non-ASCII
+    # (e.g. Turkish content) so printing a report never crashes the command.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except Exception:
+            pass
     parser = build_parser()
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
     return args.func(args)

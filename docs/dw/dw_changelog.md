@@ -307,3 +307,48 @@ pinned by smoke test, not unit tests.
 
 **Next Action:** New cards for Phase 5 (browser/desktop workflows), Phase 6
 (multi-agent), Phase 7 (UI). All 7 original backlog cards are done.
+
+---
+
+## 2026-06-20 | Execute | Task: DW-WORKFLOW-CREATEFILE (Phase 5) + input Unicode fix
+
+**Task ID:** DW-WORKFLOW-CREATEFILE
+**Type:** Execute (Phase 5 — first real desktop workflow) — user-requested working demo
+**Status:** Complete — VERIFIED on the real desktop (Validation Level 4)
+
+**User goal:** one command where the agent visibly creates a desktop text file
+(right-click → New → Text Document), names it, opens it, types "başlıyoruz", saves it.
+
+**Files Created:** `workflows/__init__.py`, `workflows/desktop_ui.py`,
+`workflows/desktop_file.py`, `tests/test_workflow_desktop_file.py`.
+**Files Modified:** `actions/windows_input.py` (CRITICAL FIX), `__main__.py`
+(`create-file` command + utf-8 stdout), `tests/test_cli_broker.py` (no real UAC in
+tests), `tests/test_perception_ocr.py` (UIA isolation); continuity files.
+
+**Critical fix (root cause):** `type_text` used `keybd_event`, whose scan param is a
+BYTE, so Unicode > 255 was truncated (Turkish ş U+015F→'_', ı U+0131→'1'). Rewrote
+Unicode typing to use **SendInput** with a 16-bit `wScan` + surrogate pairs. Also
+added full A-Z/0-9 to the VK map (Ctrl+S was a silent no-op — 'S' was missing).
+Also fixed: pytest triggered 5-6 real UAC prompts (tests now never build the real
+elevator); cp1252 console crash when printing Turkish (stdout→utf-8).
+
+**Tests / Validations Run:** `python -m pytest` → **130 passed** (+5). **Real
+end-to-end:** `python -m desktop_worker create-file` created
+`...\OneDrive\Desktop\dw-demo.txt` = exactly "başlıyoruz" (12 bytes, hex
+6261c59f6cc4b1796f72757a); report 11/11 steps OK + "verified content on disk".
+
+**Validation Level Reached:** **4** (real desktop, verified on disk) for this workflow.
+
+**Result:** First Phase 5 workflow. Input is structured actions through the
+executor (validated/audited/estop-gated); targets located via UIA; success gated
+on real on-disk bytes (never fakes success; retries once; fails safe with a clear
+error). Codex APPROVE, Northstar ALIGNED. The modern-Notepad session caveat is
+handled by verify+retry. User test = MANUAL-8 (just run the command and watch).
+
+**Risks Introduced:** None blocking. Reliability depends on UIA menu names
+(en+tr covered) + Notepad focus (verify+retry mitigates).
+**Risks Resolved:** Unicode input truncation; Ctrl+S no-op; pytest UAC prompts;
+console Unicode crash.
+
+**Next Action:** Optional — extend workflows (browser/forms, Phase 5 cont.), or
+let the AI planner orchestrate workflows. None blocking.

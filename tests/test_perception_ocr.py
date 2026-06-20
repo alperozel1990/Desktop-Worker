@@ -4,11 +4,18 @@ from desktop_worker.observation.backends import NullDesktopBackend
 from desktop_worker.observation.observer import Observer
 from desktop_worker.perception import (
     NullOcrBackend,
+    NullUiaBackend,
     Perceiver,
     data_to_elements,
     get_ocr_backend,
 )
 from desktop_worker.schema.observations import Cursor, Element, Observation, Screen
+
+
+def _perceiver(ocr):
+    # Isolate OCR: pin a Null UIA backend so tests don't read the real desktop
+    # (uiautomation may be installed on the dev machine).
+    return Perceiver(ocr=ocr, uia=NullUiaBackend())
 
 
 class FakeOcrBackend:
@@ -32,7 +39,7 @@ def _obs_with_image(tmp_path):
 
 def test_perceiver_enriches_observation_with_elements(tmp_path):
     obs = _obs_with_image(tmp_path)
-    enriched = Perceiver(FakeOcrBackend()).perceive(obs)
+    enriched = _perceiver(FakeOcrBackend()).perceive(obs)
     assert len(enriched.elements) == 1
     el = enriched.elements[0]
     assert el.text == "Submit"
@@ -46,14 +53,14 @@ def test_perceiver_skips_non_image_screenshot(tmp_path):
     # Null desktop backend writes a .txt placeholder — OCR must NOT run on it.
     fake = FakeOcrBackend()
     obs = Observer(NullDesktopBackend(), screenshots_dir=tmp_path / "s").observe("t")
-    enriched = Perceiver(fake).perceive(obs)
+    enriched = _perceiver(fake).perceive(obs)
     assert enriched.elements == ()
     assert fake.calls == []          # backend never invoked on a placeholder
 
 
 def test_null_ocr_backend_returns_empty(tmp_path):
     obs = _obs_with_image(tmp_path)
-    enriched = Perceiver(NullOcrBackend()).perceive(obs)
+    enriched = _perceiver(NullOcrBackend()).perceive(obs)
     assert enriched.elements == ()   # graceful: no Tesseract -> no elements, no crash
 
 

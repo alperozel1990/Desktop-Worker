@@ -4,6 +4,24 @@ Actions Claude cannot fully perform/validate itself.
 
 ---
 
+## MANUAL-8 — ⭐ Run the create-file demo and watch (PRIMARY working-demo test)
+**Status:** [ ] Waiting  (Claude already verified it end-to-end on disk; this is
+your watch-it-happen run)
+**Blocking:** NO
+**Tool:** PowerShell + your desktop
+**Added by:** DW-WORKFLOW-CREATEFILE
+**Instructions:**
+1. `cd C:\Desktop-Worker`
+2. (first time) `python -m pip install -e ".[windows]"`
+3. `python -m desktop_worker create-file` — watch the mouse right-click the
+   desktop, create New → Text Document, name it, open it, type "başlıyoruz", save.
+4. Confirm `dw-demo.txt` is on your desktop containing "başlıyoruz". Stop anytime
+   with `python -m desktop_worker estop` (in another window).
+**What Claude needs back:** "worked" or the printed report if a step FAILED.
+Full how-to: `dw_test_guide.md`.
+
+---
+
 ## MANUAL-1 — Validate real mouse/keyboard/drag on a live desktop
 **Status:** [ ] Waiting
 **Blocking:** NO (logic is unit-tested via Null backends; this confirms Level 4)

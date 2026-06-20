@@ -51,9 +51,20 @@ Source of truth: `docs/requirements.md`.
   logged-in `claude` CLI (subscription, NO API key) through the broker; strict
   `parse_action` validation; fails safe; real path verified. See
   [[desktop-worker-no-api-billing]]. Full task = MANUAL-7.
-- **All 7 backlog cards done. AI-control-ready core (§22) achieved.** Remaining:
-  Phase 5 (browser/desktop workflows), Phase 6 (multi-agent), Phase 7 (UI) — new
-  cards needed. Test guide for the user: `dw_test_guide.md`.
+- **AI-control-ready core (§22) achieved.** Phase 5 STARTED: first real desktop
+  workflow shipped — `workflows/desktop_file.py` (+`desktop_ui.py`): visibly create
+  a desktop .txt with content via `python -m desktop_worker create-file`. Drives
+  structured actions through the executor; UIA-located targets; verified on disk
+  (never fakes success). VERIFIED on the real desktop (Level 4).
+- **CRITICAL input fix:** `windows_input.type_text` now uses **SendInput** (16-bit
+  wScan + surrogate pairs) for Unicode — keybd_event truncated codepoints >255
+  (Turkish ş/ı were corrupted). VK map now has full A-Z/0-9 (Ctrl+S was a no-op).
+- Tests never trigger real UAC now (test brokers pass elevator=None). CLI stdout
+  reconfigured to utf-8 (cp1252 console was crashing on Turkish).
+- Remaining: more Phase 5 workflows, Phase 6 (multi-agent), Phase 7 (UI). User
+  test guide: `dw_test_guide.md`; primary demo test = MANUAL-8 (run create-file).
+- Modern Win11 Notepad restores unsaved session tabs — can hijack opens; the
+  workflow mitigates via verify-on-disk + one retry. Don't clear user TabState.
 
 ## Operating model (since 2026-06-20)
 - Autonomous per-card execution. Each card gated by **Codex Auditor** (code) +

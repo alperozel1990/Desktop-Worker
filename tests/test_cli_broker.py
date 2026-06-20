@@ -7,15 +7,13 @@ from desktop_worker.broker.elevation import ElevatedRun
 from desktop_worker.safety.policy import PermissionPolicy, auto_approve, deny_all
 
 
-_OMIT = object()
-
-
-def _broker(tmp_path, approve=False, *, elevator=_OMIT, is_elevated=None):
+def _broker(tmp_path, approve=False, *, elevator=None, is_elevated=None):
+    # IMPORTANT: default elevator=None so the test suite NEVER constructs the
+    # real WindowsElevator (which would pop a UAC prompt when run non-elevated).
+    # Tests that exercise elevation pass an explicit FakeElevator.
     audit = AuditLog(tmp_path / "audit.jsonl")
     policy = PermissionPolicy(approval_callback=auto_approve if approve else deny_all)
-    kwargs = {}
-    if elevator is not _OMIT:          # forward an explicit elevator, including None
-        kwargs["elevator"] = elevator
+    kwargs = {"elevator": elevator}
     if is_elevated is not None:
         kwargs["is_elevated"] = is_elevated
     return ElevatedCliBroker(

@@ -50,6 +50,8 @@ Gate and only implement when the selected card is explicitly approved.
 | Multi-agent orchestration | not started (Phase 6) |
 | UI (inspect/control) | not started (Phase 7); CLI only today |
 | AI planner (Claude Code CLI, no API key, via broker) | complete (DW-PLANNER-AI); real path verified, full task = MANUAL-7 |
+| Phase 5 workflow: create desktop text file (visible) | complete (DW-WORKFLOW-CREATEFILE); VERIFIED real desktop |
+| Input Unicode (Turkish ş/ı) via SendInput | fixed (was keybd_event byte-truncation) |
 
 ## Last completed task
 - **Task:** DW-PLANNER-AI — Claude Code CLI planner (no API key), via the broker.
@@ -66,16 +68,27 @@ Gate and only implement when the selected card is explicitly approved.
 None in progress.
 
 ## Milestone
-**AI-control-ready core (§22) achieved**: the AI can observe (perception), plan
-(Claude CLI planner), act (executor), verify + recover (loop), via the elevated
-broker, with emergency-stop, approval gates, and full audit — all auditor-approved.
+**AI-control-ready core (§22) achieved** + **first real Phase 5 workflow shipped**.
+The agent can visibly create a desktop text file with content end-to-end:
+`python -m desktop_worker create-file` (VERIFIED on the real desktop, Level 4).
+
+## Last completed task
+- **Task:** DW-WORKFLOW-CREATEFILE (Phase 5) + critical input Unicode fix.
+- **Date:** 2026-06-20.
+- **Summary:** `workflows/desktop_file.py` + `desktop_ui.py`: visibly create a
+  desktop .txt (right-click→New→Text Document→name→double-click→type→save) via
+  structured actions through the executor, UIA-located targets, verified on disk.
+  Fixed `windows_input` Unicode (keybd_event byte-truncation → SendInput 16-bit;
+  Turkish ş/ı now correct) + VK map (Ctrl+S was no-op) + pytest UAC prompts +
+  console Unicode crash. Codex APPROVE, Northstar ALIGNED. 130 tests; real run verified.
+- **Files:** `workflows/*` (new), `actions/windows_input.py`, `__main__.py`,
+  `tests/test_workflow_desktop_file.py`, `tests/test_cli_broker.py`, `tests/test_perception_ocr.py`.
 
 ## Next recommended task
-The 7 backlog cards are DONE. Remaining roadmap work (new cards needed):
-**Phase 5** (browser/desktop workflows), **Phase 6** (multi-agent orchestration),
-**Phase 7** (UI: task input, timeline, approve/deny, audit viewer). Also: richer
-verification methods (visibleTextContains needs perception text-match), and a
-`demo-ai` CLI entry to drive the real planner from one command. None blocking.
+Optional / not blocking: more Phase 5 workflows (browser/form fill, file picker),
+or let the AI planner orchestrate workflows; Phase 6 (multi-agent), Phase 7 (UI
+with live approve/deny prompts). User test pending: **MANUAL-8** (run create-file
+and watch) — the primary working-demo test.
 
 ## Open risks
 | Risk | Severity | Mitigation |

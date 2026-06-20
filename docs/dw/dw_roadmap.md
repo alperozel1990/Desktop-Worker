@@ -84,7 +84,7 @@ bounds + confidence + source attribution (uia/ocr/vision/heuristic).
 - [x] UIA preferred when available (DW-PERCEPTION-UIA; `merge_elements` UIA-first).
 **Complexity:** High.
 
-## Phase 5 — Browser & Desktop Workflows  ☐ not started
+## Phase 5 — Browser & Desktop Workflows  ◑ started (create-desktop-file shipped)
 **Goal:** Real user workflows in Chrome and common Windows UI.
 **Scope:** Chrome navigation, form fill, file upload via picker, downloads, file
 picker handling, window switching, drag-and-drop.

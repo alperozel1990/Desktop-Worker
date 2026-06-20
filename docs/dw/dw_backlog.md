@@ -236,6 +236,25 @@ fake broker; no real Claude calls). Plus a real end-to-end smoke confirmed:
 
 ---
 
+## DW-WORKFLOW-CREATEFILE — Visible "create desktop text file" workflow (Phase 5)  ✅ done (2026-06-20)
+**Purpose:** Deliver a real, working, *watchable* end-to-end task (user request):
+the agent creates a desktop .txt, types content, saves it — user just observes.
+**Scope:** `workflows/desktop_file.py` + `desktop_ui.py`: show desktop → right-click
+→ New → Text Document → name → double-click open → type content → Ctrl+S → verify
+on disk. Input = structured actions through the executor (validated/audited/estop);
+targets located via UIA (en+tr names). CLI: `python -m desktop_worker create-file`.
+**Also fixed (required for it to work):** `windows_input` Unicode via SendInput
+(keybd_event truncated >255 → Turkish ş/ı corrupted); VK map A-Z/0-9 (Ctrl+S no-op);
+pytest no longer triggers real UAC; CLI stdout→utf-8.
+**Files edited:** `workflows/*` (new), `actions/windows_input.py`, `__main__.py`,
+tests. **Forbidden (untouched):** `safety/`, `broker/` core, `schema/`.
+**Tests / validation:** `python -m pytest` (130) + **real desktop run verified**
+(dw-demo.txt = "başlıyoruz", 12 bytes). Manual watch test = MANUAL-8.
+**Done criteria:**
+- [x] Visible create→name→open→type→save via structured actions.
+- [x] Verified on disk; never fakes success; fails safe with clear error.
+- [x] Unicode (Turkish) input correct. Codex APPROVE, Northstar ALIGNED.
+
 ## Excluded from this backlog
 | Item | Reason |
 |---|---|

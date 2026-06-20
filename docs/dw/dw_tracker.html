@@ -43,8 +43,8 @@ const DATA = {
   workspace: "C:\\Desktop-Worker\\docs\\dw",
   updated: "2026-06-20",
   implementationAllowed: "YES (autonomous; auditor-gated)",
-  validationLevel: "3 unit (125 tests) + L4 for the AI planner→broker→claude path; UAC/input/OCR/UIA/full-AI-task need user tests",
-  cardsDone: 8, cardsTotal: 8,
+  validationLevel: "130 unit tests + L4 VERIFIED: create-file made dw-demo.txt='başlıyoruz' on the real desktop",
+  cardsDone: 9, cardsTotal: 9,
   phases: [
     {id:"P1", name:"Local Control Foundation", status:"done"},
     {id:"P2", name:"Structured Action Loop", status:"done"},
@@ -63,9 +63,10 @@ const DATA = {
     {id:"DW-PERCEPTION-WIRE", t:"Wire Perceiver into the task loop", s:"done"},
     {id:"DW-INPUT-HARDEN", t:"Input reliability hardening (plan_hotkey/paste)", s:"done"},
     {id:"DW-PLANNER-AI", t:"AI planner via Claude Code CLI (no API key, broker-routed)", s:"done"},
+    {id:"DW-WORKFLOW-CREATEFILE", t:"Visible create-desktop-text-file workflow (VERIFIED real)", s:"done"},
   ],
-  current: "none in progress — all 8 cards done; AI-control-ready core achieved",
-  nextCard: "New cards: Phase 5 (browser/desktop workflows), Phase 6 (multi-agent), Phase 7 (UI)",
+  current: "none in progress — working demo shipped: `python -m desktop_worker create-file`",
+  nextCard: "Optional: more Phase 5 workflows, AI-planner-driven workflows, Phase 6 (multi-agent), Phase 7 (UI)",
   risks: [
     ["Broker shell=True runs cmd.exe strings","Medium","Gated by classify+approval+audit; no passthrough API"],
     ["'Elevated by default' not yet true per-command from non-admin","Medium","Broker reports actual token; DW-CLI-ELEVATE closes gap"],
@@ -78,6 +79,7 @@ const DATA = {
     ["Make initial git commit now","No","Left to user (no commit without ask)"],
   ],
   manual: [
+    ["MANUAL-8","RUN THE DEMO: python -m desktop_worker create-file (watch it)","primary test"],
     ["MANUAL-7","Drive a real task end-to-end with the Claude CLI planner","non-blocking"],
     ["MANUAL-6","Install uiautomation + validate real UIA enumeration","non-blocking"],
     ["MANUAL-5","Install Tesseract + [ocr] and validate real OCR","non-blocking"],
@@ -93,6 +95,7 @@ const DATA = {
   doNotTouch: ["docs/requirements.md (read-only source of truth)","artifacts/ (generated)",
     "*/backends.py Protocol signatures"],
   changelog: [
+    "2026-06-20 DW-WORKFLOW-CREATEFILE — visible create-desktop-text-file workflow (right-click→New→Text Document→name→open→type→save), VERIFIED on real desktop (dw-demo.txt='başlıyoruz'); fixed Unicode input (SendInput) + VK map + pytest UAC + console crash; Codex APPROVE, Northstar ALIGNED; 130 tests.",
     "2026-06-20 DW-PLANNER-AI — AI planner via the logged-in Claude CLI (subscription, NO API key) routed through the broker; strict parse_action validation; fails safe; real path verified; Codex APPROVE, Northstar ALIGNED; 125 tests; AI-control-ready core achieved.",
     "2026-06-20 DW-INPUT-HARDEN — pure plan_hotkey (reverse-release, no stuck modifier) + should_paste; long text pastes via Ctrl+V; Codex APPROVE, Northstar ALIGNED; 109 tests.",
     "2026-06-20 DW-PERCEPTION-WIRE — Perceiver wired into the loop; elements reach the audit; default path unchanged; Codex APPROVE, Northstar ALIGNED; 103 tests; Phase 4 complete.",
@@ -102,7 +105,7 @@ const DATA = {
     "2026-06-20 DW-LOOP-RECOVERY — bounded retry/re-plan/safe-stop + time limit; Codex APPROVE, Northstar ALIGNED; 80 tests; Phase 2 complete.",
     "2026-06-20 BOOTSTRAP-1 — Python foundation across 8 layers; 71 tests; loop end-to-end; real observation; ease-me workspace + launchers."
   ],
-  nextPrompt: "/ease-me continue  Repo: C:\\Desktop-Worker  Workspace: docs\\dw. Read dw_memory.md + dw_state.md. All 8 cards done (AI-control-ready core). Create cards for Phase 5 (browser/desktop workflows), Phase 6 (multi-agent), Phase 7 (UI)."
+  nextPrompt: "/ease-me continue  Repo: C:\\Desktop-Worker  Workspace: docs\\dw. Read dw_memory.md + dw_state.md. Working demo shipped: `python -m desktop_worker create-file`. Next options: more Phase 5 workflows, AI-planner-driven workflows, Phase 6, Phase 7."
 };
 
 const SB = {done:["Done","b-done"],prog:["In progress","b-prog"],todo:["Not started","b-todo"],

@@ -24,8 +24,13 @@ _VK = {
     "DELETE": 0x2E, "DEL": 0x2E, "HOME": 0x24, "END": 0x23,
     "UP": 0x26, "DOWN": 0x28, "LEFT": 0x25, "RIGHT": 0x27,
     "F1": 0x70, "F2": 0x71, "F3": 0x72, "F4": 0x73, "F5": 0x74, "F6": 0x75,
-    "L": 0x4C, "C": 0x43, "V": 0x56, "A": 0x41,
+    "F7": 0x76, "F8": 0x77, "F9": 0x78, "F10": 0x79, "F11": 0x7A, "F12": 0x7B,
 }
+# Letters A-Z (VK == ASCII uppercase) and digits 0-9 (VK == ASCII digit).
+for _c in range(ord("A"), ord("Z") + 1):
+    _VK[chr(_c)] = _c
+for _d in range(ord("0"), ord("9") + 1):
+    _VK[chr(_d)] = _d
 
 # Default: paste text longer than this many chars via the clipboard instead of
 # synthesizing each keystroke (faster + far more reliable for long strings).
@@ -76,6 +81,54 @@ class WindowsInputBackend:
         # that drop input when it arrives too fast (requirements §9).
         self.inter_key_delay_s = inter_key_delay_s
         self.paste_threshold = paste_threshold
+        self._build_sendinput(ctypes)
+
+    def _build_sendinput(self, ctypes) -> None:
+        """Set up SendInput structures for true Unicode typing.
+
+        keybd_event's scan-code parameter is only a BYTE, so codepoints > 255
+        (e.g. Turkish ş U+015F, ı U+0131) get truncated to garbage. SendInput's
+        KEYBDINPUT.wScan is a 16-bit WORD, so the full BMP can be sent with
+        KEYEVENTF_UNICODE. Codepoints above U+FFFF are sent as surrogate pairs.
+        """
+        from ctypes import wintypes
+
+        ULONG_PTR = ctypes.wintypes.WPARAM if hasattr(ctypes.wintypes, "WPARAM") else ctypes.c_void_p
+
+        class KEYBDINPUT(ctypes.Structure):
+            _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
+                        ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                        ("dwExtraInfo", ULONG_PTR)]
+
+        class MOUSEINPUT(ctypes.Structure):
+            _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG),
+                        ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
+                        ("time", wintypes.DWORD), ("dwExtraInfo", ULONG_PTR)]
+
+        class _INPUTunion(ctypes.Union):
+            _fields_ = [("ki", KEYBDINPUT), ("mi", MOUSEINPUT)]
+
+        class INPUT(ctypes.Structure):
+            _fields_ = [("type", wintypes.DWORD), ("u", _INPUTunion)]
+
+        self._KEYBDINPUT = KEYBDINPUT
+        self._INPUT = INPUT
+        self._INPUTunion = _INPUTunion
+
+    def _send_unicode_units(self, units: list[int]) -> None:
+        """Send a list of 16-bit code units as Unicode key down+up via SendInput."""
+        KEYEVENTF_UNICODE = 0x0004
+        KEYEVENTF_KEYUP = 0x0002
+        INPUT_KEYBOARD = 1
+        events = []
+        for u in units:
+            for flags in (KEYEVENTF_UNICODE, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP):
+                ki = self._KEYBDINPUT(wVk=0, wScan=u, dwFlags=flags, time=0, dwExtraInfo=0)
+                inp = self._INPUT(type=INPUT_KEYBOARD, u=self._INPUTunion(ki=ki))
+                events.append(inp)
+        n = len(events)
+        arr = (self._INPUT * n)(*events)
+        self.user32.SendInput(n, arr, self.ctypes.sizeof(self._INPUT))
 
     # --- mouse ---------------------------------------------------------
     def move(self, x: int, y: int) -> None:
@@ -147,10 +200,15 @@ class WindowsInputBackend:
                 time.sleep(self.inter_key_delay_s)
 
     def _unicode_key(self, codepoint: int) -> None:
-        KEYEVENTF_UNICODE = 0x0004
-        KEYEVENTF_KEYUP = 0x0002
-        self.user32.keybd_event(0, codepoint, KEYEVENTF_UNICODE, 0)
-        self.user32.keybd_event(0, codepoint, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0)
+        # SendInput with 16-bit wScan handles the full BMP (incl. Turkish ş/ı);
+        # astral codepoints (> U+FFFF) are sent as a UTF-16 surrogate pair.
+        if codepoint > 0xFFFF:
+            cp = codepoint - 0x10000
+            hi = 0xD800 + (cp >> 10)
+            lo = 0xDC00 + (cp & 0x3FF)
+            self._send_unicode_units([hi, lo])
+        else:
+            self._send_unicode_units([codepoint])
 
     def press_key(self, key: str) -> None:
         vk = _VK.get(key.upper())
