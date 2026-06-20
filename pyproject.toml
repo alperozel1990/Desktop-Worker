@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "desktop-worker"
+version = "0.1.0"
+description = "AI-control-ready Windows desktop automation app (observe-plan-act-verify-log)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "Desktop-Worker" }]
+
+# The CORE package has ZERO required dependencies so the observe-plan-act-verify
+# loop, audit log, safety layer, and CLI broker are all unit-testable with no
+# display and no third-party libraries. Real Windows desktop control needs the
+# optional [windows] extras below; backends import them lazily.
+dependencies = []
+
+[project.optional-dependencies]
+windows = [
+    "mss>=9.0",          # fast screenshot capture
+    "pywin32>=306",      # active window / process / win32 APIs
+    "uiautomation>=2.0", # Windows UI Automation (Phase 4)
+]
+ocr = [
+    "pytesseract>=0.3.10",
+    "Pillow>=10.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[project.scripts]
+desktop-worker = "desktop_worker.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
