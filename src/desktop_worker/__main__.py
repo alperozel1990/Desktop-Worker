@@ -146,13 +146,15 @@ def _cmd_do(args: argparse.Namespace) -> int:
     from desktop_worker.loop.claude_cli_planner import ClaudeCliPlanner, claude_available
     from desktop_worker.loop.task_loop import TaskLoop
     from desktop_worker.perception import Perceiver, get_ocr_backend, get_uia_backend
-    from desktop_worker.safety.policy import PermissionPolicy, RiskLevel
+    from desktop_worker.safety import build_policy
 
     real = not args.null
     cfg = Config(session_id="ai-do", task_id="task")
-    # Low/medium actions run so you can WATCH; HIGH-risk (e.g. dangerous CLI) asks.
-    policy = PermissionPolicy(approval_callback=_console_approver,
-                              approval_threshold=RiskLevel.HIGH)
+    # Permission profile (requirements §12): standard (low/med auto, high prompts),
+    # strict (medium+ prompts), or headless (deny anything needing approval).
+    policy = build_policy(args.profile, _console_approver)
+    if args.profile != "standard":
+        print(f"Permission profile: {args.profile}.")
     session = Session(cfg, policy=policy, prefer_real_backends=real)
 
     cwd = str(cfg.artifacts_root.parent)
@@ -301,6 +303,10 @@ def build_parser() -> argparse.ArgumentParser:
     do.add_argument("--frugal", action="store_true",
                     help="leaner prompts (fewer elements/history) to use less Claude "
                          "usage per step")
+    do.add_argument("--profile", choices=("standard", "strict", "headless"),
+                    default="standard",
+                    help="permission profile: standard (low/med auto, high prompts), "
+                         "strict (medium+ prompts), headless (deny anything needing approval)")
     do.set_defaults(func=_cmd_do)
 
     rep = sub.add_parser("report", help="build an HTML replay of a session's audit log")

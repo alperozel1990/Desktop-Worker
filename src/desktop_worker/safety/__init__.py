@@ -8,6 +8,7 @@ from desktop_worker.safety.policy import (
     deny_all,
     auto_approve,
 )
+from desktop_worker.safety.profiles import PROFILES, build_policy
 
 __all__ = [
     "EmergencyStop",
@@ -17,4 +18,6 @@ __all__ = [
     "RiskLevel",
     "deny_all",
     "auto_approve",
+    "PROFILES",
+    "build_policy",
 ]
