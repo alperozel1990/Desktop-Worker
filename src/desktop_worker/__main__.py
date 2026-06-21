@@ -191,7 +191,12 @@ def _cmd_do(args: argparse.Namespace) -> int:
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))
     planner = ClaudeCliPlanner(task=args.task, broker=session.broker, cwd=cwd,
                                audit=session.audit, env_context=env_context,
-                               vision=args.vision, tools_catalog=tools.catalog())
+                               vision=args.vision, tools_catalog=tools.catalog(),
+                               frugal=args.frugal)
+    if args.frugal:
+        print("Frugal mode ON: leaner prompts (fewer elements/history) to use less "
+              "Claude usage per step — the AI sees fewer on-screen elements, so on busy "
+              "screens it may miss a target (reliability vs cost trade-off).")
     if args.vision:
         print(f"Vision fallback ON: a screenshot is sent to Claude when accessibility "
               f"data is sparse. On low-UIA apps (Electron/games) that can be MOST steps, "
@@ -292,6 +297,9 @@ def build_parser() -> argparse.ArgumentParser:
     do.add_argument("--vision", action="store_true",
                     help="let Claude SEE a screenshot when accessibility data is sparse "
                          "(works on more apps; costs more Claude usage)")
+    do.add_argument("--frugal", action="store_true",
+                    help="leaner prompts (fewer elements/history) to use less Claude "
+                         "usage per step")
     do.set_defaults(func=_cmd_do)
 
     rep = sub.add_parser("report", help="build an HTML replay of a session's audit log")

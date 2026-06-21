@@ -151,6 +151,25 @@ def test_prompt_includes_env_context_and_element_ids():
     assert "elementId" in prompt          # instructed to target by id
 
 
+def test_frugal_caps_elements_and_history(tmp_path):
+    from desktop_worker.schema.observations import Screen
+    many = tuple(Element(id=f"uia-{i}", type="button", bounds=(0, 0, 1, 1), source="uia",
+                         text=f"btn{i}") for i in range(40))
+    obs = Observation(screen=Screen(800, 600), cursor=Cursor(0, 0), elements=many)
+    full = build_planner_prompt("t", obs, [], max_elements=40)
+    frugal = build_planner_prompt("t", obs, [], max_elements=12)
+    assert frugal.count("uia-") < full.count("uia-")    # fewer elements listed
+    assert "uia-39" in full and "uia-39" not in frugal   # last element trimmed in frugal
+    assert len(frugal) < len(full)                       # smaller prompt overall
+
+
+def test_planner_frugal_sets_caps():
+    p = ClaudeCliPlanner(task="t", broker=None, cwd=".", ask=lambda x: "{}", frugal=True)
+    assert p._max_elements == 12 and p._max_history == 4
+    p2 = ClaudeCliPlanner(task="t", broker=None, cwd=".", ask=lambda x: "{}")
+    assert p2._max_elements == 40 and p2._max_history == 8
+
+
 def test_prompt_shows_action_outcome_memory():
     # The AI must SEE that a past action had no visible effect (so it won't repeat).
     from desktop_worker.schema.results import ActionResult

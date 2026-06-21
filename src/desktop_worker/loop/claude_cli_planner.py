@@ -131,8 +131,13 @@ def build_planner_prompt(
     task: str, observation: Observation, history: list[ActionResult],
     *, failed_note: str = "", env_context: str = "", screenshot_path: str = "",
     tools_catalog: Optional[list[dict]] = None,
+    max_elements: int = 40, max_history: int = 8,
 ) -> str:
-    """Build the instruction asking Claude for the next structured action."""
+    """Build the instruction asking Claude for the next structured action.
+
+    ``max_elements``/``max_history`` cap the variable sections — lowering them
+    (frugal mode) shrinks the prompt and the per-step Claude cost.
+    """
     env = f"\nEnvironment:\n{env_context}" if env_context else ""
     tools = ""
     if tools_catalog:
@@ -157,7 +162,7 @@ def build_planner_prompt(
         # center against THIS observation.
         elements = "\n".join(
             f"  {e.id}: {e.type} {e.text!r} {list(e.bounds)} [{e.source}]"
-            for e in observation.elements[:40]
+            for e in observation.elements[:max_elements]
         )
         elements = f"\nVisible UI elements (target these by elementId):\n{elements}"
 
@@ -166,7 +171,7 @@ def build_planner_prompt(
     hist = ""
     if history:
         lines = []
-        for r in history[-8:]:
+        for r in history[-max_history:]:
             d = r.detail or {}
             what = d.get("actionStr", r.action_type)
             why = d.get("reasoning", "")
@@ -269,6 +274,7 @@ class ClaudeCliPlanner:
         vision_threshold: int = 4,
         max_vision_steps: int = 6,
         tools_catalog: Optional[list[dict]] = None,
+        frugal: bool = False,
     ) -> None:
         self.task = task
         self.broker = broker
@@ -277,6 +283,11 @@ class ClaudeCliPlanner:
         self.audit = audit
         self.env_context = env_context
         self.tools_catalog = tools_catalog
+        # Frugal mode: smaller prompt (fewer elements + shorter history) => fewer
+        # input tokens per step => less Claude usage. Tools already cut total steps.
+        self.frugal = frugal
+        self._max_elements = 12 if frugal else 40
+        self._max_history = 4 if frugal else 8
         # Vision FALLBACK: attach a screenshot only when the UIA element list is
         # sparse (< vision_threshold) — so the costly image call is made only when
         # the cheap accessibility data is insufficient (e.g. Electron/custom UIs).
@@ -328,7 +339,9 @@ class ClaudeCliPlanner:
         shot = self._activate_vision(observation)
         prompt = build_planner_prompt(self.task, observation, history,
                                       env_context=self.env_context, screenshot_path=shot,
-                                      tools_catalog=self.tools_catalog)
+                                      tools_catalog=self.tools_catalog,
+                                      max_elements=self._max_elements,
+                                      max_history=self._max_history)
         return self._plan(prompt, observation)
 
     def replan(self, failed: PlannedStep, observation: Observation,
@@ -337,7 +350,9 @@ class ClaudeCliPlanner:
         shot = self._activate_vision(observation)
         prompt = build_planner_prompt(self.task, observation, history,
                                       failed_note=note, env_context=self.env_context,
-                                      screenshot_path=shot, tools_catalog=self.tools_catalog)
+                                      screenshot_path=shot, tools_catalog=self.tools_catalog,
+                                      max_elements=self._max_elements,
+                                      max_history=self._max_history)
         return self._plan(prompt, observation)
 
     # internals --------------------------------------------------------
