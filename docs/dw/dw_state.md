@@ -54,6 +54,10 @@ Gate and only implement when the selected card is explicitly approved.
 | Input Unicode (Turkish ş/ı) via SendInput | fixed (was keybd_event byte-truncation) |
 | **GENUINE live AI control** (`do "<task>"`) | complete (DW-AGENT-DO); VERIFIED real desktop |
 | Perception: context menus + editable values | complete (AI sees menus + what it typed) |
+| AI action/outcome memory + vision fallback (`--vision`) | complete (DW-AGENT-MEMORY / VISION) |
+| AI-callable tools: create_text_file, open_app, open_url, focus_window | complete (DW-AGENT-TOOLS+) |
+| Frugal mode (`--frugal`) | complete (leaner prompts, less Claude usage) |
+| Session replay HTML (`report` cmd + auto) | complete (DW-REPLAY); §16 audit viewer |
 
 ## Last completed task
 - **Task:** DW-PLANNER-AI — Claude Code CLI planner (no API key), via the broker.
@@ -77,8 +81,10 @@ opened Notepad via Run dialog and typed text, self-verifying, all on its own).
 Also: deterministic `create-file` workflow (separate, reliable).
 
 ## Last completed task
-- **Task:** DW-AGENT-DO — genuine live AI desktop control.
-- **Date:** 2026-06-20.
+- **Task:** Autonomous batch (2026-06-21): open_url + focus_window tools, session
+  replay HTML, frugal mode. All Codex+Northstar approved. 176 tests. See changelog.
+- **Earlier capstone:** DW-AGENT-DO — genuine live AI desktop control.
+- **Date:** 2026-06-21.
 - **Summary:** `do "<task>"` runs the live loop: observe → perceive (UIA elements +
   context menus + values, OCR) → Claude (logged-in CLI, no API key) picks the next
   structured action by elementId → safety-gated executor performs it → verify →

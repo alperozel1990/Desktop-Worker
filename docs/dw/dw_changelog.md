@@ -537,3 +537,40 @@ tool.run entry) — acceptable per the "verified file write" tool model.
 **Risks Resolved:** GUI-typing content corruption (tool no longer uses flaky GUI).
 
 **Next Action:** Optional — more tools (open app, web form), frugal mode, Phase 6/7.
+
+---
+
+## 2026-06-21 | Execute | Batch: autonomous session (user away, auditor-gated)
+
+User granted autonomy: "do the remaining items in sequence; Codex + Northstar
+approval is enough; don't ask me to test." Each card below: built → unit-tested →
+Codex+Northstar APPROVE/ALIGNED → committed. No live human test required.
+
+**DW-TOOL-OPENAPP** (commit 77521b8): `open_app` tool — open a known app via a
+curated allowlist (shells excluded, unknown rejected, no injection) through the
+broker's non-blocking `start`. risk MEDIUM. VERIFIED: launched Calculator in 0.4s.
+
+**DW-TOOL-OPENURL** (commit 2103129): `open_url` tool — open an http(s) URL in the
+default browser. Strict URL sanitizer (`^https?://[^\s"%<>]+$`); Codex empirically
+verified NO command-injection path (quoting safe; depends on no cmd /V:ON). risk MEDIUM.
+
+**DW-REPLAY** (commit 09b364f): session replay — `audit/report.py` turns the audit
+JSONL into a standalone HTML timeline (every AI decision + reasoning + action +
+result). All fields HTML-escaped (no injection). `do` auto-writes replay.html
+(best-effort); new `report --session --task` command. §16 audit viewer + §17 reports.
+
+**DW-FRUGAL** (commit 2a94559): `do --frugal` — leaner prompts (max_elements 40→12,
+history 8→4) to use less Claude usage per step. Prompt-only; no capability/safety
+change; default behavior byte-identical.
+
+**DW-TOOL-FOCUS** (commit f5233fb): `focus_window` tool — bring a window to front by
+title (pure matcher tested; ctypes enum/focus injectable). risk LOW. VERIFIED: focused
+a real window among 14 enumerated.
+
+**Tests:** 165 → **176 passed**. **Tool library now: create_text_file, open_app,
+open_url, focus_window** — the AI picks the right reliable tool in one step.
+
+**Validation Level:** 3 (unit) for all; open_app/focus_window also live-sanity-checked.
+
+**Next Action:** Optional — permission profiles (Phase 7), more tools, Phase 6
+multi-agent, or a real UI. None blocking.
