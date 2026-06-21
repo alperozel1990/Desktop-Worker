@@ -485,3 +485,55 @@ act; the screenshot may capture sensitive screen content) — disclosed.
 
 **Next Action:** Optional — workflows as AI-callable tools; frugal mode; Phase 6/7.
 User can run `do --vision "<task>"` on an Electron/Chromium app to validate live.
+
+---
+
+## 2026-06-21 | Execute | Task: DW-AGENT-TOOLS — AI-callable reliable tools (brain+hands)
+
+**Task ID:** DW-AGENT-TOOLS
+**Type:** Execute (extend DW-AGENT-DO) — user chose "make workflows AI-callable tools"
+**Status:** Complete — VERIFIED live (AI chose the tool; content correct on disk)
+
+**Goal (Northstar's "AI brain + reliable hands"):** let the live AI agent CALL a
+deterministic, verified tool in ONE step for known tasks, instead of improvising
+many fragile GUI actions — cheaper (fewer Claude calls) + reliable. Raw actions
+stay available; the AI decides.
+
+**Design (aligned with Codex + Northstar FIRST):** new `tool.run` action
+(`{tool, args}`), a `ToolRegistry`, one MVP tool `create_text_file`. Routed THROUGH
+the executor so it stays the single audited/estop-gated choke point. Codex must-haves
+all implemented: schema row; `_dispatch` raises on unknown/failed tool (fail safe);
+per-tool risk (unknown⇒HIGH, create_text_file⇒MEDIUM) via the registry; arg
+sanitization (reject path separators/`..`/absolute filenames, bound content);
+nesting guard (a tool can't call tool.run); audit + visible tool calls.
+
+**Key reliability fix:** the first live run had the AI correctly CALL the tool, but
+the tool mimicked the flaky GUI right-click flow and corrupted content ("tool
+worked"→"tool dddddd"; the AI even detected it). Rewrote the tool to be genuinely
+reliable: it WRITES the content to disk (verified) and opens it in Notepad via the
+broker — a tool must guarantee its result, not replay a flaky GUI (the flaky GUI
+stays in the separate `create-file` demo).
+
+**Files Created:** `tools/__init__.py`, `tools/registry.py`, `tools/builtin.py`,
+`tests/test_tools.py`. **Files Modified:** `schema/actions.py` (tool.run row),
+`actions/executor.py` (tool dispatch + per-tool risk + nesting guard + estop prop),
+`loop/claude_cli_planner.py` (tool catalog in prompt), `__main__.py` (wire registry),
+`tests/test_actions_schema.py`.
+
+**Tests / Validations:** `python -m pytest` → **157 passed** (+14). **Real run
+VERIFIED:** `do "create a text file on the desktop named ai-tool-demo containing
+'tool worked'"` → AI reasoned "the create_text_file tool matches this task, call it"
+→ tool.run → file on disk contains exactly "tool worked". Tool also unit-tested for
+exact + unicode content.
+
+**Validation Level Reached:** **4** (real desktop, AI chose tool, verified on disk).
+
+**Result:** "AI brain + reliable hands" works — the AI picks the right tool and the
+tool guarantees the result. Codex APPROVE, Northstar ALIGNED. Raw actions intact;
+no plugin framework (one tool MVP, by design).
+
+**Risks Introduced:** None blocking. A tool writes a file directly (audited via the
+tool.run entry) — acceptable per the "verified file write" tool model.
+**Risks Resolved:** GUI-typing content corruption (tool no longer uses flaky GUI).
+
+**Next Action:** Optional — more tools (open app, web form), frugal mode, Phase 6/7.

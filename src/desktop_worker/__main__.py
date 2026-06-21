@@ -160,7 +160,7 @@ def _cmd_do(args: argparse.Namespace) -> int:
         print("ERROR: the `claude` CLI is not logged in. Run `claude auth status`.")
         return 2
 
-    from desktop_worker.workflows.desktop_ui import get_desktop_dir
+    from desktop_worker.workflows.desktop_ui import get_desktop_dir, get_desktop_ui
 
     screen = session.desktop_backend.screen()
     desktop_dir = get_desktop_dir()
@@ -177,10 +177,18 @@ def _cmd_do(args: argparse.Namespace) -> int:
         "- To create a desktop text file you can right-click an empty desktop spot, "
         "choose New then Text Document; menu items appear as elements to click by id."
     )
+    # Reliable tools the AI may CHOOSE to call ("brain + hands"). The tool runs
+    # through the same audited/estop-gated executor for each of its sub-actions.
+    from desktop_worker.tools import CreateTextFileTool, ToolRegistry
+
+    tools = ToolRegistry()
+    tools.register(CreateTextFileTool(desktop_dir=desktop_dir, broker=session.broker))
+    session.executor.tools = tools
+
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))
     planner = ClaudeCliPlanner(task=args.task, broker=session.broker, cwd=cwd,
                                audit=session.audit, env_context=env_context,
-                               vision=args.vision)
+                               vision=args.vision, tools_catalog=tools.catalog())
     if args.vision:
         print(f"Vision fallback ON: a screenshot is sent to Claude when accessibility "
               f"data is sparse. On low-UIA apps (Electron/games) that can be MOST steps, "

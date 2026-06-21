@@ -130,9 +130,19 @@ def _action_catalog() -> str:
 def build_planner_prompt(
     task: str, observation: Observation, history: list[ActionResult],
     *, failed_note: str = "", env_context: str = "", screenshot_path: str = "",
+    tools_catalog: Optional[list[dict]] = None,
 ) -> str:
     """Build the instruction asking Claude for the next structured action."""
     env = f"\nEnvironment:\n{env_context}" if env_context else ""
+    tools = ""
+    if tools_catalog:
+        rows = "\n".join(f"  - {t['name']}({t['args']}) — {t['description']}"
+                         for t in tools_catalog)
+        tools = (
+            "\nReliable TOOLS you may call (PREFER a tool when it matches the task — "
+            "it is more reliable and cheaper than many manual steps) via "
+            '{"action":{"type":"tool.run","tool":"<name>","args":{...}}}:\n' + rows
+        )
     vision = (
         f"\nThe accessibility element list above may be incomplete for this app. "
         f"A screenshot of the current screen is saved at {screenshot_path} — use your "
@@ -177,7 +187,7 @@ def build_planner_prompt(
     fail = f"\nThe previous step FAILED: {failed_note}\nRe-observe and propose a corrected next step." if failed_note else ""
 
     return f"""You are the planner for Desktop-Worker, an AI agent controlling a real Windows desktop.
-TASK: {task}{env}{vision}
+TASK: {task}{env}{tools}{vision}
 
 Current desktop observation:
   {observation.summary()}{elements}{hist}{fail}
@@ -258,6 +268,7 @@ class ClaudeCliPlanner:
         vision: bool = False,
         vision_threshold: int = 4,
         max_vision_steps: int = 6,
+        tools_catalog: Optional[list[dict]] = None,
     ) -> None:
         self.task = task
         self.broker = broker
@@ -265,6 +276,7 @@ class ClaudeCliPlanner:
         self.claude_path = claude_path
         self.audit = audit
         self.env_context = env_context
+        self.tools_catalog = tools_catalog
         # Vision FALLBACK: attach a screenshot only when the UIA element list is
         # sparse (< vision_threshold) — so the costly image call is made only when
         # the cheap accessibility data is insufficient (e.g. Electron/custom UIs).
@@ -315,7 +327,8 @@ class ClaudeCliPlanner:
     def next_step(self, observation: Observation, history: list[ActionResult]) -> Optional[PlannedStep]:
         shot = self._activate_vision(observation)
         prompt = build_planner_prompt(self.task, observation, history,
-                                      env_context=self.env_context, screenshot_path=shot)
+                                      env_context=self.env_context, screenshot_path=shot,
+                                      tools_catalog=self.tools_catalog)
         return self._plan(prompt, observation)
 
     def replan(self, failed: PlannedStep, observation: Observation,
@@ -324,7 +337,7 @@ class ClaudeCliPlanner:
         shot = self._activate_vision(observation)
         prompt = build_planner_prompt(self.task, observation, history,
                                       failed_note=note, env_context=self.env_context,
-                                      screenshot_path=shot)
+                                      screenshot_path=shot, tools_catalog=self.tools_catalog)
         return self._plan(prompt, observation)
 
     # internals --------------------------------------------------------

@@ -14,13 +14,13 @@ Guarantees:
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from desktop_worker.actions.backends import InputBackend, get_input_backend
 from desktop_worker.audit.log import AuditLog
 from desktop_worker.broker.cli_broker import ElevatedCliBroker
 from desktop_worker.safety.emergency_stop import EmergencyStop, EmergencyStopError
-from desktop_worker.safety.policy import PermissionPolicy
+from desktop_worker.safety.policy import ApprovalRequest, PermissionPolicy, RiskLevel
 from desktop_worker.schema.actions import Action
 from desktop_worker.schema.results import ActionResult
 from desktop_worker.util import utc_now_iso
@@ -38,6 +38,7 @@ class ActionExecutor:
         dry_run: bool = False,
         agent: str = "system",
         role: str = "system",
+        tools: Any = None,
     ) -> None:
         self.audit = audit
         self.policy = policy
@@ -47,6 +48,10 @@ class ActionExecutor:
         self.dry_run = dry_run
         self.agent = agent
         self.role = role
+        # Optional tool registry (AI-callable reliable workflows). None => the
+        # AI cannot use tool.run (fails safe, like cli.run without a broker).
+        self.tools = tools
+        self._in_tool = False  # nesting guard: a tool's sub-actions can't be tool.run
 
     def execute(self, action: Action) -> ActionResult:
         started = utc_now_iso()
@@ -57,8 +62,17 @@ class ActionExecutor:
         except EmergencyStopError as exc:
             return self._fail(action, started, f"halted: {exc}", event="action.halted")
 
-        # 2) Approval / risk policy (cli risk is handled in the broker).
-        if action.type != "cli.run":
+        # 2) Approval / risk policy. cli.run risk is classified in the broker;
+        #    tool.run risk is declared by the named tool (unknown tool => HIGH).
+        if action.type == "tool.run":
+            ok, risk = self._authorize_tool(action)
+            if not ok:
+                res = self._fail(action, started,
+                                 f"tool not approved (risk={risk.value})",
+                                 event="action.blocked")
+                res.detail["riskLevel"] = risk.value
+                return res
+        elif action.type != "cli.run":
             ok, risk = self.policy.authorize_action(action)
             if not ok:
                 res = self._fail(
@@ -156,11 +170,40 @@ class ActionExecutor:
                 raise RuntimeError(f"cli blocked: {result.blockedReason}")
             return {"cli": result.to_dict()}
 
+        if t == "tool.run":
+            if self.tools is None:
+                raise RuntimeError("tool.run requires a tools registry; none configured")
+            if self._in_tool:
+                raise RuntimeError("a tool may not call tool.run (no nesting)")
+            name, args = p["tool"], p.get("args", {})
+            self._in_tool = True
+            try:
+                result = self.tools.run(name, args)  # raises on unknown/failed tool
+            finally:
+                self._in_tool = False
+            # If a sub-action tripped the emergency stop, propagate as a halt.
+            if self.estop.is_stopped():
+                raise EmergencyStopError(self.estop.reason or "emergency stop active")
+            return {"tool": name, "args": args, "result": result}
+
         # window.focus and verify are handled by higher layers (loop/perception);
         # reaching here means a known-but-unhandled type.
         raise NotImplementedError(f"action type not handled by executor: {t}")
 
     # --- helpers -------------------------------------------------------
+    def _authorize_tool(self, action: Action) -> tuple[bool, RiskLevel]:
+        """Authorize a tool.run by the named tool's declared risk (unknown => HIGH)."""
+        name = action.params.get("tool", "")
+        risk_str = self.tools.risk_of(name) if self.tools is not None else "high"
+        try:
+            risk = RiskLevel(risk_str)
+        except ValueError:
+            risk = RiskLevel.HIGH
+        ok = self.policy.authorize(ApprovalRequest(
+            kind="tool", summary=f"tool {name}({action.params.get('args', {})})",
+            risk=risk, detail=action.to_dict(),
+        ))
+        return ok, risk
     def _fail(self, action: Action, started: str, error: str,
               *, event: str = "action.failed") -> ActionResult:
         res = ActionResult(

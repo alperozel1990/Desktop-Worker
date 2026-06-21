@@ -83,6 +83,7 @@ def _minimal(t: str) -> dict:
         "window.focus": {"titleContains": "Chrome"},
         "wait": {"durationMs": 1},
         "cli.run": {"command": "echo hi", "cwd": "."},
+        "tool.run": {"tool": "create_text_file"},
         "verify": {"visibleTextContains": "ok"},
     }
     return {"type": t, **samples[t]}

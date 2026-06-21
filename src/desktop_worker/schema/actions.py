@@ -138,6 +138,11 @@ ACTION_SPECS: dict[str, _ActionSpec] = {
             _f("timeoutMs", _is_int, "int", required=False),
             _f("elevated", lambda v: isinstance(v, bool), "bool", required=False),
         ), "Run a command through the elevated CLI broker."),
+        # --- high-level tools (reliable named workflows the AI may call) -
+        _ActionSpec("tool.run", (
+            _f("tool", _is_str, "string"),
+            _f("args", lambda v: isinstance(v, dict), "object", required=False),
+        ), "Run a reliable named workflow tool (e.g. create_text_file)."),
         # --- verification ------------------------------------------------
         _ActionSpec("verify", (
             _f("visibleTextContains", _is_str, "string", required=False),

@@ -65,6 +65,14 @@ Source of truth: `docs/requirements.md`.
   last 8 back so the AI self-corrects (won't repeat ineffective actions). This
   replaced an earlier "you're stuck" heuristic the user rejected. Principle: give
   the AI good information and let it reason — don't spoon-feed heuristics.
+- **AI-callable TOOLS** (DW-AGENT-TOOLS): "brain + reliable hands". The AI can call
+  a deterministic tool via a `tool.run` action instead of many fragile GUI steps.
+  Registry in `tools/`; MVP tool `create_text_file` (writes file to disk + verifies
+  + opens in Notepad — RELIABLE, not flaky GUI). Routed through the executor (per-tool
+  risk: unknown⇒HIGH, create_text_file⇒MEDIUM; arg sanitization; nesting guard; fail
+  safe). Lesson: a TOOL must GUARANTEE its result (verified file write), NOT replay a
+  flaky GUI — the flaky right-click flow stays in the separate `create-file` demo.
+  VERIFIED: AI chose the tool live; disk content exact.
 - **VISION fallback** (DW-AGENT-VISION): `do "<task>" --vision` lets Claude SEE a
   screenshot when UIA is sparse (Electron/Chromium/custom apps). Adaptive + capped:
   off by default, only when elements < threshold, max 6 vision steps/task (each ~5x
