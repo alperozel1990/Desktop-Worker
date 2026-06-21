@@ -109,6 +109,54 @@ class ElevatedCliBroker:
     def allow_for_session(self, command: str) -> None:
         self._session_allow.add(command.strip())
 
+    # --- launch (fire-and-forget GUI apps) -----------------------------
+    def launch(self, command: str, cwd: str, *, agent: str = "system",
+               role: str = "system") -> CliResult:
+        """Launch a GUI app detached — gated + audited, but NEVER waits/captures.
+
+        ``run`` captures stdout, so a launched GUI app inherits the pipe and the
+        call blocks until the app CLOSES. For opening apps (notepad, Paint, a URL)
+        use this: it redirects the child's handles to DEVNULL (no inheritance) and
+        does not wait, so it returns immediately. Same classify+approval+audit gate.
+        """
+        if self.estop is not None:
+            self.estop.check()
+        command = command.strip()
+        risk = classify_command(command)
+        approved = False
+        if self.policy.requires_approval(risk):
+            approved = (command in self._session_allow) or self.policy.authorize(
+                ApprovalRequest(kind="launch", summary=command, risk=risk,
+                                detail={"cwd": cwd}))
+            if not approved:
+                return self._blocked(command, cwd, risk.value,
+                                     "launch not approved by user", agent=agent, role=role)
+        cwd_path = Path(cwd)
+        if not cwd_path.exists() or not cwd_path.is_dir():
+            return self._blocked(command, cwd, risk.value,
+                                 f"working directory does not exist: {cwd}",
+                                 agent=agent, role=role)
+        now = utc_now_iso()
+        try:
+            subprocess.Popen(command, cwd=str(cwd_path), shell=True,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        except OSError as exc:
+            return self._blocked(command, cwd, risk.value,
+                                 f"failed to launch: {exc}", agent=agent, role=role)
+        result = CliResult(
+            command=command, cwd=str(cwd_path), startedAt=now, endedAt=utc_now_iso(),
+            exitCode=0, stdoutRef=None, stderrRef=None,
+            elevated=False, riskLevel=risk.value, approvedByUser=approved,
+            blocked=False, blockedReason=None, stdoutTail="(launched detached)",
+        )
+        self.history.append(result)
+        self.audit.record("cli.launched", agent=agent, role=role,
+                          cli=result.to_dict(),
+                          approval={"required": self.policy.requires_approval(risk),
+                                    "approved": approved})
+        return result
+
     # --- run -----------------------------------------------------------
     def run(
         self,

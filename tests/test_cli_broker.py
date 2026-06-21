@@ -102,6 +102,28 @@ def test_history_and_audit_recorded(tmp_path):
     assert events.count("cli.executed") == 2
 
 
+def test_launch_is_nonblocking_and_audited(tmp_path):
+    # `launch` must return immediately (no wait/capture) and be audited. Use a
+    # command that would BLOCK under run() if its output were captured.
+    broker = _broker(tmp_path)
+    import time
+    if sys.platform.startswith("win"):
+        cmd = 'start "" cmd /c "ping 127.0.0.1 -n 3 >nul"'
+    else:
+        cmd = "sleep 3 &"
+    t = time.time()
+    res = broker.launch(cmd, str(tmp_path))
+    assert time.time() - t < 2.0          # returned immediately, did not wait
+    assert res.blocked is False
+    assert "cli.launched" in [e["event"] for e in broker.audit.read_all()]
+
+
+def test_launch_blocked_when_cwd_missing(tmp_path):
+    broker = _broker(tmp_path)
+    res = broker.launch('start "" notepad', str(tmp_path / "nope"))
+    assert res.blocked is True
+
+
 # --- DW-CLI-ELEVATE: per-command elevation -------------------------------
 
 def test_elevated_path_uses_elevator_when_not_admin(tmp_path):

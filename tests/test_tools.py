@@ -20,12 +20,13 @@ class FakeBrokerLaunch:
         self.commands = []
         self._blocked = blocked
 
-    def run(self, command, cwd, **kw):
+    def launch(self, command, cwd, **kw):
         self.commands.append(command)
         class R:
-            blocked = self._blocked
-            blockedReason = "nope"
-        r = R(); r.blocked = self._blocked; return r
+            pass
+        r = R(); r.blocked = self._blocked; r.blockedReason = "nope"; return r
+
+    run = launch  # GUI tools use launch; keep run as an alias for any old call
 
 
 class FakeTool:

@@ -74,8 +74,7 @@ class CreateTextFileTool:
             # `start` launches Notepad detached (non-blocking) and is audited by
             # the broker; best-effort — the file already exists either way.
             try:
-                res = self._broker.run(f'start "" notepad "{path}"', self._desktop_dir,
-                                       elevated=False, agent="create_text_file", role="tool")
+                res = self._broker.launch(f'start "" notepad "{path}"', self._desktop_dir, agent="create_text_file", role="tool")
                 opened = not getattr(res, "blocked", False)
             except Exception:
                 opened = False
@@ -125,8 +124,7 @@ class OpenAppTool:
                             f"Allowed: {', '.join(sorted(set(_APP_ALLOWLIST)))}")
         if self._broker is None:
             return {"success": False, "app": app, "error": "no broker to launch the app"}
-        res = self._broker.run(f'start "" {token}', self._cwd, elevated=False,
-                               agent="open_app", role="tool")
+        res = self._broker.launch(f'start "" {token}', self._cwd, agent="open_app", role="tool")
         if getattr(res, "blocked", False):
             return {"success": False, "app": app,
                     "error": f"launch blocked: {getattr(res, 'blockedReason', '')}"}
@@ -170,8 +168,7 @@ class OpenUrlTool:
         url = _sanitize_url(args.get("url"))
         if self._broker is None:
             return {"success": False, "url": url, "error": "no broker to open the url"}
-        res = self._broker.run(f'start "" "{url}"', self._cwd, elevated=False,
-                               agent="open_url", role="tool")
+        res = self._broker.launch(f'start "" "{url}"', self._cwd, agent="open_url", role="tool")
         if getattr(res, "blocked", False):
             return {"success": False, "url": url,
                     "error": f"open blocked: {getattr(res, 'blockedReason', '')}"}
