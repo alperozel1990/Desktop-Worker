@@ -65,6 +65,13 @@ Source of truth: `docs/requirements.md`.
   last 8 back so the AI self-corrects (won't repeat ineffective actions). This
   replaced an earlier "you're stuck" heuristic the user rejected. Principle: give
   the AI good information and let it reason — don't spoon-feed heuristics.
+- **VISION fallback** (DW-AGENT-VISION): `do "<task>" --vision` lets Claude SEE a
+  screenshot when UIA is sparse (Electron/Chromium/custom apps). Adaptive + capped:
+  off by default, only when elements < threshold, max 6 vision steps/task (each ~5x
+  cost via `--max-turns 2 --allowedTools Read`). The user is QUOTA-SENSITIVE (hit a
+  Claude spend limit) — keep vision cheap/optional. Each `do` step calls Claude =
+  uses their subscription quota; if it fails with a spend-limit error the CLI now
+  prints a clear note (claude.ai/settings/usage).
 - Phase 5 also has: deterministic `workflows/desktop_file.py` (+`desktop_ui.py`):
   `create-file` builds a desktop .txt visibly, verified on disk.
 - **CRITICAL input fix:** `windows_input.type_text` now uses **SendInput** (16-bit

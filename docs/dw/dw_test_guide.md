@@ -33,6 +33,16 @@ Settings, File Explorer). Apps that hide their UI from Windows accessibility
 (some Electron/Chromium apps) expose little, so the AI sees less there. If a run
 stalls or misclicks, tell me the printed steps and I'll tune it.
 
+**For apps the AI "can't see" — add `--vision`:** lets Claude look at a screenshot
+when accessibility data is sparse, so it works on Electron/Chromium/custom apps:
+```powershell
+python -m desktop_worker do "your task" --vision
+```
+⚠️ Vision steps send a screenshot to Claude and cost noticeably MORE of your Claude
+usage (capped at 6 vision steps/task). Use it only when a normal run can't see the
+app. Note: this also briefly lets Claude read local files (read-only) to view the
+screenshot — it still cannot perform any action without going through the safety gate.
+
 ---
 
 ## ⭐ Deterministic demo (MANUAL-8) — always-reliable, scripted (NOT AI-driven)

@@ -179,7 +179,13 @@ def _cmd_do(args: argparse.Namespace) -> int:
     )
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))
     planner = ClaudeCliPlanner(task=args.task, broker=session.broker, cwd=cwd,
-                               audit=session.audit, env_context=env_context)
+                               audit=session.audit, env_context=env_context,
+                               vision=args.vision)
+    if args.vision:
+        print(f"Vision fallback ON: a screenshot is sent to Claude when accessibility "
+              f"data is sparse. On low-UIA apps (Electron/games) that can be MOST steps, "
+              f"each costing notably more Claude usage. Capped at {planner.max_vision_steps} "
+              f"vision steps per task, then text-only.")
 
     def show_step(step) -> None:
         if planner.last_reasoning:
@@ -201,6 +207,9 @@ def _cmd_do(args: argparse.Namespace) -> int:
     print("\n" + report.to_markdown())
     if planner.last_done_reason:
         print(f"AI final note: {planner.last_done_reason}")
+    if args.vision:
+        print(f"Vision steps used: {planner.vision_steps_used} (each sent a screenshot "
+              f"to Claude — the higher-cost steps).")
     # Friendly hint when the AI couldn't run because of the Claude account limit.
     err = (planner.last_error or "").lower()
     if "spend limit" in err or "usage" in err or "rate limit" in err:
@@ -246,6 +255,9 @@ def build_parser() -> argparse.ArgumentParser:
     do.add_argument("task", help="the task in plain language, e.g. \"open Notepad and type hi\"")
     do.add_argument("--max-actions", type=int, default=15, help="max actions before stopping")
     do.add_argument("--max-seconds", type=int, default=300, help="max task time")
+    do.add_argument("--vision", action="store_true",
+                    help="let Claude SEE a screenshot when accessibility data is sparse "
+                         "(works on more apps; costs more Claude usage)")
     do.set_defaults(func=_cmd_do)
     return p
 

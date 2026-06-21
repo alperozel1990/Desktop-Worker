@@ -36,6 +36,12 @@ from desktop_worker.schema.results import ActionResult
 
 # Flags: print mode, single turn, tools disabled, JSON envelope output.
 _CLAUDE_FLAGS = '-p --output-format json --max-turns 1 --tools ""'
+# Vision flags: allow ONLY the read-only Read tool (so Claude can view the
+# screenshot) and one extra turn for the read. Still cannot take any action —
+# every real action goes through our executor.
+_CLAUDE_FLAGS_VISION = '-p --output-format json --max-turns 2 --allowedTools Read'
+
+_IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".bmp")
 
 # Mouse action types that accept x/y (so an elementId can be resolved to coords).
 _COORD_ACTIONS = frozenset({
@@ -123,10 +129,17 @@ def _action_catalog() -> str:
 
 def build_planner_prompt(
     task: str, observation: Observation, history: list[ActionResult],
-    *, failed_note: str = "", env_context: str = "",
+    *, failed_note: str = "", env_context: str = "", screenshot_path: str = "",
 ) -> str:
     """Build the instruction asking Claude for the next structured action."""
     env = f"\nEnvironment:\n{env_context}" if env_context else ""
+    vision = (
+        f"\nThe accessibility element list above may be incomplete for this app. "
+        f"A screenshot of the current screen is saved at {screenshot_path} — use your "
+        f"Read tool to VIEW it, then choose the next action based on what you see "
+        f"(give pixel coordinates for clicks when the element has no id)."
+        if screenshot_path else ""
+    )
     elements = ""
     if observation.elements:
         # Number elements by id so the AI targets a REAL element (no invented
@@ -164,7 +177,7 @@ def build_planner_prompt(
     fail = f"\nThe previous step FAILED: {failed_note}\nRe-observe and propose a corrected next step." if failed_note else ""
 
     return f"""You are the planner for Desktop-Worker, an AI agent controlling a real Windows desktop.
-TASK: {task}{env}
+TASK: {task}{env}{vision}
 
 Current desktop observation:
   {observation.summary()}{elements}{hist}{fail}
@@ -242,6 +255,9 @@ class ClaudeCliPlanner:
         claude_path: str = "claude",
         audit: Any = None,
         env_context: str = "",
+        vision: bool = False,
+        vision_threshold: int = 4,
+        max_vision_steps: int = 6,
     ) -> None:
         self.task = task
         self.broker = broker
@@ -249,6 +265,17 @@ class ClaudeCliPlanner:
         self.claude_path = claude_path
         self.audit = audit
         self.env_context = env_context
+        # Vision FALLBACK: attach a screenshot only when the UIA element list is
+        # sparse (< vision_threshold) — so the costly image call is made only when
+        # the cheap accessibility data is insufficient (e.g. Electron/custom UIs).
+        self.vision = vision
+        self.vision_threshold = vision_threshold
+        # Hard cap on costly vision steps per task (a low-UIA app is sparse on
+        # EVERY step, so without a cap vision could fire every step). Once hit, the
+        # planner falls back to text-only for the rest of the task.
+        self.max_vision_steps = max_vision_steps
+        self.vision_steps_used = 0
+        self._vision_active = False  # whether the CURRENT call uses vision
         # Injectable for tests; default routes through the broker.
         self._ask: AskFn = ask or self._ask_via_broker
         # Last decision (for explain-before-execute printing by the `do` command).
@@ -262,16 +289,42 @@ class ClaudeCliPlanner:
         self.last_error: str = ""
 
     # Planner protocol -------------------------------------------------
+    def _vision_path(self, observation: Observation) -> str:
+        """Return a real screenshot path to send to vision, or '' to stay text-only.
+
+        Only triggers when vision is enabled AND the accessibility element list is
+        sparse AND a real image screenshot exists (cost is incurred only when the
+        cheap UIA data is insufficient).
+        """
+        if not self.vision or self.vision_steps_used >= self.max_vision_steps:
+            return ""
+        if len(observation.elements) >= self.vision_threshold:
+            return ""
+        ref = observation.screenshotRef or ""
+        if ref and Path(ref).suffix.lower() in _IMAGE_SUFFIXES and Path(ref).exists():
+            return ref
+        return ""
+
+    def _activate_vision(self, observation: Observation) -> str:
+        shot = self._vision_path(observation)
+        self._vision_active = bool(shot)
+        if shot:
+            self.vision_steps_used += 1
+        return shot
+
     def next_step(self, observation: Observation, history: list[ActionResult]) -> Optional[PlannedStep]:
+        shot = self._activate_vision(observation)
         prompt = build_planner_prompt(self.task, observation, history,
-                                      env_context=self.env_context)
+                                      env_context=self.env_context, screenshot_path=shot)
         return self._plan(prompt, observation)
 
     def replan(self, failed: PlannedStep, observation: Observation,
                history: list[ActionResult]) -> Optional[PlannedStep]:
         note = f"{failed.action} ({failed.description})"
+        shot = self._activate_vision(observation)
         prompt = build_planner_prompt(self.task, observation, history,
-                                      failed_note=note, env_context=self.env_context)
+                                      failed_note=note, env_context=self.env_context,
+                                      screenshot_path=shot)
         return self._plan(prompt, observation)
 
     # internals --------------------------------------------------------
@@ -348,7 +401,7 @@ class ClaudeCliPlanner:
 
         self.last_outcome = "step"
         self.last_error = ""
-        self._log("planner.step", reasoning=self.last_reasoning,
+        self._log("planner.step", reasoning=self.last_reasoning, vision=self._vision_active,
                   planned={"action": action.to_dict(), "elementId": obj.get("elementId")})
         return PlannedStep(
             action=action,
@@ -371,7 +424,10 @@ class ClaudeCliPlanner:
             prompt_file.write_text(prompt, encoding="utf-8")
             # Prompt goes via stdin redirection so it never touches the command
             # line (no quoting/injection); only fixed flags + a controlled path do.
-            command = f'{self.claude_path} {_CLAUDE_FLAGS} < "{prompt_file}"'
+            # Vision steps allow the read-only Read tool so Claude can view the
+            # screenshot; non-vision steps keep all tools disabled.
+            flags = _CLAUDE_FLAGS_VISION if self._vision_active else _CLAUDE_FLAGS
+            command = f'{self.claude_path} {flags} < "{prompt_file}"'
             res = self.broker.run(command, self.cwd, elevated=False,
                                   agent="Claude CLI Planner", role="planner")
             if getattr(res, "blocked", False):

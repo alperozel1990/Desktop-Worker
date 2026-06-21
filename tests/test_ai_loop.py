@@ -34,6 +34,25 @@ def _planner(resp):
     return ClaudeCliPlanner(task="t", broker=None, cwd=".", ask=lambda p: resp)
 
 
+class _FakeCliResult:
+    def __init__(self, stdout):
+        self.stdoutRef = None
+        self.stdoutTail = stdout
+        self.blocked = False
+        self.exitCode = 0
+
+
+class FakeBroker:
+    def __init__(self, stdout):
+        self.stdout = stdout
+        self.commands = []
+        self.cli_dir = None
+
+    def run(self, command, cwd, **kw):
+        self.commands.append(command)
+        return _FakeCliResult(self.stdout)
+
+
 def test_element_id_resolves_to_center_coords_for_mouse():
     resp = _envelope('{"action": {"type": "mouse.click"}, "elementId": "uia-2", '
                      '"reasoning": "click New", "description": "click"}')
@@ -51,6 +70,50 @@ def test_element_id_not_injected_into_keyboard_action():
     assert step is not None
     assert step.action.type == "keyboard.type"
     assert "x" not in step.action.params      # keyboard.type must not get coords
+
+
+def _obs_sparse(tmp_path, n_elements=0):
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(b"\x89PNG\r\n")  # exists with image suffix
+    els = tuple(
+        Element(id=f"uia-{i}", type="button", bounds=(0, 0, 1, 1), source="uia")
+        for i in range(n_elements)
+    )
+    return Observation(screen=Screen(800, 600), cursor=Cursor(0, 0),
+                       elements=els, screenshotRef=str(shot))
+
+
+def test_vision_off_by_default_no_screenshot(tmp_path):
+    p = ClaudeCliPlanner(task="t", broker=None, cwd=".", ask=lambda x: "{}", vision=False)
+    assert p._vision_path(_obs_sparse(tmp_path, 0)) == ""   # never, even with no elements
+
+
+def test_vision_triggers_only_when_elements_sparse(tmp_path):
+    p = ClaudeCliPlanner(task="t", broker=None, cwd=".", ask=lambda x: "{}",
+                         vision=True, vision_threshold=4)
+    # sparse (0 elements) -> vision uses the screenshot
+    assert p._vision_path(_obs_sparse(tmp_path, 0)).endswith(".png")
+    # rich (>= threshold elements) -> no vision (save cost)
+    assert p._vision_path(_obs_sparse(tmp_path, 5)) == ""
+
+
+def test_vision_step_cap_protects_quota(tmp_path):
+    p = ClaudeCliPlanner(task="t", broker=None, cwd=".", ask=lambda x: "{}",
+                         vision=True, vision_threshold=4, max_vision_steps=2)
+    obs = _obs_sparse(tmp_path, 0)
+    assert p._activate_vision(obs).endswith(".png")   # 1
+    assert p._activate_vision(obs).endswith(".png")   # 2
+    assert p._activate_vision(obs) == ""              # capped -> text-only
+    assert p.vision_steps_used == 2
+
+
+def test_vision_call_uses_read_tool_flags(tmp_path):
+    resp = _envelope('{"done": true}')
+    broker = FakeBroker(resp)
+    p = ClaudeCliPlanner(task="t", broker=broker, cwd=".", vision=True, vision_threshold=4)
+    p.next_step(_obs_sparse(tmp_path, 0), [])          # sparse -> vision path
+    assert "allowedTools Read" in broker.commands[0]   # read tool enabled for vision
+    assert "--max-turns 2" in broker.commands[0]
 
 
 def test_unknown_element_id_is_rejected_not_misclicked():

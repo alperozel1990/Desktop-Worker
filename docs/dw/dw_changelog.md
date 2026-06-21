@@ -439,3 +439,49 @@ then (NO loop) reasoned "'notepad' is selected, type 'calc'" → launched Calcul
 and self-corrects, no heuristic spoon-feeding. Codex APPROVE, Northstar ALIGNED.
 
 **Next Action:** Optional, as above. None blocking.
+
+---
+
+## 2026-06-21 | Execute | Task: DW-AGENT-VISION — vision fallback for UIA-poor apps
+
+**Task ID:** DW-AGENT-VISION
+**Type:** Execute (extend DW-AGENT-DO) — user chose "add vision" as next priority
+**Status:** Complete — vision capability proven; full loop not run live (conserve quota)
+
+**Goal:** Make the live AI agent work on apps where Windows UI Automation exposes
+few elements (Electron/Chromium, games, custom UIs) by letting Claude SEE a
+screenshot. Cost-aware: a vision step costs ~$0.27 vs ~$0.05 text-only (verified),
+and the user recently hit a Claude usage limit — so vision is an adaptive,
+capped FALLBACK, off by default.
+
+**How:** `do "<task>" --vision`. The planner attaches a screenshot only when the
+UIA element list is sparse (< threshold) AND a real .png exists, capped at
+`max_vision_steps` (default 6) per task, then text-only. Vision steps switch the
+claude flags from `--tools ""` to `--max-turns 2 --allowedTools Read` (ONLY the
+read-only Read tool, one extra turn to view the image); the planner still only
+PROPOSES — the executor validates/gates/estop/audits every real action. Audit
+records `vision: true/false` per step; the CLI prints the cost note + vision-step count.
+
+**Files Modified:** `loop/claude_cli_planner.py` (vision flag/threshold/cap,
+`_vision_path`/`_activate_vision`, flag-switch, screenshot in prompt),
+`__main__.py` (`--vision` + cost note + count), `tests/test_ai_loop.py`.
+
+**Tests / Validations:** `python -m pytest` → **143 passed** (+4). Vision capability
+PROVEN standalone: `claude -p --max-turns 2 --allowedTools Read` read a real
+screenshot and accurately described it. Full `do --vision` loop deliberately NOT
+run end-to-end to conserve the user's Claude quota.
+
+**Validation Level Reached:** 3 (unit) + vision-read capability proven (real claude).
+
+**Result:** The agent can now fall back to vision on apps UIA can't describe, with
+cost controlled (off by default, sparse-only, hard step cap, audited). Codex
+APPROVE, Northstar ALIGNED. Applied review fixes: per-task vision-step cap + audit
+`vision` flag + clearer realistic cost note.
+
+**Risks Introduced:** Vision steps cost more Claude usage; capped + disclosed.
+`--allowedTools Read` lets Claude read local files during planning (read-only; can't
+act; the screenshot may capture sensitive screen content) — disclosed.
+**Risks Resolved:** Agent no longer blind on UIA-poor apps (when --vision on).
+
+**Next Action:** Optional — workflows as AI-callable tools; frugal mode; Phase 6/7.
+User can run `do --vision "<task>"` on an Electron/Chromium app to validate live.
