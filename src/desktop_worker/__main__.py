@@ -201,6 +201,13 @@ def _cmd_do(args: argparse.Namespace) -> int:
     print("\n" + report.to_markdown())
     if planner.last_done_reason:
         print(f"AI final note: {planner.last_done_reason}")
+    # Friendly hint when the AI couldn't run because of the Claude account limit.
+    err = (planner.last_error or "").lower()
+    if "spend limit" in err or "usage" in err or "rate limit" in err:
+        print("\nNOTE: your Claude usage/spend limit was reached — this is an account "
+              "limit, not an app error. Each AI step calls Claude. Wait for the reset "
+              "or raise it at claude.ai/settings/usage. (The scripted `create-file` "
+              "demo works without Claude.)")
     print(f"Audit log: {cfg.audit_file}")
     return 0 if report.completed else 1
 

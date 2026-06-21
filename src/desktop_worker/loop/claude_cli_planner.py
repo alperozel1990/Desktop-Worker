@@ -257,6 +257,9 @@ class ClaudeCliPlanner:
         # Why the last _plan returned None: "done" | "error" | "invalid" | "step".
         # Lets the loop tell genuine completion from a failed/blocked AI call.
         self.last_outcome: str = "done"
+        # Human-readable reason for the last failure (e.g. the claude CLI error),
+        # surfaced to the user so a cryptic "invalid" isn't all they see.
+        self.last_error: str = ""
 
     # Planner protocol -------------------------------------------------
     def next_step(self, observation: Observation, history: list[ActionResult]) -> Optional[PlannedStep]:
@@ -300,13 +303,15 @@ class ClaudeCliPlanner:
             raw = self._ask(prompt)
         except Exception as exc:  # noqa: BLE001 — a planner I/O failure must not crash the loop
             self.last_outcome = "error"
-            self._log("planner.error", error=f"ask failed: {exc}")
+            self.last_error = f"AI call failed: {exc}"
+            self._log("planner.error", error=self.last_error)
             return None
 
         try:
             obj = parse_planner_output(raw)
         except ValueError as exc:
             self.last_outcome = "invalid"
+            self.last_error = str(exc)
             self._log("planner.invalid", error=str(exc))
             return None
 
@@ -314,6 +319,7 @@ class ClaudeCliPlanner:
 
         if obj.get("done") is True:
             self.last_outcome = "done"
+            self.last_error = ""
             self.last_done_reason = self.last_reasoning
             self._log("planner.done", reasoning=self.last_reasoning)
             return None
@@ -321,12 +327,14 @@ class ClaudeCliPlanner:
         action_data = obj.get("action")
         if not isinstance(action_data, dict):
             self.last_outcome = "invalid"
+            self.last_error = "AI returned no action"
             self._log("planner.invalid", error="missing 'action' object")
             return None
 
         action_data = self._resolve_element(obj, action_data, observation)
         if action_data is None:
             self.last_outcome = "invalid"
+            self.last_error = f"AI targeted an unknown element ({obj.get('elementId')!r})"
             self._log("planner.invalid", error=f"unknown elementId: {obj.get('elementId')!r}")
             return None
 
@@ -334,10 +342,12 @@ class ClaudeCliPlanner:
             action = parse_action(action_data)  # STRICT schema validation
         except ActionValidationError as exc:
             self.last_outcome = "invalid"
+            self.last_error = f"AI proposed an invalid action: {exc}"
             self._log("planner.invalid", error=f"action rejected: {exc}")
             return None
 
         self.last_outcome = "step"
+        self.last_error = ""
         self._log("planner.step", reasoning=self.last_reasoning,
                   planned={"action": action.to_dict(), "elementId": obj.get("elementId")})
         return PlannedStep(

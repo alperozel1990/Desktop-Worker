@@ -141,7 +141,7 @@ def test_loop_marks_failed_when_planner_errors(tmp_path):
     loop, audit = _loop(tmp_path, StubPlanner([None]))
     report = loop.run()
     assert report.completed is False
-    assert "planner produced no action" in report.stop_reason
+    assert "AI could not decide" in report.stop_reason
 
 
 def test_stall_guard_stops_on_no_progress(tmp_path):

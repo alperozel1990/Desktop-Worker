@@ -280,7 +280,8 @@ class TaskLoop:
                 if outcome == "done":
                     completed = True
                 else:
-                    stop_reason = f"planner produced no action ({outcome})"
+                    detail = getattr(self.planner, "last_error", "")
+                    stop_reason = f"AI could not decide ({outcome})" + (f": {detail}" if detail else "")
                     self.audit.record("task.planner_failed", reason=stop_reason)
                 break
 
