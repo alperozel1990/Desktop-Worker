@@ -67,8 +67,9 @@ Source of truth: `docs/requirements.md`.
   the AI good information and let it reason — don't spoon-feed heuristics.
 - **AI-callable TOOLS** (DW-AGENT-TOOLS): "brain + reliable hands". The AI can call
   a deterministic tool via a `tool.run` action instead of many fragile GUI steps.
-  Registry in `tools/`; MVP tool `create_text_file` (writes file to disk + verifies
-  + opens in Notepad — RELIABLE, not flaky GUI). Routed through the executor (per-tool
+  Registry in `tools/`; tools: `create_text_file` (writes file to disk + verifies
+  + opens in Notepad — RELIABLE, not flaky GUI) and `open_app` (open a known app
+  via a curated allowlist → broker `start`; shells excluded, unknown rejected). Routed through the executor (per-tool
   risk: unknown⇒HIGH, create_text_file⇒MEDIUM; arg sanitization; nesting guard; fail
   safe). Lesson: a TOOL must GUARANTEE its result (verified file write), NOT replay a
   flaky GUI — the flaky right-click flow stays in the separate `create-file` demo.
