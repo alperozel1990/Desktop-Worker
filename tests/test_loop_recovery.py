@@ -194,3 +194,22 @@ def test_time_limit_trips_inside_recovery(tmp_path):
     events = [e["event"] for e in audit.read_all()]
     assert "task.timeout" in events
     assert "step.retry" not in events    # tripped before any retry was spent
+
+
+def test_verify_file_exists(tmp_path):
+    from desktop_worker.schema.observations import Observation, Screen, Cursor
+    from desktop_worker.schema.results import ActionResult
+    from desktop_worker.loop.task_loop import TaskLoop, PlannedStep, ScriptedPlanner
+    from desktop_worker.util import utc_now_iso
+    f = tmp_path / "made.txt"; f.write_text("x", encoding="utf-8")
+    loop = TaskLoop(task_id="t", planner=ScriptedPlanner([]), observer=None,
+                    executor=None, audit=None, estop=None)
+    obs = Observation(screen=Screen(800, 600), cursor=Cursor(0, 0))
+    res = ActionResult(action_type="wait", success=True, startedAt=utc_now_iso(), endedAt=utc_now_iso())
+    # present file -> passes; absent -> fails
+    ok = loop._verify(PlannedStep(parse_action({"type": "wait", "durationMs": 1}),
+                                  expected={"fileExists": str(f)}), obs, res)
+    assert ok.passed is True and ok.method == "fileExists"
+    missing = loop._verify(PlannedStep(parse_action({"type": "wait", "durationMs": 1}),
+                                       expected={"fileExists": str(tmp_path / "nope.txt")}), obs, res)
+    assert missing.passed is False

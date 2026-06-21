@@ -214,8 +214,9 @@ the id to its on-screen position — do NOT guess pixel coordinates. For typing 
 
 Rules: output valid JSON only; prefer clicking elements by elementId over raw
 coordinates; take one small verifiable step; set expectedResult when you can
-(e.g. {{"activeWindowContains":"Notepad"}} or {{"visibleTextContains":"Done"}});
-say done:true only when the task is actually achieved."""
+(e.g. {{"activeWindowContains":"Notepad"}}, {{"visibleTextContains":"Done"}} or
+{{"fileExists":"C:\\\\path\\\\to\\\\file.txt"}}); say done:true only when the task
+is actually achieved."""
 
 
 # --- availability check --------------------------------------------------

@@ -430,6 +430,17 @@ class TaskLoop:
                 observed={"text": got},
             )
 
+        if "fileExists" in expected:
+            # Verify a filesystem outcome (requirements §14) — lets the AI confirm
+            # a file task actually produced the file on disk.
+            import os
+            path = str(expected["fileExists"])
+            passed = os.path.isfile(path)
+            return VerificationResult(
+                passed=passed, method="fileExists",
+                expected={"fileExists": path}, observed={"exists": passed},
+            )
+
         if "visibleTextContains" in expected:
             # Now that perception is wired, check perceived element text + the
             # active window title for the expected substring (requirements §14).
