@@ -9,8 +9,21 @@ from desktop_worker.safety.emergency_stop import EmergencyStop
 from desktop_worker.safety.policy import PermissionPolicy, deny_all
 from desktop_worker.schema.actions import ActionValidationError, parse_action
 from desktop_worker.tools import ToolRegistry
-from desktop_worker.tools.builtin import CreateTextFileTool, _sanitize_filename
+from desktop_worker.tools.builtin import CreateTextFileTool, OpenAppTool, _sanitize_filename
 from desktop_worker.tools.registry import ToolError
+
+
+class FakeBrokerLaunch:
+    def __init__(self, blocked=False):
+        self.commands = []
+        self._blocked = blocked
+
+    def run(self, command, cwd, **kw):
+        self.commands.append(command)
+        class R:
+            blocked = self._blocked
+            blockedReason = "nope"
+        r = R(); r.blocked = self._blocked; return r
 
 
 class FakeTool:
@@ -98,6 +111,29 @@ def test_create_text_file_tool_rejects_bad_filename(tmp_path):
     tool = CreateTextFileTool(desktop_dir=str(tmp_path), broker=None)
     with pytest.raises(ToolError):
         tool.run({"filename": "../evil", "content": "x"})
+
+
+# --- open_app tool -------------------------------------------------------
+
+def test_open_app_launches_allowed_app(tmp_path):
+    broker = FakeBrokerLaunch()
+    tool = OpenAppTool(desktop_dir=str(tmp_path), broker=broker)
+    res = tool.run({"app": "Calculator"})              # case-insensitive friendly name
+    assert res["success"] is True
+    assert broker.commands == ['start "" calc']        # mapped to safe launch token
+
+
+def test_open_app_rejects_unknown_and_shells(tmp_path):
+    tool = OpenAppTool(desktop_dir=str(tmp_path), broker=FakeBrokerLaunch())
+    for bad in ["cmd", "powershell", "C:\\evil.exe", "whatever"]:
+        with pytest.raises(ToolError):
+            tool.run({"app": bad})                      # not in the allowlist
+
+
+def test_open_app_blocked_launch_fails_safe(tmp_path):
+    tool = OpenAppTool(desktop_dir=str(tmp_path), broker=FakeBrokerLaunch(blocked=True))
+    res = tool.run({"app": "notepad"})
+    assert res["success"] is False
 
 
 # --- executor dispatch + gating -----------------------------------------

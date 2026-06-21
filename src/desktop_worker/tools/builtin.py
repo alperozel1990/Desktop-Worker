@@ -81,3 +81,53 @@ class CreateTextFileTool:
                 opened = False
 
         return {"success": True, "path": str(path), "opened": opened, "error": None}
+
+
+# Curated allowlist of safe GUI apps the AI may open (friendly name -> launch
+# token for `start "" <token>`). Shells (cmd/powershell) are deliberately EXCLUDED
+# — the AI has the gated cli.run path for commands. Unknown apps are rejected, so
+# the AI cannot launch an arbitrary executable through this tool.
+_APP_ALLOWLIST = {
+    "notepad": "notepad",
+    "calculator": "calc", "calc": "calc",
+    "paint": "mspaint", "mspaint": "mspaint",
+    "explorer": "explorer", "file explorer": "explorer", "files": "explorer",
+    "settings": "ms-settings:",
+    "chrome": "chrome", "google chrome": "chrome",
+    "edge": "msedge", "microsoft edge": "msedge",
+    "task manager": "taskmgr",
+    "wordpad": "write",
+}
+
+
+class OpenAppTool:
+    """Open a known, safe GUI application by friendly name (reliable, non-blocking).
+
+    Only apps in a curated allowlist can be opened (no arbitrary executables, no
+    shells). Launches via the audited CLI broker's non-blocking `start`.
+    """
+
+    name = "open_app"
+    description = ("Open a known Windows app by name (reliable). Allowed: "
+                  + ", ".join(sorted(set(_APP_ALLOWLIST))) + ".")
+    args_help = "app (one of the allowed names above)"
+    risk = "medium"  # launches a known GUI app; non-destructive
+
+    def __init__(self, *, desktop_dir: str, broker: Any = None) -> None:
+        self._cwd = desktop_dir
+        self._broker = broker
+
+    def run(self, args: dict[str, Any]) -> dict[str, Any]:
+        app = str(args.get("app", "")).strip().lower()
+        token = _APP_ALLOWLIST.get(app)
+        if token is None:
+            raise ToolError(f"app not allowed: {args.get('app')!r}. "
+                            f"Allowed: {', '.join(sorted(set(_APP_ALLOWLIST)))}")
+        if self._broker is None:
+            return {"success": False, "app": app, "error": "no broker to launch the app"}
+        res = self._broker.run(f'start "" {token}', self._cwd, elevated=False,
+                               agent="open_app", role="tool")
+        if getattr(res, "blocked", False):
+            return {"success": False, "app": app,
+                    "error": f"launch blocked: {getattr(res, 'blockedReason', '')}"}
+        return {"success": True, "app": app, "launched": token, "error": None}
