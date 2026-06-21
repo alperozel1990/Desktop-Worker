@@ -33,31 +33,52 @@ src/desktop_worker/
   broker/       elevated/admin-capable CLI broker (the ONLY CLI path) + risk classifier
   observation/  desktop observation (screenshot, cursor, windows) — Windows + Null backends
   actions/      action executor + input backends (mouse/keyboard/clipboard) — Windows + Null
-  loop/         the observe-plan-act-verify-log task loop + pluggable planner
+  loop/         observe-plan-act-verify-log loop + Claude-CLI AI planner (no API key)
+  perception/   OCR + Windows UI Automation → structured Elements (UIA preferred)
+  workflows/    deterministic desktop workflows (e.g. create-file demo)
+  tools/        AI-callable reliable tools (create_text_file, open_app, open_url, focus_window)
   app.py        Session wiring
-  __main__.py   CLI: status / observe / demo / estop / clear-stop
-tests/          pytest suite (no display required)
+  __main__.py   CLI: do / create-file / status / observe / demo / report / estop
+tests/          pytest suite (180+ tests, no display required)
 ```
 
 ## Quick start
 
 ```powershell
-# Install (core has zero deps; extras enable real screenshots / OCR)
-python -m pip install -e ".[dev]"
-python -m pip install -e ".[windows]"   # optional: mss screenshots, pywin32
+python -m pip install -e ".[dev,windows]"   # core + real desktop (mss, pywin32, uiautomation)
+```
 
-# Show config, backends, and process elevation
-python -m desktop_worker status
+### Genuine live AI control (the headline)
 
-# Capture one real structured observation (cursor, active window, screen)
-python -m desktop_worker observe --no-screenshot
+Give a plain-language task and the AI decides + performs each action itself, live —
+using your existing `claude` CLI login (no API key, no separate billing). It
+observes the screen, reasons, acts through the safety-gated executor, verifies, and
+continues until done. Every decision is printed and audited.
 
-# Run the scripted demo task through the full loop (Null backends, safe)
-python -m desktop_worker --null demo
+```powershell
+python -m desktop_worker do "open the Calculator and compute 12 times 9"
+python -m desktop_worker do "create a text file on the desktop and write a haiku in it"
+```
 
-# Emergency stop (writes a sentinel any running session will halt on)
-python -m desktop_worker estop
-python -m desktop_worker clear-stop
+Flags: `--vision` (let Claude SEE a screenshot on UIA-poor apps — costs more usage),
+`--frugal` (leaner prompts = less usage/step), `--profile {standard|strict|headless}`
+(how much it asks before risky actions). Emergency stop anytime:
+`python -m desktop_worker estop`. Each run writes a browsable `replay.html`.
+
+The agent can call **reliable tools** in one step instead of fumbling many GUI
+actions: `create_text_file`, `open_app`, `open_url`, `focus_window`. It still has raw
+mouse/keyboard for everything else; the AI chooses. Tools have **action/outcome
+memory** (it sees what it tried and whether the screen changed) so it self-corrects.
+
+### Other commands
+
+```powershell
+python -m desktop_worker status                 # config, backends, elevation
+python -m desktop_worker observe --no-screenshot # one real structured observation
+python -m desktop_worker create-file            # deterministic demo (no AI): make a desktop .txt
+python -m desktop_worker --null demo            # scripted loop on Null backends (safe)
+python -m desktop_worker report --session ai-do --task task  # HTML replay of a session
+python -m desktop_worker estop / clear-stop     # emergency stop / clear
 ```
 
 ## Tests
