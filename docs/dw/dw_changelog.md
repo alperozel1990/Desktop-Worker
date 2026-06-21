@@ -567,10 +567,24 @@ change; default behavior byte-identical.
 title (pure matcher tested; ctypes enum/focus injectable). risk LOW. VERIFIED: focused
 a real window among 14 enumerated.
 
-**Tests:** 165 → **176 passed**. **Tool library now: create_text_file, open_app,
+**DW-PROFILES** (commit 8b53fce): `do --profile {standard|strict|headless}` —
+selectable safety presets (§12). standard == prior behavior; strict prompts MEDIUM+
+(tool calls, window focus, risky CLI); headless denies anything needing approval.
+
+**DW-VERIFY-FILE** (commit 6590112): loop `_verify` gains `fileExists` so the AI can
+confirm a file task produced the file on disk.
+
+**DW-README + DW-INTEGRATION** (commits 91f9d9a, 7cd09cf): refreshed README for the
+full capability set; added a full-stack integration test (stubbed AI planner →
+loop+perceiver → executor → tool.run → reliable tool writes+verifies file → audit →
+HTML replay; plus emergency-stop-halts case).
+
+**Tests:** 165 → **184 passed**. **Tool library: create_text_file, open_app,
 open_url, focus_window** — the AI picks the right reliable tool in one step.
+Plus: `--vision` fallback, `--frugal` mode, `--profile` presets, session-replay HTML.
 
-**Validation Level:** 3 (unit) for all; open_app/focus_window also live-sanity-checked.
+**Validation Level:** 3 (unit) for all; open_app/focus_window also live-sanity-checked;
+the live `do` agent itself is L4-verified (earlier).
 
-**Next Action:** Optional — permission profiles (Phase 7), more tools, Phase 6
-multi-agent, or a real UI. None blocking.
+**Next Action:** Optional — Phase 6 multi-agent, a real UI (Phase 7), or more tools.
+None blocking. The agent is feature-complete for the core north-star.

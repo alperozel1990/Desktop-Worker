@@ -67,9 +67,12 @@ Source of truth: `docs/requirements.md`.
   the AI good information and let it reason — don't spoon-feed heuristics.
 - **AI-callable TOOLS** (DW-AGENT-TOOLS): "brain + reliable hands". The AI can call
   a deterministic tool via a `tool.run` action instead of many fragile GUI steps.
-  Registry in `tools/`; tools: `create_text_file` (writes file to disk + verifies
-  + opens in Notepad — RELIABLE, not flaky GUI) and `open_app` (open a known app
-  via a curated allowlist → broker `start`; shells excluded, unknown rejected). Routed through the executor (per-tool
+  Registry in `tools/`; tools: `create_text_file` (writes+verifies+opens — RELIABLE,
+  not flaky GUI), `open_app` (curated allowlist, shells excluded), `open_url`
+  (http/https only, injection-safe), `focus_window` (by title). Also: `--vision`
+  fallback (screenshot when UIA sparse, capped), `--frugal` (leaner prompts),
+  `--profile {standard|strict|headless}` (§12 safety presets), session-replay HTML
+  (`report` cmd / auto after `do`). 184 tests. All Codex+Northstar approved. Routed through the executor (per-tool
   risk: unknown⇒HIGH, create_text_file⇒MEDIUM; arg sanitization; nesting guard; fail
   safe). Lesson: a TOOL must GUARANTEE its result (verified file write), NOT replay a
   flaky GUI — the flaky right-click flow stays in the separate `create-file` demo.
