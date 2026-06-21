@@ -229,7 +229,30 @@ def _cmd_do(args: argparse.Namespace) -> int:
               "or raise it at claude.ai/settings/usage. (The scripted `create-file` "
               "demo works without Claude.)")
     print(f"Audit log: {cfg.audit_file}")
+    # Auto-generate a human-readable HTML replay (best-effort: never let replay
+    # generation mask the actual task outcome).
+    try:
+        from desktop_worker.audit.report import write_html_report
+        replay = write_html_report(cfg.audit_file, cfg.task_dir / "replay.html",
+                                   title=f"do: {args.task}")
+        print(f"Replay (open in browser): {replay}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"(replay generation skipped: {exc})")
     return 0 if report.completed else 1
+
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    """Build an HTML replay from a session/task's audit log."""
+    from desktop_worker.audit.report import write_html_report
+
+    cfg = Config(session_id=args.session, task_id=args.task)
+    if not cfg.audit_file.exists():
+        print(f"No audit log at {cfg.audit_file}")
+        return 1
+    out = write_html_report(cfg.audit_file, cfg.task_dir / "replay.html",
+                            title=f"{args.session}/{args.task}")
+    print(f"Replay written: {out}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -270,6 +293,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="let Claude SEE a screenshot when accessibility data is sparse "
                          "(works on more apps; costs more Claude usage)")
     do.set_defaults(func=_cmd_do)
+
+    rep = sub.add_parser("report", help="build an HTML replay of a session's audit log")
+    rep.add_argument("--session", default="ai-do", help="session id")
+    rep.add_argument("--task", default="task", help="task id")
+    rep.set_defaults(func=_cmd_report)
     return p
 
 
