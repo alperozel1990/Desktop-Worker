@@ -75,6 +75,7 @@ def _minimal(t: str) -> dict:
         "mouse.up": {},
         "mouse.scroll": {},
         "mouse.drag": {"from": [0, 0], "to": [1, 1]},
+        "mouse.stroke": {"points": [[0, 0], [1, 1]]},
         "keyboard.type": {"text": "x"},
         "keyboard.press": {"key": "ENTER"},
         "keyboard.hotkey": {"keys": ["CTRL", "C"]},

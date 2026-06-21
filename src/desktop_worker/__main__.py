@@ -177,7 +177,13 @@ def _cmd_do(args: argparse.Namespace) -> int:
         "- cli.run is ONLY for short non-interactive commands and BLOCKS until they "
         "exit — NEVER use it to launch GUI apps (notepad, chrome). Its cwd must exist.\n"
         "- To create a desktop text file you can right-click an empty desktop spot, "
-        "choose New then Text Document; menu items appear as elements to click by id."
+        "choose New then Text Document; menu items appear as elements to click by id.\n"
+        "- To DRAW (e.g. in Paint), use mouse.stroke with a list of points inside the "
+        "drawing canvas (estimate the canvas area from the app window's bounds). Strokes "
+        "are piecewise-LINEAR (straight segments between your points), so supply MANY "
+        "close points to approximate curves; build a shape from several strokes. The "
+        "canvas pixels are NOT in the element list, so run with --vision to SEE your "
+        "drawing and correct it. Expect rough/approximate results, not fine art."
     )
     # Reliable tools the AI may CHOOSE to call ("brain + hands"). The tool runs
     # through the same audited/estop-gated executor for each of its sub-actions.

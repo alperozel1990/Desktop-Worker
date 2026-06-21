@@ -185,6 +185,25 @@ class WindowsInputBackend:
             time.sleep(duration_ms / 1000.0 / steps)
         self.mouse_up("left")
 
+    def stroke(self, points: list, duration_ms: int) -> None:
+        """Press at the first point, drag smoothly through all points, release.
+
+        Interpolates between consecutive points so freehand drawing (e.g. in
+        Paint) produces continuous lines rather than disconnected dots.
+        """
+        pts = [(int(p[0]), int(p[1])) for p in points]
+        if not pts:
+            return
+        self.move(*pts[0])
+        self.mouse_down("left")
+        seg_ms = max(1.0, duration_ms / max(1, len(pts) - 1))
+        for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+            steps = max(1, int(seg_ms / 10))
+            for i in range(1, steps + 1):
+                self.move(int(x1 + (x2 - x1) * i / steps), int(y1 + (y2 - y1) * i / steps))
+                time.sleep(seg_ms / 1000.0 / steps)
+        self.mouse_up("left")
+
     # --- keyboard ------------------------------------------------------
     def type_text(self, text: str) -> None:
         # For long text, paste via clipboard (Ctrl+V) — much faster and far more

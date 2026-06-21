@@ -67,3 +67,19 @@ def test_cli_run_without_broker_fails_cleanly(tmp_path):
     res = ex.execute(parse_action({"type": "cli.run", "command": "echo hi", "cwd": str(tmp_path)}))
     assert res.success is False
     assert "broker" in (res.error or "").lower()
+
+
+def test_mouse_stroke_dispatches_points(tmp_path):
+    ex, backend, _ = _executor(tmp_path)
+    res = ex.execute(parse_action({"type": "mouse.stroke",
+                                   "points": [[10, 10], [20, 30], [40, 5]], "durationMs": 50}))
+    assert res.success
+    calls = [c for c in backend.calls if c[0] == "stroke"]
+    assert calls and calls[0][1] == ((10, 10), (20, 30), (40, 5))
+
+
+def test_mouse_stroke_requires_two_points():
+    from desktop_worker.schema.actions import ActionValidationError
+    import pytest as _pt
+    with _pt.raises(ActionValidationError):
+        parse_action({"type": "mouse.stroke", "points": [[1, 1]]})   # need >= 2

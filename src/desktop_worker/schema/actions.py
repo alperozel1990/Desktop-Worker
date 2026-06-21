@@ -36,6 +36,10 @@ def _is_point(v: Any) -> bool:
     )
 
 
+def _is_point_list(v: Any) -> bool:
+    return isinstance(v, (list, tuple)) and len(v) >= 2 and all(_is_point(p) for p in v)
+
+
 def _is_str(v: Any) -> bool:
     return isinstance(v, str)
 
@@ -108,6 +112,10 @@ ACTION_SPECS: dict[str, _ActionSpec] = {
             _f("to", _is_point, "[x, y]"),
             _f("durationMs", _is_int, "int", required=False),
         ), "Drag from one point to another."),
+        _ActionSpec("mouse.stroke", (
+            _f("points", _is_point_list, "list of >=2 [x, y] points"),
+            _f("durationMs", _is_int, "int", required=False),
+        ), "Freehand stroke: press, drag through all points (e.g. to draw), release."),
         # --- keyboard ----------------------------------------------------
         _ActionSpec("keyboard.type", (
             _f("text", _is_str, "string"),

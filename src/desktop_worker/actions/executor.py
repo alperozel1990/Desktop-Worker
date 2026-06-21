@@ -140,6 +140,8 @@ class ActionExecutor:
         if t == "mouse.drag":
             fx, fy = p["from"]; tx, ty = p["to"]
             ib.drag(fx, fy, tx, ty, p.get("durationMs", 600)); return {}
+        if t == "mouse.stroke":
+            ib.stroke(list(p["points"]), p.get("durationMs", 800)); return {}
 
         if t == "keyboard.type":
             ib.type_text(p["text"]); return {}
