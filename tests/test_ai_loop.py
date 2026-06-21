@@ -234,3 +234,40 @@ def test_stall_guard_stops_on_no_progress(tmp_path):
     assert report.completed is False
     assert "no progress" in report.stop_reason
     assert "task.stalled" in [e["event"] for e in audit.read_all()]
+
+
+def _loop_with(tmp_path, steps, *, stall_guard=False):
+    from desktop_worker.config import Limits
+    planner = StubPlanner(list(steps))
+    return _loop(tmp_path, planner, stall_guard=stall_guard, limits=Limits(max_actions_per_task=50))
+
+
+def test_vision_forced_after_drawing(tmp_path):
+    # After a stroke/drag, vision should fire even if the app is UIA-rich (the
+    # drawing is on the canvas which UIA can't see).
+    from desktop_worker.schema.results import ActionResult
+    from desktop_worker.util import utc_now_iso
+    rich = _obs_sparse(tmp_path, 20)        # 20 elements (>= threshold) — normally no vision
+    p = ClaudeCliPlanner(task="draw", broker=None, cwd=".", ask=lambda x: '{"done":true}',
+                         vision=True, vision_threshold=4)
+    drew = [ActionResult(action_type="mouse.stroke", success=True,
+                         startedAt=utc_now_iso(), endedAt=utc_now_iso())]
+    # without a prior draw -> no vision (UIA rich); after a draw -> vision forced
+    assert p._vision_path(rich, force=False) == ""
+    assert p._vision_path(rich, force=True).endswith(".png")
+    assert p._drew_last(drew) is True
+    assert p._drew_last([]) is False
+
+
+def test_stall_guard_ignores_drawing(tmp_path):
+    # A loop of stroke actions on a constant (Null) observation must NOT trip the
+    # stall guard — drawing legitimately doesn't change the element signature.
+    from desktop_worker.loop.task_loop import _DRAW_ACTIONS
+    assert "mouse.stroke" in _DRAW_ACTIONS and "mouse.drag" in _DRAW_ACTIONS
+    move = PlannedStep(parse_action({"type": "mouse.stroke",
+                                     "points": [[1, 1], [2, 2]]}), description="draw")
+    loop, audit = _loop_with(tmp_path, [move] * 8, stall_guard=True)
+    report = loop.run()
+    # 8 strokes all ran (not killed by stall guard); ends by running out of planner steps
+    assert report.steps_run == 8
+    assert "task.stalled" not in [e["event"] for e in audit.read_all()]

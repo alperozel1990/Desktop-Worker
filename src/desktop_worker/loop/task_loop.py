@@ -26,6 +26,11 @@ from desktop_worker.schema.results import ActionResult, VerificationResult
 from desktop_worker.util import utc_now_iso
 
 
+# Drawing actions change the canvas bitmap but not the UIA element list, so an
+# unchanged observation after one of these is not "no progress".
+_DRAW_ACTIONS = frozenset({"mouse.stroke", "mouse.drag"})
+
+
 @dataclass
 class PlannedStep:
     """One step the planner proposes."""
@@ -229,6 +234,7 @@ class TaskLoop:
         start_mono = self._now()
         last_sig = None
         stale_count = 0
+        last_action_type = ""
 
         while True:
             # Action-count limit (requirements section 12).
@@ -259,7 +265,11 @@ class TaskLoop:
             # as a final safety backstop if the AI can't make progress at all.
             before_sig = self._obs_signature(before)
             if self.stall_guard:
-                if before_sig == last_sig:
+                # Drawing (stroke/drag) changes the canvas bitmap but NOT the UIA
+                # element list, so an unchanged signature after a draw is NOT a
+                # stall — don't count it, or we'd kill legitimate drawing tasks.
+                drew_last = last_action_type in _DRAW_ACTIONS
+                if before_sig == last_sig and not drew_last:
                     stale_count += 1
                 else:
                     stale_count = 0
@@ -358,6 +368,7 @@ class TaskLoop:
             result.detail["screenChanged"] = self._obs_signature(after) != before_sig
             if step.reasoning:
                 result.detail["reasoning"] = step.reasoning
+            last_action_type = step.action.type
             history.append(result)
             successes += int(ok)
             failures += int(not ok)

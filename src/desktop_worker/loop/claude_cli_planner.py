@@ -313,7 +313,7 @@ class ClaudeCliPlanner:
         self.last_error: str = ""
 
     # Planner protocol -------------------------------------------------
-    def _vision_path(self, observation: Observation) -> str:
+    def _vision_path(self, observation: Observation, force: bool = False) -> str:
         """Return a real screenshot path to send to vision, or '' to stay text-only.
 
         Only triggers when vision is enabled AND the accessibility element list is
@@ -322,22 +322,29 @@ class ClaudeCliPlanner:
         """
         if not self.vision or self.vision_steps_used >= self.max_vision_steps:
             return ""
-        if len(observation.elements) >= self.vision_threshold:
+        # Trigger when UIA is sparse OR (forced) right after a drawing action, where
+        # the result is on the canvas which UIA can't see — so the AI can look.
+        if not force and len(observation.elements) >= self.vision_threshold:
             return ""
         ref = observation.screenshotRef or ""
         if ref and Path(ref).suffix.lower() in _IMAGE_SUFFIXES and Path(ref).exists():
             return ref
         return ""
 
-    def _activate_vision(self, observation: Observation) -> str:
-        shot = self._vision_path(observation)
+    def _activate_vision(self, observation: Observation, force: bool = False) -> str:
+        shot = self._vision_path(observation, force=force)
         self._vision_active = bool(shot)
         if shot:
             self.vision_steps_used += 1
         return shot
 
+    @staticmethod
+    def _drew_last(history: list[ActionResult]) -> bool:
+        from desktop_worker.loop.task_loop import _DRAW_ACTIONS
+        return bool(history) and history[-1].action_type in _DRAW_ACTIONS
+
     def next_step(self, observation: Observation, history: list[ActionResult]) -> Optional[PlannedStep]:
-        shot = self._activate_vision(observation)
+        shot = self._activate_vision(observation, force=self._drew_last(history))
         prompt = build_planner_prompt(self.task, observation, history,
                                       env_context=self.env_context, screenshot_path=shot,
                                       tools_catalog=self.tools_catalog,
@@ -348,7 +355,7 @@ class ClaudeCliPlanner:
     def replan(self, failed: PlannedStep, observation: Observation,
                history: list[ActionResult]) -> Optional[PlannedStep]:
         note = f"{failed.action} ({failed.description})"
-        shot = self._activate_vision(observation)
+        shot = self._activate_vision(observation, force=self._drew_last(history))
         prompt = build_planner_prompt(self.task, observation, history,
                                       failed_note=note, env_context=self.env_context,
                                       screenshot_path=shot, tools_catalog=self.tools_catalog,
