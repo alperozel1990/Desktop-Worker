@@ -131,3 +131,48 @@ class OpenAppTool:
             return {"success": False, "app": app,
                     "error": f"launch blocked: {getattr(res, 'blockedReason', '')}"}
         return {"success": True, "app": app, "launched": token, "error": None}
+
+
+# http/https only. The URL is always passed INSIDE quotes (`start "" "<url>"`),
+# where cmd only treats '"' and '%' specially — so we reject quotes, '%' (env
+# expansion), whitespace and angle brackets; '&','?','=' etc. (query params) are
+# safe inside quotes and allowed.
+# SAFETY DEPENDS on the broker invoking cmd WITHOUT delayed expansion (no /V:ON):
+# '!' is literal under the default `cmd /c`. If the broker ever enables /V:ON,
+# '!VAR!' would become injectable and this regex would need to also reject '!'.
+_SAFE_URL = re.compile(r'^https?://[^\s"%<>]+$', re.IGNORECASE)
+
+
+def _sanitize_url(url: Any) -> str:
+    url = str(url or "").strip()
+    if not _SAFE_URL.match(url):
+        raise ToolError(f"unsafe or non-http(s) url: {url!r}")
+    return url
+
+
+class OpenUrlTool:
+    """Open an http(s) URL in the default browser (reliable, non-blocking).
+
+    Only http/https URLs with a safe character set are allowed; the URL is
+    launched via the audited broker's non-blocking `start`.
+    """
+
+    name = "open_url"
+    description = "Open an http(s) web URL in the default browser (reliable)."
+    args_help = "url (must start with http:// or https://)"
+    risk = "medium"  # opens a browser to an AI-chosen URL; non-destructive
+
+    def __init__(self, *, desktop_dir: str, broker: Any = None) -> None:
+        self._cwd = desktop_dir
+        self._broker = broker
+
+    def run(self, args: dict[str, Any]) -> dict[str, Any]:
+        url = _sanitize_url(args.get("url"))
+        if self._broker is None:
+            return {"success": False, "url": url, "error": "no broker to open the url"}
+        res = self._broker.run(f'start "" "{url}"', self._cwd, elevated=False,
+                               agent="open_url", role="tool")
+        if getattr(res, "blocked", False):
+            return {"success": False, "url": url,
+                    "error": f"open blocked: {getattr(res, 'blockedReason', '')}"}
+        return {"success": True, "url": url, "error": None}

@@ -9,7 +9,8 @@ from desktop_worker.safety.emergency_stop import EmergencyStop
 from desktop_worker.safety.policy import PermissionPolicy, deny_all
 from desktop_worker.schema.actions import ActionValidationError, parse_action
 from desktop_worker.tools import ToolRegistry
-from desktop_worker.tools.builtin import CreateTextFileTool, OpenAppTool, _sanitize_filename
+from desktop_worker.tools.builtin import (CreateTextFileTool, OpenAppTool, OpenUrlTool,
+                                          _sanitize_filename, _sanitize_url)
 from desktop_worker.tools.registry import ToolError
 
 
@@ -134,6 +135,35 @@ def test_open_app_blocked_launch_fails_safe(tmp_path):
     tool = OpenAppTool(desktop_dir=str(tmp_path), broker=FakeBrokerLaunch(blocked=True))
     res = tool.run({"app": "notepad"})
     assert res["success"] is False
+
+
+# --- open_url tool -------------------------------------------------------
+
+def test_open_url_accepts_https_and_launches(tmp_path):
+    broker = FakeBrokerLaunch()
+    tool = OpenUrlTool(desktop_dir=str(tmp_path), broker=broker)
+    res = tool.run({"url": "https://example.com/search?q=1&p=2"})
+    assert res["success"] is True
+    assert broker.commands == ['start "" "https://example.com/search?q=1&p=2"']
+
+
+def test_open_url_rejects_unsafe():
+    for bad in ["file:///c:/x", "javascript:alert(1)", "http://x\" & calc",
+                "https://x %TEMP%", "ftp://x", "not a url", "https://a b"]:
+        with pytest.raises(ToolError):
+            _sanitize_url(bad)
+
+
+def test_open_url_sanitizer_accepts_normal():
+    assert _sanitize_url("http://a.com") == "http://a.com"
+    assert _sanitize_url("https://a.com/p?x=1").startswith("https://")
+
+
+def test_open_url_accepts_query_metachars_without_whitespace():
+    # These chars are safe INSIDE the quoted `start "" "<url>"` — the quoting,
+    # not a whitespace rule, is what protects (no env expansion '%' / no quote).
+    for ok in ["https://x.com/a?b=1&c=2", "https://x.com/p?q=a&r=(b)", "https://x.com/!a"]:
+        assert _sanitize_url(ok) == ok
 
 
 # --- executor dispatch + gating -----------------------------------------
