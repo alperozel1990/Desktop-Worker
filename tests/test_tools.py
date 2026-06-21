@@ -9,8 +9,9 @@ from desktop_worker.safety.emergency_stop import EmergencyStop
 from desktop_worker.safety.policy import PermissionPolicy, deny_all
 from desktop_worker.schema.actions import ActionValidationError, parse_action
 from desktop_worker.tools import ToolRegistry
-from desktop_worker.tools.builtin import (CreateTextFileTool, OpenAppTool, OpenUrlTool,
-                                          _sanitize_filename, _sanitize_url)
+from desktop_worker.tools.builtin import (CreateTextFileTool, FocusWindowTool, OpenAppTool,
+                                          OpenUrlTool, _match_window, _sanitize_filename,
+                                          _sanitize_url)
 from desktop_worker.tools.registry import ToolError
 
 
@@ -157,6 +158,37 @@ def test_open_url_rejects_unsafe():
 def test_open_url_sanitizer_accepts_normal():
     assert _sanitize_url("http://a.com") == "http://a.com"
     assert _sanitize_url("https://a.com/p?x=1").startswith("https://")
+
+
+# --- focus_window tool ---------------------------------------------------
+
+def test_match_window_case_insensitive_substring():
+    wins = [(1, "Untitled - Notepad"), (2, "Calculator"), (3, "Doc - Word")]
+    assert _match_window(wins, "calc") == (2, "Calculator")
+    assert _match_window(wins, "notepad") == (1, "Untitled - Notepad")
+    assert _match_window(wins, "nope") is None
+
+
+def test_focus_window_tool_focuses_match():
+    focused = []
+    tool = FocusWindowTool(
+        enum_windows=lambda: [(10, "Settings"), (20, "Calculator")],
+        focus=lambda hwnd: focused.append(hwnd) or True,
+    )
+    res = tool.run({"title_contains": "calc"})
+    assert res["success"] is True and res["title"] == "Calculator"
+    assert focused == [20]
+
+
+def test_focus_window_no_match_fails_safe():
+    tool = FocusWindowTool(enum_windows=lambda: [(1, "Notepad")], focus=lambda h: True)
+    assert tool.run({"title_contains": "chrome"})["success"] is False
+
+
+def test_focus_window_requires_title():
+    tool = FocusWindowTool(enum_windows=lambda: [], focus=lambda h: True)
+    with pytest.raises(ToolError):
+        tool.run({"title_contains": ""})
 
 
 def test_open_url_accepts_query_metachars_without_whitespace():

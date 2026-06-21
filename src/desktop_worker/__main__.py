@@ -179,13 +179,14 @@ def _cmd_do(args: argparse.Namespace) -> int:
     )
     # Reliable tools the AI may CHOOSE to call ("brain + hands"). The tool runs
     # through the same audited/estop-gated executor for each of its sub-actions.
-    from desktop_worker.tools import (CreateTextFileTool, OpenAppTool, OpenUrlTool,
-                                      ToolRegistry)
+    from desktop_worker.tools import (CreateTextFileTool, FocusWindowTool, OpenAppTool,
+                                      OpenUrlTool, ToolRegistry)
 
     tools = ToolRegistry()
     tools.register(CreateTextFileTool(desktop_dir=desktop_dir, broker=session.broker))
     tools.register(OpenAppTool(desktop_dir=desktop_dir, broker=session.broker))
     tools.register(OpenUrlTool(desktop_dir=desktop_dir, broker=session.broker))
+    tools.register(FocusWindowTool())
     session.executor.tools = tools
 
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))

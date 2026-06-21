@@ -176,3 +176,75 @@ class OpenUrlTool:
             return {"success": False, "url": url,
                     "error": f"open blocked: {getattr(res, 'blockedReason', '')}"}
         return {"success": True, "url": url, "error": None}
+
+
+def _match_window(windows: list[tuple[int, str]], title_contains: str) -> tuple[int, str] | None:
+    """Pure: first (hwnd, title) whose title contains the text (case-insensitive)."""
+    want = title_contains.lower()
+    for hwnd, title in windows:
+        if title and want in title.lower():
+            return hwnd, title
+    return None
+
+
+class FocusWindowTool:
+    """Bring a window to the foreground by (part of) its title.
+
+    The window matching is a pure function; the OS enumeration/focus calls are
+    injectable so the tool is testable without a desktop.
+    """
+
+    name = "focus_window"
+    description = "Bring an open window to the front by (part of) its title."
+    args_help = "title_contains (text appearing in the window's title)"
+    risk = "low"  # changes focus only; non-destructive
+
+    def __init__(self, *, enum_windows: Any = None, focus: Any = None) -> None:
+        self._enum = enum_windows or self._win_enum_windows
+        self._focus = focus or self._win_focus
+
+    def run(self, args: dict[str, Any]) -> dict[str, Any]:
+        tc = str(args.get("title_contains", "")).strip()
+        if not tc:
+            raise ToolError("focus_window needs a non-empty title_contains")
+        match = _match_window(list(self._enum()), tc)
+        if match is None:
+            return {"success": False, "error": f"no open window matching {tc!r}"}
+        hwnd, title = match
+        ok = self._focus(hwnd)
+        return {"success": bool(ok), "title": title,
+                "error": None if ok else "could not focus the window"}
+
+    # --- Windows implementations (lazy ctypes) -------------------------
+    def _win_enum_windows(self) -> list[tuple[int, str]]:
+        try:
+            import ctypes
+        except Exception:
+            return []
+        u = ctypes.windll.user32
+        out: list[tuple[int, str]] = []
+        EnumProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+        def cb(hwnd, _l):
+            if u.IsWindowVisible(hwnd):
+                n = u.GetWindowTextLengthW(hwnd)
+                if n:
+                    b = ctypes.create_unicode_buffer(n + 1)
+                    u.GetWindowTextW(hwnd, b, n + 1)
+                    out.append((hwnd, b.value))
+            return True
+
+        u.EnumWindows(EnumProc(cb), 0)
+        return out
+
+    def _win_focus(self, hwnd: int) -> bool:
+        try:
+            import ctypes
+        except Exception:
+            return False
+        u = ctypes.windll.user32
+        try:
+            u.ShowWindow(hwnd, 9)            # SW_RESTORE (un-minimize)
+            return bool(u.SetForegroundWindow(hwnd))
+        except Exception:
+            return False
