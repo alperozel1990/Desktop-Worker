@@ -175,6 +175,70 @@ class OpenUrlTool:
         return {"success": True, "url": url, "error": None}
 
 
+class SketchTool:
+    """Draw a complete figure in Paint from geometric primitives — reliable hands.
+
+    The AI plans a whole figure ONCE as primitives on a 0..100 grid (the brain);
+    this tool finds Paint's real canvas, tessellates each primitive into a precise
+    stroke (smooth circles/curves), and draws them with the existing input backend
+    (the reliable hands). One primitive == one stroke, so shapes never fuse into a
+    stray connecting line. Emergency stop is honored before every stroke.
+    """
+
+    name = "sketch"
+    description = ("Draw a complete figure in MS Paint from geometric primitives on a "
+                  "0..100 grid (kinds: line, polyline, circle, ellipse, arc, bezier, dot; "
+                  "origin top-left). Reliable + precise — use this instead of mouse "
+                  "strokes for ANY drawing. Plan the whole figure in one call.")
+    args_help = ("title (str), primitives (list of {kind, ...}); e.g. "
+                "{kind:'circle',center:[50,40],r:22}, {kind:'polyline',points:[[33,22],"
+                "[28,8],[42,26]],closed:true}, {kind:'dot',at:[50,46]}, "
+                "{kind:'arc',center:[50,46],r:8,start:20,end:160}, "
+                "{kind:'bezier',points:[[72,55],[92,60],[80,80]]}")
+    risk = "low"  # synthesized mouse movement inside the focused window; non-destructive
+
+    def __init__(self, *, input_backend: Any, canvas_locator: Any, estop: Any = None) -> None:
+        self._input = input_backend
+        self._locator = canvas_locator
+        self._estop = estop
+
+    def run(self, args: dict[str, Any]) -> dict[str, Any]:
+        from desktop_worker.geometry import (apply_inner_margin, compile_program,
+                                             fit_square, parse_program)
+        from desktop_worker.safety.emergency_stop import EmergencyStopError
+
+        program = parse_program(args)            # raises ToolError on bad input
+        canvas = self._locator.locate()
+        if canvas is None:
+            return {"success": False, "error": "could not locate the drawing canvas "
+                    "(is Paint the focused window?)"}
+
+        # Draw into the largest centered SQUARE so the 0..100 grid keeps its aspect
+        # ratio (circles stay round on a wide canvas), with a small margin so the
+        # figure never crowds the ribbon/edges. Report the full canvas so the
+        # critique screenshot can be cropped to the whole drawing area.
+        draw_rect = apply_inner_margin(fit_square(canvas), 0.05)
+        strokes = compile_program(program, draw_rect)
+        drawn = total_points = 0
+        for points in strokes:
+            if self._estop is not None:
+                try:
+                    self._estop.check()
+                except EmergencyStopError as exc:
+                    return {"success": False, "error": f"emergency stop: {exc}",
+                            "strokes": drawn, "canvas": list(canvas.as_tuple()),
+                            "canvasSource": canvas.source}
+            duration_ms = max(120, len(points) * 6)
+            self._input.stroke(points, duration_ms)
+            drawn += 1
+            total_points += len(points)
+
+        return {"success": True, "title": program.title,
+                "primitives": len(program.primitives), "strokes": drawn,
+                "points": total_points, "canvas": list(canvas.as_tuple()),
+                "canvasSource": canvas.source, "error": None}
+
+
 def _match_window(windows: list[tuple[int, str]], title_contains: str) -> tuple[int, str] | None:
     """Pure: first (hwnd, title) whose title contains the text (case-insensitive)."""
     want = title_contains.lower()

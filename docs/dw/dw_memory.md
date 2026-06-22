@@ -86,6 +86,23 @@ Source of truth: `docs/requirements.md`.
   prints a clear note (claude.ai/settings/usage).
 - Phase 5 also has: deterministic `workflows/desktop_file.py` (+`desktop_ui.py`):
   `create-file` builds a desktop .txt visibly, verified on disk.
+- **SMART DRAWING (DW-AGENT-SKETCH).** New `geometry/` package (pure, dep-free core):
+  `dsl.py` (validated 0..100-grid primitive language: line/polyline/circle/ellipse/
+  arc/bezier/dot), `render.py` (deterministic tessellation → one stroke per primitive,
+  adaptive sampling = smooth curves, affine map to canvas px), `canvas.py` (UIA-first
+  canvas detection w/ geometric client fallback + Null; lazy ctypes/PIL). Exposed as
+  the `sketch` AI tool (risk=low) so the AI plans a WHOLE figure in ONE `tool.run`
+  instead of many blind strokes — fixes the old polygon-circle + stray-slash + timeout.
+  Planner forces ONE cropped vision look after a sketch (render→look→refine, bounded
+  for quota). Design rooted in SketchAgent (grid reasoning) + generator-critic
+  refinement. NO new schema action (the `tool.run` envelope suffices); `stroke()`
+  reused unchanged. **LIVE-VALIDATED (Level 4):** drove the real mouse + real UIA
+  canvas detection in real Win11 Paint → clean recognizable cat
+  (`artifacts/cat_attempts/cat_live_best.png`), no Claude quota used. Two fixes from
+  observing the real app: (1) draw into `fit_square`+5% margin so circles stay round
+  on a wide canvas; (2) after Select-All/clear Paint stays on the SELECT tool — pick a
+  drawing tool (Pencil/Brush) before sketching (guidance added to `do`). Lesson:
+  observing the REAL app surfaced two bugs unit tests + offline render could not.
 - **CRITICAL input fix:** `windows_input.type_text` now uses **SendInput** (16-bit
   wScan + surrogate pairs) for Unicode — keybd_event truncated codepoints >255
   (Turkish ş/ı were corrupted). VK map now has full A-Z/0-9 (Ctrl+S was a no-op).

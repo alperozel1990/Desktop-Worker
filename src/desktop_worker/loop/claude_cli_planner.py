@@ -341,10 +341,48 @@ class ClaudeCliPlanner:
     @staticmethod
     def _drew_last(history: list[ActionResult]) -> bool:
         from desktop_worker.loop.task_loop import _DRAW_ACTIONS
-        return bool(history) and history[-1].action_type in _DRAW_ACTIONS
+        if not history:
+            return False
+        last = history[-1]
+        if last.action_type in _DRAW_ACTIONS:
+            return True
+        # A `sketch` tool.run renders to the canvas (UIA can't see it) — force ONE
+        # look so the AI can critique its drawing and optionally correct it. The
+        # executor records the tool name explicitly in the action detail.
+        if last.action_type == "tool.run":
+            return (last.detail or {}).get("tool") == "sketch"
+        return False
+
+    @staticmethod
+    def _sketch_canvas(history: list[ActionResult]) -> Optional[tuple]:
+        """Canvas rect [l,t,r,b] from the last action if it was a sketch, else None."""
+        if not history or history[-1].action_type != "tool.run":
+            return None
+        result = (history[-1].detail or {}).get("result") or {}
+        canvas = result.get("canvas")
+        if isinstance(canvas, (list, tuple)) and len(canvas) == 4:
+            return tuple(canvas)
+        return None
+
+    def _crop_for_sketch(self, shot: str, history: list[ActionResult]) -> str:
+        """If the last action drew with `sketch`, crop the screenshot to the canvas.
+
+        A canvas-cropped image shows the drawing large and clear so the critique is
+        accurate. Best-effort: falls back to the full screenshot if PIL is absent
+        or cropping fails.
+        """
+        rect = self._sketch_canvas(history)
+        if not shot or rect is None:
+            return shot
+        from desktop_worker.geometry import CanvasRect, crop_to_canvas
+        dest = str(Path(shot).with_name(Path(shot).stem + "_canvas.png"))
+        # source="crop": a reconstructed rect for cropping only, not a fresh detection.
+        cropped = crop_to_canvas(shot, CanvasRect(*rect, source="crop"), dest)
+        return cropped or shot
 
     def next_step(self, observation: Observation, history: list[ActionResult]) -> Optional[PlannedStep]:
         shot = self._activate_vision(observation, force=self._drew_last(history))
+        shot = self._crop_for_sketch(shot, history)
         prompt = build_planner_prompt(self.task, observation, history,
                                       env_context=self.env_context, screenshot_path=shot,
                                       tools_catalog=self.tools_catalog,
@@ -356,6 +394,7 @@ class ClaudeCliPlanner:
                history: list[ActionResult]) -> Optional[PlannedStep]:
         note = f"{failed.action} ({failed.description})"
         shot = self._activate_vision(observation, force=self._drew_last(history))
+        shot = self._crop_for_sketch(shot, history)
         prompt = build_planner_prompt(self.task, observation, history,
                                       failed_note=note, env_context=self.env_context,
                                       screenshot_path=shot, tools_catalog=self.tools_catalog,

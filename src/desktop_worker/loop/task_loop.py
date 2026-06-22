@@ -265,10 +265,13 @@ class TaskLoop:
             # as a final safety backstop if the AI can't make progress at all.
             before_sig = self._obs_signature(before)
             if self.stall_guard:
-                # Drawing (stroke/drag) changes the canvas bitmap but NOT the UIA
-                # element list, so an unchanged signature after a draw is NOT a
-                # stall — don't count it, or we'd kill legitimate drawing tasks.
-                drew_last = last_action_type in _DRAW_ACTIONS
+                # Drawing changes the canvas bitmap but NOT the UIA element list, so
+                # an unchanged signature after a draw is NOT a stall — don't count it,
+                # or we'd kill legitimate drawing tasks. This covers raw strokes AND
+                # the `sketch` tool (a tool.run that renders a whole figure).
+                drew_last = (last_action_type in _DRAW_ACTIONS or
+                             (last_action_type == "tool.run" and bool(history) and
+                              (history[-1].detail or {}).get("tool") == "sketch"))
                 if before_sig == last_sig and not drew_last:
                     stale_count += 1
                 else:

@@ -11,7 +11,7 @@ primitive actions — a tool is a *gated capability*, not a privileged side path
 
 from desktop_worker.tools.registry import Tool, ToolRegistry, ToolError
 from desktop_worker.tools.builtin import (CreateTextFileTool, FocusWindowTool,
-                                          OpenAppTool, OpenUrlTool)
+                                          OpenAppTool, OpenUrlTool, SketchTool)
 
 __all__ = ["Tool", "ToolRegistry", "ToolError", "CreateTextFileTool",
-           "OpenAppTool", "OpenUrlTool", "FocusWindowTool"]
+           "OpenAppTool", "OpenUrlTool", "FocusWindowTool", "SketchTool"]

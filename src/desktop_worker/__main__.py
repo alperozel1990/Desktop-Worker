@@ -178,23 +178,36 @@ def _cmd_do(args: argparse.Namespace) -> int:
         "exit — NEVER use it to launch GUI apps (notepad, chrome). Its cwd must exist.\n"
         "- To create a desktop text file you can right-click an empty desktop spot, "
         "choose New then Text Document; menu items appear as elements to click by id.\n"
-        "- To DRAW (e.g. in Paint), use mouse.stroke with a list of points inside the "
-        "drawing canvas (estimate the canvas area from the app window's bounds). Strokes "
-        "are piecewise-LINEAR (straight segments between your points), so supply MANY "
-        "close points to approximate curves; build a shape from several strokes. The "
-        "canvas pixels are NOT in the element list, so run with --vision to SEE your "
-        "drawing and correct it. Expect rough/approximate results, not fine art."
+        "- To DRAW a figure in Paint, do NOT emit raw mouse strokes. Open Paint first "
+        "(open_app 'paint'); make sure a drawing tool (Pencil or Brush) is selected — "
+        "click it by elementId if you just used Select/clear, else the default brush is "
+        "fine. Then call the `sketch` tool ONCE with the WHOLE figure as a "
+        "list of geometric primitives on a 0..100 grid (x and y both 0..100, origin "
+        "top-left). The app finds Paint's real canvas and renders precisely — circles are "
+        "true circles, curves are smooth, no stray lines. Think on the grid, e.g. a cat: "
+        "head circle center [50,40] r 22; two triangular ears as closed polylines; eyes "
+        "as small circles ~[42,38]/[58,38] r 3; nose as a dot [50,46]; mouth as an arc "
+        "center [50,47] r 8 start 20 end 160; whiskers as lines; body ellipse [50,72]; "
+        "tail as a bezier. Primitive kinds: line{from,to}, polyline{points,closed?}, "
+        "circle{center,r}, ellipse{center,rx,ry,rotation?}, arc{center,r,start,end}, "
+        "bezier{points: 3=quadratic or 4=cubic}, dot{at}. After drawing you get ONE "
+        "cropped look at the canvas (with --vision) to critique and ONE optional "
+        "correction sketch — so make the first program complete."
     )
     # Reliable tools the AI may CHOOSE to call ("brain + hands"). The tool runs
     # through the same audited/estop-gated executor for each of its sub-actions.
+    from desktop_worker.geometry import get_canvas_locator
     from desktop_worker.tools import (CreateTextFileTool, FocusWindowTool, OpenAppTool,
-                                      OpenUrlTool, ToolRegistry)
+                                      OpenUrlTool, SketchTool, ToolRegistry)
 
     tools = ToolRegistry()
     tools.register(CreateTextFileTool(desktop_dir=desktop_dir, broker=session.broker))
     tools.register(OpenAppTool(desktop_dir=desktop_dir, broker=session.broker))
     tools.register(OpenUrlTool(desktop_dir=desktop_dir, broker=session.broker))
     tools.register(FocusWindowTool())
+    tools.register(SketchTool(input_backend=session.input_backend,
+                              canvas_locator=get_canvas_locator(real),
+                              estop=session.estop))
     session.executor.tools = tools
 
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))

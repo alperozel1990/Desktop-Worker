@@ -4,6 +4,33 @@ Actions Claude cannot fully perform/validate itself.
 
 ---
 
+## MANUAL-10 — ⭐⭐ Watch the AI draw a cat with the new `sketch` pipeline
+**Status:** [~] Partially validated by Claude — the FULL drawing pipeline (real mouse
++ real UIA canvas detection + render) was run live in real Win11 Paint and produced a
+clean, recognizable cat: `artifacts/cat_attempts/cat_live_best.png`. What remains for
+YOU is to watch the *AI-driven* version end-to-end (the `do` command, which also calls
+Claude to plan the program — uses a little quota).
+**Blocking:** NO
+**Tool:** PowerShell + your `claude` login (no API key) + your desktop + MS Paint
+**Added by:** DW-AGENT-SKETCH
+**Instructions:**
+1. `cd C:\Desktop-Worker` ; (first time) `python -m pip install -e ".[windows]"`
+   (the `[windows]` extra brings `uiautomation` for canvas detection + `mss`/`Pillow`
+   for the cropped vision look).
+2. `python -m desktop_worker do "open Paint and draw a cat" --vision`
+3. Watch: the AI opens Paint, then makes ONE `sketch` tool call with the whole cat as
+   primitives on a 0..100 grid; the app finds Paint's real canvas and draws smooth
+   circles/curves (no ribbon overdraw, no diagonal slash). Then it takes ONE cropped
+   look and may issue ONE correction `sketch`. Stop anytime: `python -m desktop_worker
+   estop` (another window).
+**What Claude needs back:** Did a recognizable cat land INSIDE the canvas? If the
+figure was offset/clipped, tell me the Paint version (Win11 Store Paint vs classic
+mspaint) and paste the printed `[AI]` steps — the `canvasSource` in the audit
+(`uia` vs `client`) tells me whether canvas detection used UI Automation or the
+geometric fallback, so I can tune the insets.
+
+---
+
 ## MANUAL-9 — ⭐⭐ Run the GENUINE live-AI demo (the real AI control)
 **Status:** [ ] Waiting  (Claude verified end-to-end: the AI opened Notepad via the
 Run dialog and typed text, deciding each step itself)

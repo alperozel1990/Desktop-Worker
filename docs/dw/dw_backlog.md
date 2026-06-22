@@ -8,6 +8,38 @@ Status legend: ☐ todo · ◑ partial · ✅ done
 
 ---
 
+## DW-AGENT-SKETCH — Smart, controlled drawing (`sketch` tool + `geometry/`)  ✅ done (2026-06-22)
+**Purpose:** Make the AI draw recognizable figures (cat) in a smart, controlled
+way. The old path poked raw `mouse.stroke` in absolute pixels, guessing the canvas
+— polygon "circle", stray diagonal slash, 300s timeout before the body.
+**Scope:** New pure `geometry/` package: `dsl.py` (validated 0..100-grid primitive
+language), `render.py` (deterministic tessellation, one stroke per primitive,
+adaptive sampling), `canvas.py` (UIA-first canvas detection + geometric fallback +
+Null). Exposed as the `sketch` AI tool; AI plans the whole figure in ONE `tool.run`.
+Planner forces ONE cropped vision look after a sketch (render→look→refine).
+Research basis: SketchAgent (grid reasoning) + generator-critic refinement.
+**Non-goals:** New schema action (the `tool.run` envelope suffices); changing
+`stroke()`; erase/correction primitives; multi-monitor.
+**Dependencies:** tools registry, input backend, vision plumbing (all existed).
+
+**Files allowed to edit:** new `src/desktop_worker/geometry/*`, `tools/builtin.py`,
+`tools/__init__.py`, `__main__.py`, `loop/claude_cli_planner.py`, new
+`tests/test_geometry_*.py`, `tests/test_tools.py`, `tests/test_claude_cli_planner.py`.
+**Files forbidden to edit:** `schema/actions.py`, `actions/windows_input.py`,
+`actions/executor.py`, `safety/`, `audit/`, `docs/requirements.md`, `artifacts/`.
+
+**Done criteria:**
+- [x] AI emits ONE `sketch` program; code finds the canvas + renders precisely.
+- [x] One stroke per primitive (no fusion → no stray slash); smooth circles/curves.
+- [x] UIA-first canvas detection with deterministic client fallback + Null.
+- [x] Planner forces ONE cropped vision look after a sketch; quota-bounded.
+- [x] 223 tests green (+39); offline render proof = clean cat. Live = MANUAL-10.
+**Diff budget:** 4 new geometry files + 3 new test files; 5 small edits. Met.
+**Result:** Shipped. `artifacts/cat_attempts/cat_render_preview.png` proves the
+geometry. Supersedes the blind-stroke + autonomous-retry cat loop.
+
+---
+
 ## DW-CLI-ELEVATE — True per-command UAC elevation with captured output  ✅ done (2026-06-20)
 **Purpose:** Make "elevated by default" real even when Desktop-Worker starts from
 a non-admin context, without losing stdout/stderr/exit capture.

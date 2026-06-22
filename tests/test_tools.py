@@ -10,8 +10,9 @@ from desktop_worker.safety.policy import PermissionPolicy, deny_all
 from desktop_worker.schema.actions import ActionValidationError, parse_action
 from desktop_worker.tools import ToolRegistry
 from desktop_worker.tools.builtin import (CreateTextFileTool, FocusWindowTool, OpenAppTool,
-                                          OpenUrlTool, _match_window, _sanitize_filename,
-                                          _sanitize_url)
+                                          OpenUrlTool, SketchTool, _match_window,
+                                          _sanitize_filename, _sanitize_url)
+from desktop_worker.geometry.canvas import NullCanvasLocator
 from desktop_worker.tools.registry import ToolError
 
 
@@ -252,3 +253,74 @@ def test_estop_blocks_tool(tmp_path):
     ex, _ = _executor(tmp_path, tools=_registry(FakeTool()), estop=es)
     res = ex.execute(parse_action({"type": "tool.run", "tool": "create_text_file"}))
     assert res.success is False
+
+
+# --- sketch tool (smart, controlled drawing) -----------------------------
+
+_CAT = {"title": "cat", "primitives": [
+    {"kind": "circle", "center": [50, 40], "r": 22},
+    {"kind": "polyline", "points": [[33, 22], [28, 8], [42, 26]], "closed": True},
+    {"kind": "circle", "center": [42, 38], "r": 3},
+    {"kind": "dot", "at": [50, 46]},
+    {"kind": "bezier", "points": [[72, 55], [92, 60], [80, 80]]},
+]}
+
+
+def _sketch_tool(estop=None):
+    return SketchTool(input_backend=NullInputBackend(),
+                      canvas_locator=NullCanvasLocator((100, 100, 900, 700)),
+                      estop=estop)
+
+
+def test_sketch_draws_one_stroke_per_primitive():
+    ib = NullInputBackend()
+    tool = SketchTool(input_backend=ib, canvas_locator=NullCanvasLocator(), estop=None)
+    res = tool.run(_CAT)
+    assert res["success"] is True
+    assert res["primitives"] == 5 and res["strokes"] == 5
+    strokes = [c for c in ib.calls if c[0] == "stroke"]
+    assert len(strokes) == 5                          # exactly one stroke per primitive
+    assert res["canvasSource"] == "null"
+    assert res["canvas"] == [100, 100, 900, 700]
+
+
+def test_sketch_points_land_inside_the_canvas():
+    ib = NullInputBackend()
+    SketchTool(input_backend=ib, canvas_locator=NullCanvasLocator((100, 100, 900, 700)),
+               estop=None).run(_CAT)
+    for name, points, _dur in [c for c in ib.calls if c[0] == "stroke"]:
+        for x, y in points:
+            assert 100 <= x <= 900 and 100 <= y <= 700
+
+
+def test_sketch_estop_stops_before_any_stroke():
+    es = EmergencyStop(); es.stop("halt")
+    ib = NullInputBackend()
+    res = SketchTool(input_backend=ib, canvas_locator=NullCanvasLocator(), estop=es).run(_CAT)
+    assert res["success"] is False
+    assert "emergency stop" in res["error"]
+    assert not any(c[0] == "stroke" for c in ib.calls)   # nothing drawn
+
+
+def test_sketch_rejects_bad_program():
+    with pytest.raises(ToolError):
+        _sketch_tool().run({"primitives": [{"kind": "spiral"}]})
+    with pytest.raises(ToolError):
+        _sketch_tool().run({"primitives": []})
+
+
+def test_sketch_fails_when_no_canvas():
+    class NoCanvas:
+        def locate(self):
+            return None
+    res = SketchTool(input_backend=NullInputBackend(), canvas_locator=NoCanvas(),
+                     estop=None).run(_CAT)
+    assert res["success"] is False and "canvas" in res["error"]
+
+
+def test_sketch_runs_through_executor_registry(tmp_path):
+    tool = _sketch_tool()
+    ex, audit = _executor(tmp_path, tools=_registry(tool))
+    res = ex.execute(parse_action({"type": "tool.run", "tool": "sketch", "args": _CAT}))
+    assert res.success                                # low-risk tool auto-runs, audited
+    assert "action.executed" in [e["event"] for e in audit.read_all()]

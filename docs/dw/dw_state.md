@@ -4,7 +4,7 @@
 > for "where are we".
 
 ## Session info
-- **Last updated:** 2026-06-20
+- **Last updated:** 2026-06-22
 - **Repo path:** `C:\Desktop-Worker`
 - **Workspace path:** `C:\Desktop-Worker\docs\dw`
 - **Current branch:** `main`
@@ -56,6 +56,7 @@ Gate and only implement when the selected card is explicitly approved.
 | Perception: context menus + editable values | complete (AI sees menus + what it typed) |
 | AI action/outcome memory + vision fallback (`--vision`) | complete (DW-AGENT-MEMORY / VISION) |
 | AI-callable tools: create_text_file, open_app, open_url, focus_window | complete (DW-AGENT-TOOLS+) |
+| Smart drawing: `sketch` tool + `geometry/` (DSL, renderer, canvas detection) | complete (DW-AGENT-SKETCH); offline-proven, live = MANUAL-10 |
 | Frugal mode (`--frugal`) | complete (leaner prompts, less Claude usage) |
 | Session replay HTML (`report` cmd + auto) | complete (DW-REPLAY); §16 audit viewer |
 
@@ -72,6 +73,19 @@ Gate and only implement when the selected card is explicitly approved.
 
 ## Current task
 None in progress.
+
+## Most recent task (2026-06-22)
+- **Task:** DW-AGENT-SKETCH — smart, controlled drawing. New `geometry/` package
+  (DSL on a 0..100 grid + deterministic tessellation + UIA-first canvas detection)
+  exposed as the `sketch` AI tool; the AI plans a whole figure in ONE call and code
+  renders it precisely (smooth circles, one stroke per primitive → no stray slash).
+  Planner forces ONE cropped vision look after a sketch. Replaces the old blind
+  raw-`mouse.stroke` drawing. **223 tests pass** (+39). Offline-proven:
+  `artifacts/cat_attempts/cat_render_preview.png` is a clean cat. Live = MANUAL-10.
+- **Files:** `geometry/{__init__,dsl,render,canvas}.py` (new),
+  `tools/builtin.py`, `tools/__init__.py`, `__main__.py`,
+  `loop/claude_cli_planner.py`, `tests/test_geometry_*.py` (new), `tests/test_tools.py`,
+  `tests/test_claude_cli_planner.py`.
 
 ## Milestone
 **GENUINE live AI desktop control shipped (§22 realized).** Give a plain-language
@@ -119,7 +133,8 @@ Optional / not blocking: expose deterministic workflows as AI-callable tools
 | 3 | Make the initial git commit now? | No | DONE — committed `023b107` and pushed to GitHub (user requested). Commit/push now allowed for this project. |
 
 ## Manual steps waiting (user tests — none block further implementation)
-See `dw_manual_steps.md`: MANUAL-1 (validate real input on a desktop),
+See `dw_manual_steps.md`: **MANUAL-10 (watch the AI draw a cat with the new `sketch`
+pipeline — the headline drawing demo)**, MANUAL-1 (validate real input on a desktop),
 MANUAL-2 (install `[windows]` extra for real screenshots), MANUAL-3 (DONE — git),
 **MANUAL-4 (validate real UAC elevation from a non-admin shell)**,
 **MANUAL-5 (install Tesseract + `[ocr]` and validate real OCR)**,
@@ -127,13 +142,18 @@ MANUAL-2 (install `[windows]` extra for real screenshots), MANUAL-3 (DONE — gi
 **MANUAL-7 (drive a real task end-to-end with the Claude CLI planner)**.
 
 ## Last validation results
-- **Date:** 2026-06-20.
-- **Type:** `python -m pytest` (125 tests) + demo + real planner smoke.
-- **Result:** 125 passed. Demo loop 5/5. Real `observe` returned genuine
-  cursor/window/screen data. **Real Claude CLI planner verified** (Level 4 for the
-  planner path): `claude_available=True`, live call returned a valid action.
-- **Validation level reached:** **3** overall (unit + local runtime); **4** for the
-  planner→broker→claude path. Live-desktop input/UAC/OCR/UIA = MANUAL-1/4/5/6/7.
+- **Date:** 2026-06-22.
+- **Type:** `python -m pytest` (224 tests) + **LIVE real-desktop draw** of the `sketch`
+  pipeline in real Win11 Paint.
+- **Result:** **224 passed.** LIVE: the `sketch` tool drove the real mouse + real UIA
+  canvas detection to draw a clean, recognizable cat in real Paint —
+  `artifacts/cat_attempts/cat_live_best.png` (no stray slash, round circles). This also
+  incidentally validated MANUAL-1 (real input motion), MANUAL-2 (real screenshots), and
+  MANUAL-6 (real UIA enumeration / canvas detection).
+- **Validation level reached:** **4 (live real desktop)** for the `sketch` drawing path
+  (deterministic — no Claude quota used) and the planner→broker→claude path (earlier);
+  **3** elsewhere. Remaining live user tests: MANUAL-10 (AI-driven `do` cat), MANUAL-4
+  (UAC), MANUAL-5 (Tesseract OCR), MANUAL-7 (full AI task).
 
 ## Continuity rules
 After every task: update this file's status table + Last completed/Next, append a

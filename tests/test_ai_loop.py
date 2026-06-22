@@ -274,6 +274,34 @@ def test_stall_guard_ignores_drawing(tmp_path):
     assert "task.stalled" not in [e["event"] for e in audit.read_all()]
 
 
+def test_stall_guard_ignores_sketch_tool(tmp_path):
+    # A `sketch` tool.run renders to the canvas (no UIA change) — like raw strokes it
+    # must NOT trip the stall guard, or multi-primitive drawing tasks get killed.
+    from desktop_worker.geometry.canvas import NullCanvasLocator
+    from desktop_worker.tools import ToolRegistry
+    from desktop_worker.tools.builtin import SketchTool
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    policy = PermissionPolicy(approval_callback=auto_approve)
+    es = EmergencyStop()
+    observer = Observer(NullDesktopBackend(), screenshots_dir=tmp_path / "s")
+    broker = ElevatedCliBroker(audit=audit, policy=policy, cli_artifacts_dir=tmp_path / "c",
+                               estop=es, elevator=None)
+    tools = ToolRegistry()
+    tools.register(SketchTool(input_backend=NullInputBackend(),
+                              canvas_locator=NullCanvasLocator(), estop=es))
+    ex = ActionExecutor(audit=audit, policy=policy, input_backend=NullInputBackend(),
+                        broker=broker, estop=es, tools=tools)
+    cat = {"primitives": [{"kind": "circle", "center": [50, 50], "r": 20}]}
+    step = PlannedStep(parse_action({"type": "tool.run", "tool": "sketch", "args": cat}),
+                       description="draw")
+    loop = TaskLoop(task_id="t", planner=StubPlanner([step] * 8), observer=observer,
+                    executor=ex, audit=audit, estop=es, stall_guard=True,
+                    limits=Limits(max_actions_per_task=50))
+    report = loop.run()
+    assert report.steps_run == 8
+    assert "task.stalled" not in [e["event"] for e in audit.read_all()]
+
+
 class FlakyPlanner:
     """Returns invalid (None) for the first `fail_n` calls, then a real step."""
     def __init__(self, step, fail_n):

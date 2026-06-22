@@ -588,3 +588,83 @@ the live `do` agent itself is L4-verified (earlier).
 
 **Next Action:** Optional — Phase 6 multi-agent, a real UI (Phase 7), or more tools.
 None blocking. The agent is feature-complete for the core north-star.
+
+---
+
+## 2026-06-22 | Smart, controlled drawing (`sketch` tool) | Task: DW-AGENT-SKETCH
+
+**Type:** Phase 5 capability (AI-callable tool) + perception (canvas detection)
+**Status:** Complete (offline-verified; live Paint = MANUAL-10)
+
+**Why:** The AI drew a cat by poking raw `mouse.stroke` in absolute screen pixels,
+guessing the canvas from window bounds — yielding a polygon "circle", a stray
+diagonal slash across the face, and a 300s/15-action timeout before the body.
+Research-backed fix (SketchAgent grid reasoning + generator-critic render→look→
+refine, deterministic vector tessellation): plan the WHOLE figure once on a 0..100
+grid; deterministic code finds Paint's real canvas and renders precise primitives.
+
+**Files Created:**
+- `src/desktop_worker/geometry/{__init__,dsl,render,canvas}.py` — pure DSL +
+  tessellation + UIA-first canvas locator (Null/Windows backends, lazy ctypes/PIL).
+- `tests/test_geometry_{render,dsl,canvas}.py` (+23 tests).
+
+**Files Modified:**
+- `tools/builtin.py` (+`tools/__init__.py`) — new `SketchTool` (risk=low): parse →
+  locate canvas → compile → one stroke per primitive via the existing input
+  backend, estop checked before each stroke.
+- `__main__.py` `_cmd_do` — register `SketchTool`; swapped the "estimate the canvas,
+  expect rough results" guidance for grid-reasoning + a 7-primitive reference.
+- `loop/claude_cli_planner.py` — `_drew_last` now forces ONE vision look after a
+  `tool.run sketch`; the critique screenshot is cropped to the canvas rect.
+- `tests/test_tools.py`, `tests/test_claude_cli_planner.py` (+ sketch/vision tests).
+
+**Explicitly NOT touched:** `schema/actions.py` (the `tool.run` envelope suffices —
+no new action), `actions/windows_input.py` (`stroke()` reused as-is), executor,
+stall-guard.
+
+**Tests / Validations Run:**
+- `python -m pytest` — **223 passed** (was 184).
+- Offline render proof: compiled the cat program against an 800x600 canvas and drew
+  the resulting strokes to `artifacts/cat_attempts/cat_render_preview.png` — a clean,
+  recognizable cat (smooth circle head, 2 ears, 2 eyes, nose, arc mouth, whiskers,
+  body ellipse, bezier tail), NO stray slash. This IS the geometry the mouse draws.
+
+**Validation Level Reached:** **3** (unit + offline geometry render). Live mouse
+drawing in real Paint (Level 4) = **MANUAL-10**.
+
+**Next Action:** Run MANUAL-10 to confirm the figure lands inside Paint's canvas on
+the user's machine (report Paint version + audit `canvasSource` if offset). Then
+optional: erase/correction primitives, multi-figure scenes, Phase 6/7.
+
+---
+
+## 2026-06-22 | LIVE cat validated + 2 observation fixes | Task: DW-AGENT-SKETCH (follow-up)
+
+**Type:** Live validation (Level 4) + two real-world fixes found by observing Paint
+**Status:** Complete — autonomous session while user away (no Claude quota used)
+
+**What ran:** Drove the `sketch` tool against REAL Win11 Paint with the real
+`WindowsInputBackend` + real `WindowsCanvasLocator` (UIA). The actual mouse drew a
+clean, recognizable cat — round head, 2 ears, 2 eyes, nose, smiling arc mouth,
+whiskers, body ellipse, curved tail; NO stray slash, circles round.
+Artifacts: `artifacts/cat_attempts/cat_live_best.png` (+ `_crop`, and iterations
+`cat_live_1/2/3_*`). Incidentally validated MANUAL-1 (real input), MANUAL-2 (real
+screenshots), MANUAL-6 (real UIA) too.
+
+**Two fixes discovered by OBSERVING the live result:**
+1. **Aspect ratio** — a wide canvas stretched circles into ellipses (the 0..100 grid
+   maps x/y independently). Added `geometry.canvas.fit_square` and draw into the
+   centered square + 5% margin (`SketchTool`). Circles stay round; figure clears the
+   ribbon/edges. +1 test (`test_fit_square_centers_and_preserves_aspect`).
+2. **Tool mode** — after Select-All/clear, Paint stays on the SELECT tool, so strokes
+   made selections instead of ink. The live `do` guidance (`__main__` env_context) now
+   tells the AI to ensure a drawing tool (Pencil/Brush) is selected before sketching.
+
+**Tests:** `python -m pytest` — **224 passed**.
+
+**Validation Level Reached:** **4 (live real desktop)** for the deterministic `sketch`
+path. The remaining MANUAL-10 is just watching the AI-DRIVEN `do` version once.
+
+**Next Action:** Optional — let the AI plan the program itself (`do "...draw a cat"
+--vision`, a little quota) to confirm end-to-end; add erase/correction primitives;
+expose a line-thickness/tool hint. None blocking.

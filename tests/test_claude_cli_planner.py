@@ -106,6 +106,30 @@ def test_build_prompt_mentions_task_and_allowed_types():
     assert "JSON" in prompt or "json" in prompt
 
 
+# --- sketch vision-force (draw -> look) ----------------------------------
+
+def _result(action_type, detail):
+    from desktop_worker.schema.results import ActionResult
+    return ActionResult(action_type=action_type, success=True,
+                        startedAt="t", endedAt="t", detail=detail)
+
+
+def test_drew_last_forces_vision_after_sketch():
+    sketch = _result("tool.run", {"tool": "sketch",
+                                   "result": {"canvas": [100, 100, 900, 700]}})
+    assert ClaudeCliPlanner._drew_last([sketch]) is True
+    other = _result("tool.run", {"tool": "open_app"})
+    assert ClaudeCliPlanner._drew_last([other]) is False
+    assert ClaudeCliPlanner._drew_last([]) is False
+
+
+def test_sketch_canvas_recovers_rect():
+    sketch = _result("tool.run", {"tool": "sketch",
+                                   "result": {"canvas": [100, 100, 900, 700]}})
+    assert ClaudeCliPlanner._sketch_canvas([sketch]) == (100, 100, 900, 700)
+    assert ClaudeCliPlanner._sketch_canvas([_result("mouse.stroke", {})]) is None
+
+
 # --- broker routing (fake broker, no real claude) ------------------------
 
 class _FakeCliResult:
