@@ -103,6 +103,19 @@ Source of truth: `docs/requirements.md`.
   on a wide canvas; (2) after Select-All/clear Paint stays on the SELECT tool — pick a
   drawing tool (Pencil/Brush) before sketching (guidance added to `do`). Lesson:
   observing the REAL app surfaced two bugs unit tests + offline render could not.
+- **DRAWING v2 (DW-AGENT-DRAW)** — robust + best-of-N + SVG. Fixes the "red scribbles"
+  gap (no canvas hygiene; raw strokes still possible; no quality gate). Method
+  (Chat2SVG/CLIPasso/LLM4SVG): generate→render-OFFLINE→AI-judge→execute-CLEAN→verify;
+  the AI only PROPOSES (SVG), execution is deterministic. New: `geometry/svg.py`
+  (SVG-subset→Program, aspect-fit to 0..100), `geometry/preview.py` (offline PNG +
+  montage), `geometry/paint_setup.py` (`prepare_paint`: clean canvas + Pencil + Black
+  via UIA, Null fallback), `drawing/director.py` (best-of-N orchestrator, Claude calls
+  injected), `drawing/claude_io.py` (broker-routed claude). `SketchTool` accepts `svg`
+  OR `primitives` + preps canvas; `tools.render_program_to_canvas` is the shared
+  hygienic execution. Command: `desktop_worker draw "<subject>"`. LIVE-validated the
+  deterministic path (cleaned a red-scribbled canvas → clean SVG cat,
+  `cat_v2_clean_best.png`); full AI best-of-N = MANUAL-11. Lesson: give the AI a
+  PROPOSE-only role + deterministic clean execution → robustness by construction.
 - **CRITICAL input fix:** `windows_input.type_text` now uses **SendInput** (16-bit
   wScan + surrogate pairs) for Unicode — keybd_event truncated codepoints >255
   (Turkish ş/ı were corrupted). VK map now has full A-Z/0-9 (Ctrl+S was a no-op).

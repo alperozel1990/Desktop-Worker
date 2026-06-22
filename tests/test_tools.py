@@ -324,3 +324,29 @@ def test_sketch_runs_through_executor_registry(tmp_path):
     res = ex.execute(parse_action({"type": "tool.run", "tool": "sketch", "args": _CAT}))
     assert res.success                                # low-risk tool auto-runs, audited
     assert "action.executed" in [e["event"] for e in audit.read_all()]
+
+
+def test_sketch_accepts_svg():
+    ib = NullInputBackend()
+    svg = ('<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="25"/>'
+           '<path d="M 30 50 Q 50 60 70 50"/></svg>')
+    res = SketchTool(input_backend=ib, canvas_locator=NullCanvasLocator(),
+                     estop=None).run({"svg": svg})
+    assert res["success"] is True and res["strokes"] == 2     # circle + smile path
+
+
+class _FakePaintUi:
+    def focus(self): return True
+    def tool_center(self, name): return (10, 10) if name == "Pencil" else None
+    def color_center(self, name): return (20, 20) if name == "Black" else None
+
+
+def test_sketch_runs_canvas_prep_before_drawing():
+    ib = NullInputBackend()
+    res = SketchTool(input_backend=ib, canvas_locator=NullCanvasLocator(),
+                     estop=None, paint_ui=_FakePaintUi()).run(_CAT)
+    assert res["prep"] == {"focused": True, "cleared": True,
+                           "tool": "Pencil", "color": "Black"}
+    # clear keystrokes happen before the first stroke (clean canvas first).
+    names = [c[0] for c in ib.calls]
+    assert names.index("hotkey") < names.index("stroke")

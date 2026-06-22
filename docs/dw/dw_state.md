@@ -56,7 +56,8 @@ Gate and only implement when the selected card is explicitly approved.
 | Perception: context menus + editable values | complete (AI sees menus + what it typed) |
 | AI action/outcome memory + vision fallback (`--vision`) | complete (DW-AGENT-MEMORY / VISION) |
 | AI-callable tools: create_text_file, open_app, open_url, focus_window | complete (DW-AGENT-TOOLS+) |
-| Smart drawing: `sketch` tool + `geometry/` (DSL, renderer, canvas detection) | complete (DW-AGENT-SKETCH); offline-proven, live = MANUAL-10 |
+| Smart drawing: `sketch` tool + `geometry/` (DSL, renderer, canvas detection) | complete (DW-AGENT-SKETCH); LIVE-validated |
+| Drawing v2: SVG + canvas hygiene + best-of-N `draw` command (`drawing/`) | complete (DW-AGENT-DRAW); deterministic path LIVE-validated, AI best-of-N = MANUAL-11 |
 | Frugal mode (`--frugal`) | complete (leaner prompts, less Claude usage) |
 | Session replay HTML (`report` cmd + auto) | complete (DW-REPLAY); §16 audit viewer |
 
@@ -74,7 +75,21 @@ Gate and only implement when the selected card is explicitly approved.
 ## Current task
 None in progress.
 
-## Most recent task (2026-06-22)
+## Most recent task (2026-06-22) — Drawing v2
+- **Task:** DW-AGENT-DRAW — robust, best-of-N, multi-representation drawing. New
+  `geometry/svg.py` (SVG→Program), `geometry/preview.py` (offline render+montage),
+  `geometry/paint_setup.py` (canvas hygiene: clean canvas + Pencil + Black via UIA),
+  `drawing/director.py` (generate→render→AI-judge→execute-clean→verify; Claude calls
+  injected), `drawing/claude_io.py` (broker-routed claude). `SketchTool` now accepts
+  `svg` OR `primitives` and preps the canvas. New command:
+  `python -m desktop_worker draw "<subject>"`. **251 tests** (+25). LIVE-validated the
+  deterministic path (cleaned the red-scribbled canvas → clean SVG cat in real Paint,
+  `cat_v2_clean_best.png`); Claude integration smoke OK. Full AI run = MANUAL-11.
+  Fixes the "red scribbles" gap: canvas hygiene + no raw strokes in the `draw` path.
+- **Files:** `geometry/{svg,preview,paint_setup}.py`, `drawing/{__init__,director,
+  claude_io}.py` (new), `tools/builtin.py`, `__main__.py`, `tests/test_*` (new+updated).
+
+## Earlier task (2026-06-22)
 - **Task:** DW-AGENT-SKETCH — smart, controlled drawing. New `geometry/` package
   (DSL on a 0..100 grid + deterministic tessellation + UIA-first canvas detection)
   exposed as the `sketch` AI tool; the AI plans a whole figure in ONE call and code

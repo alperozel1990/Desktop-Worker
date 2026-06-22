@@ -8,6 +8,33 @@ Status legend: ☐ todo · ◑ partial · ✅ done
 
 ---
 
+## DW-AGENT-DRAW — Robust drawing v2: SVG + canvas hygiene + best-of-N  ✅ done (2026-06-22)
+**Purpose:** v1 drew a clean cat but live the canvas still showed red scribbles. Make
+the AI draw "in the best way regardless": clean execution + a quality gate + a stronger
+representation (SVG). Research: Chat2SVG, CLIPasso/CLIPDraw++, LLM4SVG.
+**Scope:** generate→render-offline→AI-judge→execute-clean→verify. New pure modules
+`geometry/svg.py` (SVG→Program), `geometry/preview.py` (offline render+montage),
+`geometry/paint_setup.py` (canvas hygiene via UIA), `drawing/director.py` (best-of-N,
+injected Claude), `drawing/claude_io.py` (broker-routed claude). `SketchTool` accepts
+`svg` OR `primitives` + preps; `render_program_to_canvas` shared execution; `draw`
+command.
+**Non-goals:** training/RL, differentiable rasterizer, GPU CLIP, colour drawings,
+animation.
+**Files forbidden to edit:** `schema/actions.py`, `actions/windows_input.py`, `safety/`,
+`audit/`, `docs/requirements.md`.
+**Done criteria:**
+- [x] AI proposes SVG; renders offline; AI judge picks best; only winner drawn.
+- [x] Canvas hygiene: clean canvas + Pencil + Black; no raw strokes in the `draw` path.
+- [x] SVG-subset parser (paths/curves/shapes) with aspect-fit + fail-safe on truncation.
+- [x] One verify+refine pass, quota-bounded (~3-4 Claude calls).
+- [x] 251 tests (+25); deterministic path LIVE-validated (red canvas cleaned → clean
+  cat); Claude integration smoke OK. Full AI run = MANUAL-11.
+**Diff budget:** 5 new modules + 3 new test files; small edits to builtin/__main__. Met.
+**Result:** Shipped. `artifacts/cat_attempts/cat_v2_clean_best.png` proves the
+red-chaos fix + SVG path. Two review CRITICALs fixed.
+
+---
+
 ## DW-AGENT-SKETCH — Smart, controlled drawing (`sketch` tool + `geometry/`)  ✅ done (2026-06-22)
 **Purpose:** Make the AI draw recognizable figures (cat) in a smart, controlled
 way. The old path poked raw `mouse.stroke` in absolute pixels, guessing the canvas

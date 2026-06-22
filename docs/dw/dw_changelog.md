@@ -668,3 +668,49 @@ path. The remaining MANUAL-10 is just watching the AI-DRIVEN `do` version once.
 **Next Action:** Optional — let the AI plan the program itself (`do "...draw a cat"
 --vision`, a little quota) to confirm end-to-end; add erase/correction primitives;
 expose a line-thickness/tool hint. None blocking.
+
+---
+
+## 2026-06-22 | Drawing v2: robust + best-of-N + SVG (DW-AGENT-DRAW)
+
+**Type:** Major capability — research-backed drawing pipeline
+**Status:** Complete. Deterministic path LIVE-validated (no quota); AI best-of-N
+path integration-verified; full AI-driven run = MANUAL-11 (user observes).
+
+**Why:** v1's `sketch` tool drew a clean cat, but live the canvas still showed red
+scribbles — no canvas hygiene, raw strokes still available, no quality gate, and a
+bespoke DSL the LLM isn't great at. Three gaps: (1) no clean-canvas/tool/color lock,
+(2) no offline quality gate before ink, (3) weak representation/objective.
+
+**Method (Chat2SVG / CLIPasso / LLM4SVG):** generate → render OFFLINE → judge →
+execute-clean → verify. The AI only PROPOSES (SVG); rendering, scoring and execution
+are deterministic. Phased: Phase A (quota-free robustness + SVG), Phase B (best-of-N
++ AI judge `draw` command).
+
+**New files:**
+- `geometry/svg.py` — SVG subset (path M/L/H/V/C/S/Q/T/Z + rel, circle/ellipse/line/
+  polyline/polygon/rect) → Program; viewBox/bbox aspect-fit to 0..100; truncated
+  paths fail safe.
+- `geometry/preview.py` — Program → PNG offline + candidate montage (PIL lazy).
+- `geometry/paint_setup.py` — canvas hygiene: focus+maximize, clear (Ctrl+A/Del/Esc),
+  select Pencil + Black via UIA; Null fallback; `prepare_paint` orchestration.
+- `drawing/director.py` — best-of-N generate → render → AI judge → execute → one
+  verify+refine; Claude calls injected (unit-tested with stubs).
+- `drawing/claude_io.py` — broker-routed claude text/vision callers (no API key).
+- `tools/builtin.py render_program_to_canvas` — shared hygienic execution.
+
+**Changed:** `SketchTool` accepts `svg` OR `primitives` and runs canvas prep first;
+`__main__` adds `python -m desktop_worker draw "<subject>"` + wires the director;
+`do` guidance mentions svg.
+
+**Validation:** `python -m pytest` — **251 passed** (+25). LIVE (Claude, no quota):
+the deterministic path cleaned the red-scribbled canvas and drew a clean black SVG
+cat in real Paint — `artifacts/cat_attempts/cat_v2_clean_best.png` (prep reported
+focused/cleared/Pencil/Black; canvasSource=uia). Claude integration smoke (`ask_text`
+→ PONG) confirms the director's broker path. Two review CRITICALs fixed (svg truncated-
+path crash; director generate/draw exceptions) + path-separator nit.
+
+**Validation Level:** **4 (live real desktop)** for the deterministic execution +
+canvas hygiene (the red-chaos fix is proven). Full AI best-of-N run = MANUAL-11.
+
+**Next:** user runs `draw "a cat"` and observes best-of-N + judge live.

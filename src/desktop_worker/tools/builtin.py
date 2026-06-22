@@ -175,6 +175,50 @@ class OpenUrlTool:
         return {"success": True, "url": url, "error": None}
 
 
+def render_program_to_canvas(program, *, input_backend, canvas_locator, estop=None,
+                             paint_ui=None, clear=True) -> dict[str, Any]:
+    """Execute a validated Program on Paint's real canvas (clean + draw). Shared by
+    the `sketch` tool and the DrawingDirector so both use the identical, hygienic,
+    estop-checked execution path."""
+    from desktop_worker.geometry import apply_inner_margin, compile_program, fit_square
+    from desktop_worker.geometry.paint_setup import NullPaintUi, prepare_paint
+    from desktop_worker.safety.emergency_stop import EmergencyStopError
+
+    if estop is not None and estop.is_stopped():
+        return {"success": False, "error": "emergency stop active"}
+
+    # Canvas hygiene FIRST: clean canvas + drawing tool + known colour, so strokes
+    # are ink on white — never selections over stale scribbles.
+    prep = prepare_paint(input_backend, paint_ui or NullPaintUi(), clear=clear)
+
+    canvas = canvas_locator.locate()
+    if canvas is None:
+        return {"success": False, "prep": prep,
+                "error": "could not locate the drawing canvas (is Paint focused?)"}
+
+    # Centered SQUARE + small margin so the 0..100 grid keeps aspect (round circles)
+    # and clears the ribbon/edges. Report the full canvas for screenshot cropping.
+    draw_rect = apply_inner_margin(fit_square(canvas), 0.05)
+    strokes = compile_program(program, draw_rect)
+    drawn = total_points = 0
+    for points in strokes:
+        if estop is not None:
+            try:
+                estop.check()
+            except EmergencyStopError as exc:
+                return {"success": False, "error": f"emergency stop: {exc}", "prep": prep,
+                        "strokes": drawn, "canvas": list(canvas.as_tuple()),
+                        "canvasSource": canvas.source}
+        input_backend.stroke(points, max(120, len(points) * 6))
+        drawn += 1
+        total_points += len(points)
+
+    return {"success": True, "title": program.title,
+            "primitives": len(program.primitives), "strokes": drawn,
+            "points": total_points, "canvas": list(canvas.as_tuple()),
+            "canvasSource": canvas.source, "prep": prep, "error": None}
+
+
 class SketchTool:
     """Draw a complete figure in Paint from geometric primitives — reliable hands.
 
@@ -186,57 +230,38 @@ class SketchTool:
     """
 
     name = "sketch"
-    description = ("Draw a complete figure in MS Paint from geometric primitives on a "
-                  "0..100 grid (kinds: line, polyline, circle, ellipse, arc, bezier, dot; "
-                  "origin top-left). Reliable + precise — use this instead of mouse "
-                  "strokes for ANY drawing. Plan the whole figure in one call.")
-    args_help = ("title (str), primitives (list of {kind, ...}); e.g. "
-                "{kind:'circle',center:[50,40],r:22}, {kind:'polyline',points:[[33,22],"
-                "[28,8],[42,26]],closed:true}, {kind:'dot',at:[50,46]}, "
-                "{kind:'arc',center:[50,46],r:8,start:20,end:160}, "
-                "{kind:'bezier',points:[[72,55],[92,60],[80,80]]}")
+    description = ("Draw a complete figure in MS Paint. Pass EITHER `svg` (an SVG "
+                  "string — preferred; use paths/circles/ellipses/lines/polylines) OR "
+                  "`primitives` (a list on a 0..100 grid: line/polyline/circle/ellipse/"
+                  "arc/bezier/dot). The tool clears the canvas, picks the Pencil + black, "
+                  "finds Paint's real canvas, and renders precisely. Reliable + precise — "
+                  "use this instead of raw mouse strokes for ANY drawing. One call = whole figure.")
+    args_help = ("svg (SVG string) OR primitives (list of {kind,...} on a 0..100 grid); "
+                "optional title (str), clear (bool, default true)")
     risk = "low"  # synthesized mouse movement inside the focused window; non-destructive
 
-    def __init__(self, *, input_backend: Any, canvas_locator: Any, estop: Any = None) -> None:
+    def __init__(self, *, input_backend: Any, canvas_locator: Any, estop: Any = None,
+                 paint_ui: Any = None) -> None:
+        from desktop_worker.geometry.paint_setup import NullPaintUi
         self._input = input_backend
         self._locator = canvas_locator
         self._estop = estop
+        self._paint_ui = paint_ui if paint_ui is not None else NullPaintUi()
+
+    def _program(self, args: dict[str, Any]):
+        """Build a validated Program from `svg` or `primitives` (raises ToolError)."""
+        from desktop_worker.geometry import parse_program
+        from desktop_worker.geometry.svg import parse_svg
+        if isinstance(args.get("svg"), str):
+            return parse_svg(args["svg"], title=str(args.get("title", "drawing")))
+        return parse_program(args)               # DSL primitives path
 
     def run(self, args: dict[str, Any]) -> dict[str, Any]:
-        from desktop_worker.geometry import (apply_inner_margin, compile_program,
-                                             fit_square, parse_program)
-        from desktop_worker.safety.emergency_stop import EmergencyStopError
-
-        program = parse_program(args)            # raises ToolError on bad input
-        canvas = self._locator.locate()
-        if canvas is None:
-            return {"success": False, "error": "could not locate the drawing canvas "
-                    "(is Paint the focused window?)"}
-
-        # Draw into the largest centered SQUARE so the 0..100 grid keeps its aspect
-        # ratio (circles stay round on a wide canvas), with a small margin so the
-        # figure never crowds the ribbon/edges. Report the full canvas so the
-        # critique screenshot can be cropped to the whole drawing area.
-        draw_rect = apply_inner_margin(fit_square(canvas), 0.05)
-        strokes = compile_program(program, draw_rect)
-        drawn = total_points = 0
-        for points in strokes:
-            if self._estop is not None:
-                try:
-                    self._estop.check()
-                except EmergencyStopError as exc:
-                    return {"success": False, "error": f"emergency stop: {exc}",
-                            "strokes": drawn, "canvas": list(canvas.as_tuple()),
-                            "canvasSource": canvas.source}
-            duration_ms = max(120, len(points) * 6)
-            self._input.stroke(points, duration_ms)
-            drawn += 1
-            total_points += len(points)
-
-        return {"success": True, "title": program.title,
-                "primitives": len(program.primitives), "strokes": drawn,
-                "points": total_points, "canvas": list(canvas.as_tuple()),
-                "canvasSource": canvas.source, "error": None}
+        program = self._program(args)            # raises ToolError on bad input
+        return render_program_to_canvas(
+            program, input_backend=self._input, canvas_locator=self._locator,
+            estop=self._estop, paint_ui=self._paint_ui,
+            clear=bool(args.get("clear", True)))
 
 
 def _match_window(windows: list[tuple[int, str]], title_contains: str) -> tuple[int, str] | None:

@@ -43,8 +43,8 @@ const DATA = {
   workspace: "C:\\Desktop-Worker\\docs\\dw",
   updated: "2026-06-22",
   implementationAllowed: "YES (autonomous; auditor-gated)",
-  validationLevel: "224 unit tests + L4 LIVE: sketch tool drew a real cat in real Win11 Paint (real mouse + UIA canvas detection, no quota) — artifacts/cat_attempts/cat_live_best.png; plus L4 live AI control; tools (create_text_file/open_app/open_url/focus_window/sketch), smart drawing via geometry/ (DSL+renderer+canvas detection), memory, vision, frugal, session-replay HTML",
-  cardsDone: 16, cardsTotal: 16,
+  validationLevel: "251 unit tests + L4 LIVE: drawing v2 cleaned a red-scribbled canvas and drew a clean SVG cat in real Win11 Paint (real mouse + UIA hygiene, no quota) — artifacts/cat_attempts/cat_v2_clean_best.png; best-of-N + AI judge `draw` command (Claude integration verified); tools (…/sketch accepts SVG or primitives), drawing/ (svg parser, offline preview, canvas hygiene, director), memory, vision, frugal, session-replay HTML",
+  cardsDone: 17, cardsTotal: 17,
   phases: [
     {id:"P1", name:"Local Control Foundation", status:"done"},
     {id:"P2", name:"Structured Action Loop", status:"done"},
@@ -66,8 +66,9 @@ const DATA = {
     {id:"DW-WORKFLOW-CREATEFILE", t:"Visible create-desktop-text-file workflow (VERIFIED real)", s:"done"},
     {id:"DW-AGENT-DO", t:"GENUINE live AI control: do '<task>' (VERIFIED real, AI decides)", s:"done"},
     {id:"DW-AGENT-SKETCH", t:"Smart drawing: sketch tool + geometry/ (DSL, renderer, canvas detection)", s:"done"},
+    {id:"DW-AGENT-DRAW", t:"Drawing v2: SVG + canvas hygiene + best-of-N draw command", s:"done"},
   ],
-  current: "none in progress — smart drawing shipped: `do \"open Paint and draw a cat\" --vision` uses the new `sketch` tool (geometry/). Live confirm = MANUAL-10.",
+  current: "none in progress — drawing v2 shipped: `python -m desktop_worker draw \"a cat\"` (best-of-N SVG + AI judge + clean execution). Deterministic path live-validated; full AI run = MANUAL-11.",
   nextCard: "Optional: workflows as AI-callable tools; vision fallback for UIA-poor apps; Phase 6 (multi-agent); Phase 7 (UI)",
   risks: [
     ["Broker shell=True runs cmd.exe strings","Medium","Gated by classify+approval+audit; no passthrough API"],
@@ -98,6 +99,7 @@ const DATA = {
   doNotTouch: ["docs/requirements.md (read-only source of truth)","artifacts/ (generated)",
     "*/backends.py Protocol signatures"],
   changelog: [
+    "2026-06-22 DW-AGENT-DRAW — drawing v2 (robust + best-of-N + SVG): fixes the 'red scribbles' gap with canvas hygiene (clean canvas + Pencil + Black via UIA) + a PROPOSE-only AI role. New `draw \"<subject>\"` command: AI proposes several SVGs → rendered offline → AI judge picks best → only winner drawn on a cleaned canvas → one verify/correct. New modules geometry/{svg,preview,paint_setup}, drawing/{director,claude_io}; sketch tool accepts SVG or primitives. 251 tests; deterministic path LIVE-validated (red canvas cleaned → clean SVG cat, cat_v2_clean_best.png); two review CRITICALs fixed; full AI run = MANUAL-11.",
     "2026-06-22 DW-AGENT-SKETCH — smart, controlled drawing: new geometry/ package (0..100-grid DSL + deterministic tessellation + UIA-first canvas detection) exposed as the `sketch` AI tool; AI plans a whole figure in ONE tool.run, code renders it precisely (smooth circles, one stroke per primitive → no stray slash); planner forces ONE cropped vision look after a sketch; 223 tests; offline render proof = clean cat; live = MANUAL-10.",
     "2026-06-20 DW-AGENT-DO — GENUINE live AI desktop control: `do '<task>'` — AI perceives the screen and decides+performs each action itself (no script); VERIFIED real (AI opened Notepad via Run dialog + typed, self-verified); perception gained context menus + typed-value feedback; Codex APPROVE, Northstar ALIGNED; 138 tests; §22 realized.",
     "2026-06-20 DW-WORKFLOW-CREATEFILE — visible create-desktop-text-file workflow (right-click→New→Text Document→name→open→type→save), VERIFIED on real desktop (dw-demo.txt='başlıyoruz'); fixed Unicode input (SendInput) + VK map + pytest UAC + console crash; Codex APPROVE, Northstar ALIGNED; 130 tests.",

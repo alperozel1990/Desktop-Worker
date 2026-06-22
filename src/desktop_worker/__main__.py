@@ -135,6 +135,74 @@ def _console_approver(request) -> bool:
         return False
 
 
+def _cmd_draw(args: argparse.Namespace) -> int:
+    """Draw a recognizable figure of <subject> in Paint — best-of-N + AI judge.
+
+    The AI proposes several SVG drawings; we render them offline, an AI judge picks
+    the best, and ONLY the winner is drawn — on a freshly cleaned canvas with the
+    Pencil + black selected. No raw mouse strokes are ever emitted, so the canvas
+    cannot be scribbled over. ~3-4 Claude calls total (quota-friendly).
+    """
+    import time
+
+    from desktop_worker.drawing import DrawingDirector
+    from desktop_worker.drawing.claude_io import make_claude_callers
+    from desktop_worker.geometry import get_canvas_locator
+    from desktop_worker.geometry.paint_setup import get_paint_ui
+    from desktop_worker.loop.claude_cli_planner import claude_available
+    from desktop_worker.tools.builtin import render_program_to_canvas
+
+    real = not args.null
+    cfg = Config(session_id="ai-draw", task_id="task")
+    session = Session(cfg, prefer_real_backends=real)
+    cwd = str(cfg.artifacts_root.parent)
+    if real and not claude_available(session.broker, cwd):
+        print("ERROR: the `claude` CLI is not logged in. Run `claude auth status`.")
+        return 2
+
+    work = cfg.task_dir / "draw"
+    work.mkdir(parents=True, exist_ok=True)
+
+    # Make sure Paint is open (the prep step focuses/maximizes it before drawing).
+    if real:
+        session.broker.launch('start "" mspaint', cwd, agent="draw", role="tool")
+        time.sleep(3.0)
+
+    locator = get_canvas_locator(real)
+    paint_ui = get_paint_ui(real)
+
+    def draw_fn(program):
+        return render_program_to_canvas(
+            program, input_backend=session.input_backend, canvas_locator=locator,
+            estop=session.estop, paint_ui=paint_ui, clear=True)
+
+    def screenshot_fn():
+        dest = work / "canvas.png"
+        try:
+            return session.desktop_backend.capture_screenshot(dest)
+        except Exception:
+            return None
+
+    ask_text, ask_vision = make_claude_callers(session.broker, cwd)
+    director = DrawingDirector(
+        ask_text=ask_text, ask_vision=ask_vision, draw_fn=draw_fn,
+        work_dir=str(work), screenshot_fn=screenshot_fn,
+        n_candidates=args.candidates, refine=not args.no_refine,
+        log=lambda m: print(f"[draw] {m}"))
+
+    print(f"Drawing '{args.subject}' (best-of-{args.candidates}). "
+          "This makes a few Claude calls (your subscription). Press estop to stop.")
+    res = director.draw(args.subject)
+    if res.get("success"):
+        print(f"Done: chose candidate #{res['chosen']} of {res['candidates']}"
+              + (f", refined once ({res['verdict'].get('issue')})" if res.get("refined") else "")
+              + f"; drew {res['draw'].get('strokes')} strokes. "
+              f"Canvas source: {res['draw'].get('canvasSource')}.")
+        return 0
+    print(f"Could not draw: {res.get('error')}")
+    return 1
+
+
 def _cmd_do(args: argparse.Namespace) -> int:
     """Live AI-driven task: Claude decides each action; the agent performs it.
 
@@ -183,7 +251,9 @@ def _cmd_do(args: argparse.Namespace) -> int:
         "click it by elementId if you just used Select/clear, else the default brush is "
         "fine. Then call the `sketch` tool ONCE with the WHOLE figure as a "
         "list of geometric primitives on a 0..100 grid (x and y both 0..100, origin "
-        "top-left). The app finds Paint's real canvas and renders precisely — circles are "
+        "top-left), OR an `svg` string (viewBox 0 0 100 100, black stroke, paths/circles/"
+        "etc.) — the sketch tool clears the canvas and picks the Pencil first. The app "
+        "finds Paint's real canvas and renders precisely — circles are "
         "true circles, curves are smooth, no stray lines. Think on the grid, e.g. a cat: "
         "head circle center [50,40] r 22; two triangular ears as closed polylines; eyes "
         "as small circles ~[42,38]/[58,38] r 3; nose as a dot [50,46]; mouth as an arc "
@@ -197,6 +267,7 @@ def _cmd_do(args: argparse.Namespace) -> int:
     # Reliable tools the AI may CHOOSE to call ("brain + hands"). The tool runs
     # through the same audited/estop-gated executor for each of its sub-actions.
     from desktop_worker.geometry import get_canvas_locator
+    from desktop_worker.geometry.paint_setup import get_paint_ui
     from desktop_worker.tools import (CreateTextFileTool, FocusWindowTool, OpenAppTool,
                                       OpenUrlTool, SketchTool, ToolRegistry)
 
@@ -207,7 +278,7 @@ def _cmd_do(args: argparse.Namespace) -> int:
     tools.register(FocusWindowTool())
     tools.register(SketchTool(input_backend=session.input_backend,
                               canvas_locator=get_canvas_locator(real),
-                              estop=session.estop))
+                              estop=session.estop, paint_ui=get_paint_ui(real)))
     session.executor.tools = tools
 
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))
@@ -327,6 +398,15 @@ def build_parser() -> argparse.ArgumentParser:
                     help="permission profile: standard (low/med auto, high prompts), "
                          "strict (medium+ prompts), headless (deny anything needing approval)")
     do.set_defaults(func=_cmd_do)
+
+    dr = sub.add_parser("draw", help="draw a recognizable figure of <subject> in Paint "
+                                     "(best-of-N candidates + AI judge, clean execution)")
+    dr.add_argument("subject", help='what to draw, e.g. "a cat", "a house", "a smiling sun"')
+    dr.add_argument("--candidates", type=int, default=3,
+                    help="how many candidate drawings the AI proposes (judge picks the best)")
+    dr.add_argument("--no-refine", action="store_true",
+                    help="skip the one-shot verify+correct pass (fewer Claude calls)")
+    dr.set_defaults(func=_cmd_draw)
 
     rep = sub.add_parser("report", help="build an HTML replay of a session's audit log")
     rep.add_argument("--session", default="ai-do", help="session id")

@@ -4,7 +4,30 @@ Actions Claude cannot fully perform/validate itself.
 
 ---
 
-## MANUAL-10 — ⭐⭐ Watch the AI draw a cat with the new `sketch` pipeline
+## MANUAL-11 — ⭐⭐⭐ Watch the AI draw with best-of-N + judge (`draw` command)
+**Status:** [ ] Waiting  (Claude live-validated the DETERMINISTIC half: clean canvas
++ SVG cat in real Paint — `artifacts/cat_attempts/cat_v2_clean_best.png`, no red; and
+verified the Claude integration. The AI best-of-N half uses your subscription, so it's
+yours to watch.)
+**Blocking:** NO
+**Tool:** PowerShell + your `claude` login + desktop + MS Paint
+**Added by:** DW-AGENT-DRAW
+**Instructions:**
+1. `cd C:\Desktop-Worker` ; (first time) `python -m pip install -e ".[windows]"`
+2. `python -m desktop_worker draw "a cat"`
+   (try also: `draw "a house"`, `draw "a smiling sun"`, or `--candidates 4`)
+3. Watch the console: the AI proposes several SVG drawings → they're rendered offline
+   → an AI judge picks the best → ONLY the winner is drawn on a freshly CLEANED canvas
+   (Pencil + black; no raw scribbles possible) → one verify/correct pass. ~3-4 Claude
+   calls total. Stop anytime: `python -m desktop_worker estop` (another window).
+**What Claude needs back:** Did a clean, recognizable figure appear (no red mess)?
+Paste the `[draw]` console lines if anything looked off (which candidate it chose,
+canvasSource uia/client). The candidate previews + montage are saved under
+`artifacts/sessions/ai-draw/task/draw/`.
+
+---
+
+## MANUAL-10 — ⭐⭐ Watch the AI draw a cat with the `sketch` pipeline (v1)
 **Status:** [~] Partially validated by Claude — the FULL drawing pipeline (real mouse
 + real UIA canvas detection + render) was run live in real Win11 Paint and produced a
 clean, recognizable cat: `artifacts/cat_attempts/cat_live_best.png`. What remains for
