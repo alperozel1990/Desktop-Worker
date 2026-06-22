@@ -281,8 +281,16 @@ class TaskLoop:
                     self.audit.record("task.stalled", reason=stop_reason)
                     break
 
-            # PLAN.
+            # PLAN. A transient invalid/empty AI response (e.g. the CLI returned an
+            # empty result) shouldn't end the task — re-ask a couple of times.
             step = self.planner.next_step(before, history)
+            plan_tries = 0
+            while step is None and getattr(self.planner, "last_outcome", "done") in ("invalid", "error") \
+                    and plan_tries < 2:
+                plan_tries += 1
+                self.audit.record("planner.retry", attempt=plan_tries,
+                                  error=getattr(self.planner, "last_error", ""))
+                step = self.planner.next_step(before, history)
             if step is None:
                 # Distinguish "planner says task done" from "planner failed/blocked"
                 # (e.g. the AI call errored) so we don't mislabel failure as success.

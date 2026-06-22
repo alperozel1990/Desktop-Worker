@@ -219,8 +219,9 @@ def _loop(tmp_path, planner, *, desktop=None, stall_guard=False, limits=None):
 
 
 def test_loop_marks_failed_when_planner_errors(tmp_path):
-    # planner returns None with outcome "error" -> not completed.
-    loop, audit = _loop(tmp_path, StubPlanner([None]))
+    # A PERSISTENT invalid planner (past the retries) -> not completed.
+    move = PlannedStep(parse_action({"type": "wait", "durationMs": 1}), description="w")
+    loop, audit = _loop(tmp_path, FlakyPlanner(move, fail_n=99))
     report = loop.run()
     assert report.completed is False
     assert "AI could not decide" in report.stop_reason
@@ -271,3 +272,31 @@ def test_stall_guard_ignores_drawing(tmp_path):
     # 8 strokes all ran (not killed by stall guard); ends by running out of planner steps
     assert report.steps_run == 8
     assert "task.stalled" not in [e["event"] for e in audit.read_all()]
+
+
+class FlakyPlanner:
+    """Returns invalid (None) for the first `fail_n` calls, then a real step."""
+    def __init__(self, step, fail_n):
+        self._step = step; self._fail = fail_n; self.last_outcome = "invalid"; self.last_error = "empty"
+    def next_step(self, obs, history):
+        if self._fail > 0:
+            self._fail -= 1; self.last_outcome = "invalid"; return None
+        self.last_outcome = "step"; return self._step
+
+
+def test_loop_retries_transient_invalid_planner(tmp_path):
+    move = PlannedStep(parse_action({"type": "wait", "durationMs": 1}), description="w")
+    # planner fails twice (transient) then succeeds -> loop should retry, not give up
+    loop, audit = _loop(tmp_path, FlakyPlanner(move, fail_n=2))
+    report = loop.run()
+    retries = [e for e in audit.read_all() if e["event"] == "planner.retry"]
+    assert len(retries) == 2
+    assert report.steps_run >= 1          # recovered and ran the step
+
+
+def test_loop_gives_up_after_persistent_invalid(tmp_path):
+    move = PlannedStep(parse_action({"type": "wait", "durationMs": 1}), description="w")
+    loop, audit = _loop(tmp_path, FlakyPlanner(move, fail_n=99))   # never recovers
+    report = loop.run()
+    assert report.completed is False
+    assert "AI could not decide" in report.stop_reason

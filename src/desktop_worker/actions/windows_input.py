@@ -175,33 +175,57 @@ class WindowsInputBackend:
             self.user32.mouse_event(0x01000, 0, 0, int(dx) * WHEEL_DELTA, 0)  # horizontal
 
     def drag(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int) -> None:
-        self.move(x1, y1)
+        # Absolute synthetic moves so drag also works for drawing (see _abs_move).
+        self._abs_move(x1, y1)
+        time.sleep(0.03)
         self.mouse_down("left")
-        steps = max(1, int(duration_ms / 15))
+        time.sleep(0.03)
+        steps = max(2, int(duration_ms / 12))
         for i in range(1, steps + 1):
             ix = int(x1 + (x2 - x1) * i / steps)
             iy = int(y1 + (y2 - y1) * i / steps)
-            self.move(ix, iy)
+            self._abs_move(ix, iy)
             time.sleep(duration_ms / 1000.0 / steps)
+        time.sleep(0.03)
         self.mouse_up("left")
+
+    def _abs_move(self, x: int, y: int) -> None:
+        """Move via a synthetic ABSOLUTE mouse-move event.
+
+        Drawing apps (Paint) track WM_MOUSEMOVE between button-down/up; SetCursorPos
+        teleports the cursor without reliably generating those, so freehand strokes
+        collapse to a dot. mouse_event(MOVE|ABSOLUTE) emits a real move the app draws.
+
+        NOTE: ABSOLUTE is normalized over the PRIMARY monitor only; for a secondary
+        monitor this would need MOUSEEVENTF_VIRTUALDESK + the virtual-screen metrics.
+        """
+        u = self.user32
+        w = max(1, u.GetSystemMetrics(0) - 1)
+        h = max(1, u.GetSystemMetrics(1) - 1)
+        nx = int(x * 65535 / w)
+        ny = int(y * 65535 / h)
+        u.mouse_event(0x0001 | 0x8000, nx, ny, 0, 0)  # MOUSEEVENTF_MOVE|ABSOLUTE
 
     def stroke(self, points: list, duration_ms: int) -> None:
         """Press at the first point, drag smoothly through all points, release.
 
-        Interpolates between consecutive points so freehand drawing (e.g. in
-        Paint) produces continuous lines rather than disconnected dots.
+        Uses absolute synthetic moves (so Paint actually draws) and interpolates
+        between consecutive points to produce continuous lines, not dots.
         """
         pts = [(int(p[0]), int(p[1])) for p in points]
         if not pts:
             return
-        self.move(*pts[0])
+        self._abs_move(*pts[0])
+        time.sleep(0.03)
         self.mouse_down("left")
+        time.sleep(0.03)
         seg_ms = max(1.0, duration_ms / max(1, len(pts) - 1))
         for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
-            steps = max(1, int(seg_ms / 10))
+            steps = max(2, int(seg_ms / 8))
             for i in range(1, steps + 1):
-                self.move(int(x1 + (x2 - x1) * i / steps), int(y1 + (y2 - y1) * i / steps))
+                self._abs_move(int(x1 + (x2 - x1) * i / steps), int(y1 + (y2 - y1) * i / steps))
                 time.sleep(seg_ms / 1000.0 / steps)
+        time.sleep(0.03)
         self.mouse_up("left")
 
     # --- keyboard ------------------------------------------------------
