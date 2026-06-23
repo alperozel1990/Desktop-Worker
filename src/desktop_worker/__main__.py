@@ -133,6 +133,22 @@ def _cmd_switch_window(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
+def _cmd_pick_file(args: argparse.Namespace) -> int:
+    """Type a path into an already-open native file dialog and confirm (Phase 5)."""
+    from desktop_worker.workflows import choose_file
+    from desktop_worker.workflows.file_dialog import get_file_dialog_ui
+
+    cfg = Config(session_id="workflow", task_id="pick-file")
+    session = Session(cfg, prefer_real_backends=not args.null)
+    ui = get_file_dialog_ui(prefer_real=not args.null)
+
+    print(f"Filling the open file dialog with {args.path!r} (confirm={args.confirm}).")
+    print("A file dialog must already be open. Emergency stop: `python -m desktop_worker estop`.")
+    result = choose_file(args.path, executor=session.executor, ui=ui, confirm=args.confirm)
+    print(result.to_markdown())
+    return 0 if result.success else 1
+
+
 def _console_approver(request) -> bool:
     """Interactive approval for high-risk actions; deny if not a TTY (headless)."""
     try:
@@ -397,6 +413,13 @@ def build_parser() -> argparse.ArgumentParser:
                         help="bring an open window to the front by (part of) its title")
     sw.add_argument("title", help="text appearing in the target window's title")
     sw.set_defaults(func=_cmd_switch_window)
+
+    pf = sub.add_parser("pick-file",
+                        help="fill an already-open native file dialog with a path and confirm")
+    pf.add_argument("path", help="the file path to type into the dialog")
+    pf.add_argument("--confirm", choices=("open", "save"), default="open",
+                    help="which confirm button to click (open=file picker/upload, save=save-as)")
+    pf.set_defaults(func=_cmd_pick_file)
 
     do = sub.add_parser("do", help="give a natural-language task; the AI drives it live")
     do.add_argument("task", help="the task in plain language, e.g. \"open Notepad and type hi\"")
