@@ -15,8 +15,14 @@ from desktop_worker.workflows.file_dialog import (
     choose_file,
     upload_file,
 )
+from desktop_worker.workflows.downloads import (
+    get_downloads_dir,
+    is_partial,
+    wait_for_download,
+)
 from desktop_worker.workflows.window import WindowResult, drag_drop, switch_window
 
 __all__ = ["create_desktop_text_file", "CreateDesktopFileResult",
            "switch_window", "drag_drop", "WindowResult",
-           "choose_file", "upload_file", "FileDialogResult"]
+           "choose_file", "upload_file", "FileDialogResult",
+           "wait_for_download", "is_partial", "get_downloads_dir"]

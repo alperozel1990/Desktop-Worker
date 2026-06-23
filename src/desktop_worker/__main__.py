@@ -149,6 +149,20 @@ def _cmd_pick_file(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
+def _cmd_wait_download(args: argparse.Namespace) -> int:
+    """Wait for a browser download to complete and print its path (Phase 5)."""
+    from desktop_worker.workflows import get_downloads_dir, wait_for_download
+
+    directory = args.dir or get_downloads_dir()
+    print(f"Watching {directory} for a new completed download (timeout {args.timeout}s) ...")
+    path = wait_for_download(directory, timeout_s=args.timeout)
+    if path is None:
+        print(f"No new download appeared within {args.timeout}s.")
+        return 1
+    print(f"Downloaded: {path}")
+    return 0
+
+
 def _console_approver(request) -> bool:
     """Interactive approval for high-risk actions; deny if not a TTY (headless)."""
     try:
@@ -420,6 +434,12 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--confirm", choices=("open", "save"), default="open",
                     help="which confirm button to click (open=file picker/upload, save=save-as)")
     pf.set_defaults(func=_cmd_pick_file)
+
+    wd = sub.add_parser("wait-download",
+                        help="wait for a browser download to finish and print its path")
+    wd.add_argument("--dir", default=None, help="download directory (default: ~/Downloads)")
+    wd.add_argument("--timeout", type=float, default=60.0, help="max seconds to wait")
+    wd.set_defaults(func=_cmd_wait_download)
 
     do = sub.add_parser("do", help="give a natural-language task; the AI drives it live")
     do.add_argument("task", help="the task in plain language, e.g. \"open Notepad and type hi\"")
