@@ -10,5 +10,7 @@ from desktop_worker.workflows.desktop_file import (
     CreateDesktopFileResult,
     create_desktop_text_file,
 )
+from desktop_worker.workflows.window import WindowResult, drag_drop, switch_window
 
-__all__ = ["create_desktop_text_file", "CreateDesktopFileResult"]
+__all__ = ["create_desktop_text_file", "CreateDesktopFileResult",
+           "switch_window", "drag_drop", "WindowResult"]

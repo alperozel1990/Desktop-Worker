@@ -264,6 +264,49 @@ class SketchTool:
             clear=bool(args.get("clear", True)))
 
 
+class DragDropTool:
+    """Drag-and-drop between two screen points (reliable hands).
+
+    A single press-move-release drag, executed through the injected input backend
+    with the same emergency-stop check used before every synthesized movement.
+    Coordinates are absolute screen pixels.
+    """
+
+    name = "drag_drop"
+    description = ("Drag from one screen point to another (press-move-release). Args: "
+                  "from [x,y], to [x,y], optional durationMs. Use for moving icons, "
+                  "selecting ranges, or rearranging windows.")
+    args_help = "from [x,y], to [x,y], optional durationMs (default 600)"
+    risk = "low"  # synthesized mouse movement; non-destructive
+
+    def __init__(self, *, input_backend: Any, estop: Any = None) -> None:
+        self._input = input_backend
+        self._estop = estop
+
+    @staticmethod
+    def _point(value: Any, field: str) -> tuple[int, int]:
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise ToolError(f"drag_drop {field} must be [x, y]")
+        try:
+            return int(value[0]), int(value[1])
+        except (TypeError, ValueError):
+            raise ToolError(f"drag_drop {field} must be two integers")
+
+    def run(self, args: dict[str, Any]) -> dict[str, Any]:
+        fx, fy = self._point(args.get("from"), "from")
+        tx, ty = self._point(args.get("to"), "to")
+        duration = args.get("durationMs", 600)
+        try:
+            duration = max(1, int(duration))
+        except (TypeError, ValueError):
+            raise ToolError("drag_drop durationMs must be an integer")
+        if self._estop is not None and self._estop.is_stopped():
+            return {"success": False, "from": [fx, fy], "to": [tx, ty],
+                    "error": "emergency stop active"}
+        self._input.drag(fx, fy, tx, ty, duration)
+        return {"success": True, "from": [fx, fy], "to": [tx, ty], "error": None}
+
+
 def _match_window(windows: list[tuple[int, str]], title_contains: str) -> tuple[int, str] | None:
     """Pure: first (hwnd, title) whose title contains the text (case-insensitive)."""
     want = title_contains.lower()

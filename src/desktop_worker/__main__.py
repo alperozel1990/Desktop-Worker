@@ -124,6 +124,15 @@ def _cmd_create_file(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
+def _cmd_switch_window(args: argparse.Namespace) -> int:
+    """Bring an open window to the foreground by (part of) its title (Phase 5)."""
+    from desktop_worker.workflows import switch_window
+
+    result = switch_window(args.title)
+    print(result.to_markdown())
+    return 0 if result.success else 1
+
+
 def _console_approver(request) -> bool:
     """Interactive approval for high-risk actions; deny if not a TTY (headless)."""
     try:
@@ -268,14 +277,15 @@ def _cmd_do(args: argparse.Namespace) -> int:
     # through the same audited/estop-gated executor for each of its sub-actions.
     from desktop_worker.geometry import get_canvas_locator
     from desktop_worker.geometry.paint_setup import get_paint_ui
-    from desktop_worker.tools import (CreateTextFileTool, FocusWindowTool, OpenAppTool,
-                                      OpenUrlTool, SketchTool, ToolRegistry)
+    from desktop_worker.tools import (CreateTextFileTool, DragDropTool, FocusWindowTool,
+                                      OpenAppTool, OpenUrlTool, SketchTool, ToolRegistry)
 
     tools = ToolRegistry()
     tools.register(CreateTextFileTool(desktop_dir=desktop_dir, broker=session.broker))
     tools.register(OpenAppTool(desktop_dir=desktop_dir, broker=session.broker))
     tools.register(OpenUrlTool(desktop_dir=desktop_dir, broker=session.broker))
     tools.register(FocusWindowTool())
+    tools.register(DragDropTool(input_backend=session.input_backend, estop=session.estop))
     tools.register(SketchTool(input_backend=session.input_backend,
                               canvas_locator=get_canvas_locator(real),
                               estop=session.estop, paint_ui=get_paint_ui(real)))
@@ -382,6 +392,11 @@ def build_parser() -> argparse.ArgumentParser:
     cf.add_argument("--name", default="dw-demo", help="file name (without .txt)")
     cf.add_argument("--desktop", default=None, help="override the desktop directory")
     cf.set_defaults(func=_cmd_create_file)
+
+    sw = sub.add_parser("switch-window",
+                        help="bring an open window to the front by (part of) its title")
+    sw.add_argument("title", help="text appearing in the target window's title")
+    sw.set_defaults(func=_cmd_switch_window)
 
     do = sub.add_parser("do", help="give a natural-language task; the AI drives it live")
     do.add_argument("task", help="the task in plain language, e.g. \"open Notepad and type hi\"")
