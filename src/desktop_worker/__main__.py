@@ -218,6 +218,75 @@ def _cmd_browse(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
+def _cmd_ui(args: argparse.Namespace) -> int:
+    """Open the Tkinter control window (Phase 7 UI).
+
+    The window shows the live audit timeline + latest screenshot and offers Run /
+    STOP / Pause / Resume / Approve / Deny. High-risk approvals block the loop
+    (on a worker thread) until you click Approve or Deny.
+    """
+    from desktop_worker.config import Limits
+    from desktop_worker.loop.claude_cli_planner import ClaudeCliPlanner, claude_available
+    from desktop_worker.loop.task_loop import TaskLoop
+    from desktop_worker.perception import Perceiver, get_ocr_backend, get_uia_backend
+    from desktop_worker.safety import build_policy
+    from desktop_worker.tools import (CreateTextFileTool, DragDropTool, FocusWindowTool,
+                                      OpenAppTool, OpenUrlTool, ToolRegistry)
+    from desktop_worker.ui import UiController
+    from desktop_worker.ui.app_tk import run_control_window
+    from desktop_worker.workflows.desktop_ui import get_desktop_dir
+
+    real = not args.null
+    cfg = Config(session_id="ui", task_id="task")
+
+    # The policy's approver delegates to the controller (built just below), which
+    # blocks the worker thread until the user clicks Approve/Deny in the window.
+    holder: dict[str, object] = {}
+
+    def approver(req) -> bool:
+        c = holder.get("controller")
+        return bool(c.approve(req)) if c is not None else False
+
+    policy = build_policy(args.profile, approver, app_allowlist=cfg.app_allowlist,
+                          app_denylist=cfg.app_denylist)
+    session = Session(cfg, policy=policy, prefer_real_backends=real)
+    controller = UiController(cfg, session.estop)
+    holder["controller"] = controller
+
+    cwd = str(cfg.artifacts_root.parent)
+    if real and not claude_available(session.broker, cwd):
+        print("WARNING: the `claude` CLI is not logged in; Run will fail until you "
+              "log in (`claude auth status`). The window still opens for observation.")
+
+    desktop_dir = get_desktop_dir()
+    tools = ToolRegistry()
+    tools.register(CreateTextFileTool(desktop_dir=desktop_dir, broker=session.broker))
+    tools.register(OpenAppTool(desktop_dir=desktop_dir, broker=session.broker, policy=policy))
+    tools.register(OpenUrlTool(desktop_dir=desktop_dir, broker=session.broker))
+    tools.register(FocusWindowTool())
+    tools.register(DragDropTool(input_backend=session.input_backend, estop=session.estop))
+    session.executor.tools = tools
+
+    perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))
+
+    def run_task(text: str) -> None:
+        planner = ClaudeCliPlanner(task=text, broker=session.broker, cwd=cwd,
+                                   audit=session.audit, tools_catalog=tools.catalog())
+        loop = TaskLoop(task_id=cfg.task_id, planner=planner, observer=session.observer,
+                        executor=session.executor, audit=session.audit, estop=session.estop,
+                        perceiver=perceiver, settle_s=0.5, stall_guard=True,
+                        limits=Limits(max_actions_per_task=args.max_actions,
+                                      max_task_seconds=args.max_seconds))
+        try:
+            loop.run()
+        except Exception as exc:  # noqa: BLE001 — keep the UI alive on task error
+            session.audit.record("ui.task_error", error=str(exc))
+
+    print("Opening the control window. Close it to exit.")
+    run_control_window(controller, run_task=run_task)
+    return 0
+
+
 def _cmd_clean_artifacts(args: argparse.Namespace) -> int:
     """Prune old session artifacts by age and/or count (Phase 7 retention)."""
     from desktop_worker.audit.retention import prune_artifacts
@@ -630,6 +699,14 @@ def build_parser() -> argparse.ArgumentParser:
     ca.add_argument("--max-count", type=int, default=None,
                     help="keep only the newest N session artifacts")
     ca.set_defaults(func=_cmd_clean_artifacts)
+
+    ui = sub.add_parser("ui", help="open the Tkinter control window (timeline, "
+                                   "approve/deny, estop/pause)")
+    ui.add_argument("--max-actions", type=int, default=15, help="max actions per task")
+    ui.add_argument("--max-seconds", type=int, default=300, help="max task time")
+    ui.add_argument("--profile", choices=("standard", "strict", "headless"),
+                    default="standard", help="permission profile")
+    ui.set_defaults(func=_cmd_ui)
 
     do = sub.add_parser("do", help="give a natural-language task; the AI drives it live")
     do.add_argument("task", help="the task in plain language, e.g. \"open Notepad and type hi\"")
