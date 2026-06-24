@@ -55,21 +55,30 @@ class ApprovalQueue:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._event = threading.Event()
+        self._slot = threading.Semaphore(1)  # serialize concurrent requesters
         self._request: Optional[Any] = None
         self._pending = False
         self._decision = False
 
     def request(self, req: Any, timeout: Optional[float] = None) -> bool:
-        with self._lock:
-            self._request = req
-            self._pending = True
-            self._decision = False
-            self._event.clear()
-        got = self._event.wait(timeout)
-        with self._lock:
-            self._pending = False
-            self._request = None
-            return self._decision if got else False
+        # Only one request may own the slot at a time; deny if we can't get it.
+        acquired = (self._slot.acquire(timeout=timeout) if timeout is not None
+                    else self._slot.acquire())
+        if not acquired:
+            return False
+        try:
+            with self._lock:
+                self._request = req
+                self._pending = True
+                self._decision = False
+                self._event.clear()
+            got = self._event.wait(timeout)
+            with self._lock:
+                self._pending = False
+                self._request = None
+                return self._decision if got else False
+        finally:
+            self._slot.release()
 
     def pending(self) -> Optional[Any]:
         with self._lock:
@@ -78,7 +87,7 @@ class ApprovalQueue:
     def resolve(self, approved: bool) -> None:
         with self._lock:
             self._decision = bool(approved)
-            self._event.set()
+        self._event.set()  # signal OUTSIDE the lock so the waiter never contends
 
 
 class UiController:

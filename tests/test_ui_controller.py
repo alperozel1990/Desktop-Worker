@@ -110,6 +110,21 @@ def test_approval_queue_denies_on_timeout():
     assert q.request("req", timeout=0.05) is False  # nobody resolved -> deny
 
 
+def test_approval_queue_serializes_concurrent_requests():
+    q = ApprovalQueue()
+    # First requester holds the slot (waiting for a decision)...
+    t1 = threading.Thread(target=lambda: q.request("first", timeout=1.0))
+    t1.start()
+    for _ in range(100):
+        if q.pending() == "first":
+            break
+        time.sleep(0.01)
+    # ...so a second requester cannot grab the slot and denies on its timeout.
+    assert q.request("second", timeout=0.05) is False
+    q.resolve(True)
+    t1.join(timeout=2.0)
+
+
 def test_controller_approve_resolves(tmp_path):
     c, _, _ = _controller(tmp_path)
     out = {}
