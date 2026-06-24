@@ -340,6 +340,21 @@ Manual watch test = MANUAL-9.
 - [x] Safe failure: stale id rejected, planner-failure not mislabeled as success,
   no-progress stall guard. Codex APPROVE, Northstar ALIGNED.
 
+## Phase 5/6/7 cards — Autonomous batch 2026-06-24  ✅ all done
+
+> Branch `dw/roadmap-5-6-7`; 350 tests; each phase Codex-audited. Live = MANUAL-*.
+
+- **DW-WF-WINDOW** ✅ — `workflows/window.py` switch_window + drag_drop; DragDropTool. CLI `switch-window`. MANUAL-WF-1.
+- **DW-WF-FILEPICKER** ✅ — `workflows/file_dialog.py` choose_file/upload_file. CLI `pick-file`. MANUAL-WF-2.
+- **DW-WF-DOWNLOAD** ✅ — `workflows/downloads.py` wait_for_download (pure). CLI `wait-download`. MANUAL-WF-3.
+- **DW-WF-BROWSER** ✅ — `workflows/browser.py`+`browser_ui.py` navigate/fill/submit. CLI `browse`. MANUAL-WF-4.
+- **DW-ORCH-SCHEMA** ✅ — `orchestration/schema.py` AgentTask/AgentReport/AuditorFinding + parse_*.
+- **DW-ORCH-ROLES** ✅ — `orchestration/roles.py`+`claude_io.py` Strategist/Implementer/Codex+Northstar (fail-safe).
+- **DW-ORCH-COORD** ✅ — `orchestration/coordinator.py` state machine. CLI `orchestrate [--execute]`. MANUAL-ORCH-1.
+- **DW-HARDEN** ✅ — authorize_app + profile/app-list persistence + `audit/retention.py`. CLI `clean-artifacts`.
+- **DW-UI-CONTROLLER** ✅ — `ui/controller.py` pure UiController + ApprovalQueue.
+- **DW-UI-TK** ✅ — `ui/app_tk.py` Tkinter window. CLI `ui`. MANUAL-UI-1.
+
 ## Excluded from this backlog
 | Item | Reason |
 |---|---|

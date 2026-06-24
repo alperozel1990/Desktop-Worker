@@ -209,3 +209,55 @@ prompt behaved as described (or any error / leftover files).
 **Resolution:** User created GitHub repo and authorized push. Committed `023b107`
 and pushed to `origin/main` (https://github.com/alperozel1990/Desktop-Worker.git).
 Commit + push are now allowed for this project going forward.
+
+---
+
+## MANUAL-WF-1 — Window switch + drag-and-drop (live)  ☐
+**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-WF-WINDOW
+**Tool:** Real Windows desktop with a couple of windows open.
+**Instructions:**
+1. Open Notepad (or any window). Run `python -m desktop_worker switch-window "Notepad"`.
+   Confirm Notepad comes to the front (audited; check `artifacts/.../switch-window/audit.jsonl`).
+2. For drag-drop, the `drag_drop` workflow/`DragDropTool` move the mouse; try via a
+   short script or the `do`/`ui` agent dragging a desktop icon. Confirm a real drag.
+**What Claude needs back:** Whether the window focused + whether a drag actually moved an item.
+
+## MANUAL-WF-2 — Native file picker upload (live)  ☐
+**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-WF-FILEPICKER
+**Tool:** Any app that opens the standard Open dialog (e.g. a browser upload).
+**Instructions:** With an Open dialog visible, run
+`python -m desktop_worker pick-file "C:\full\path\to\file.txt"`. Confirm the path is
+typed into the File name field and Open is clicked.
+**What Claude needs back:** Whether the file was selected / dialog confirmed.
+
+## MANUAL-WF-3 — Download wait + locate (live)  ☐
+**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-WF-DOWNLOAD
+**Instructions:** Run `python -m desktop_worker wait-download --timeout 60`, then start
+a download in Chrome. Confirm the command prints the completed file's path once the
+`.crdownload` finishes.
+**What Claude needs back:** The printed path / whether partials were correctly ignored.
+
+## MANUAL-WF-4 — Chrome navigate + form fill (live)  ☐
+**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-WF-BROWSER
+**Instructions:** Run e.g.
+`python -m desktop_worker browse "https://www.google.com" --fill "Search=desktop worker" --submit "Google Search"`
+(label names depend on the page's accessibility names). Confirm Chrome opens, navigates,
+the field fills, and it submits.
+**What Claude needs back:** Whether navigation + fill + submit worked (and which UIA
+names matched), so we can tune the name candidates.
+
+## MANUAL-ORCH-1 — Full multi-agent orchestration (live)  ☐
+**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-ORCH-COORD
+**Instructions:** Plan-only first: `python -m desktop_worker orchestrate "tidy my desktop"`
+(real Claude decomposes + auditors review; no side effects). Then, only if comfortable,
+`... orchestrate "..." --execute` to let the Implementer drive the desktop per task.
+**What Claude needs back:** The printed plan/outcomes table + whether verdicts looked sane.
+
+## MANUAL-UI-1 — Tkinter control window (live)  ☐
+**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-UI-TK
+**Instructions:** Run `python -m desktop_worker ui`. The window shows a task box +
+Run, a live audit timeline, the latest screenshot, Approve/Deny, and STOP/Pause/Resume.
+Type a task (e.g. "open notepad and type hi"), click Run, watch the timeline; trigger a
+high-risk action to see the Approve/Deny prompt block the loop until you click; test STOP.
+**What Claude needs back:** Whether the window renders, the timeline updates live, the
+screenshot shows, approve/deny gates the loop, and STOP halts it.

@@ -89,7 +89,7 @@ The AI now drives the loop end-to-end: observe → perceive → AI-decide → ga
 → verify → continue. Genuine dynamic control (DW-AGENT-DO), verified on the real
 desktop, all safety below the planner. This was the product north star.
 
-## Phase 5 — Browser & Desktop Workflows  ◑ started (create-desktop-file shipped)
+## Phase 5 — Browser & Desktop Workflows  ✅ complete (window/drag, file picker, download, Chrome form)
 **Goal:** Real user workflows in Chrome and common Windows UI.
 **Scope:** Chrome navigation, form fill, file upload via picker, downloads, file
 picker handling, window switching, drag-and-drop.
@@ -99,12 +99,13 @@ picker handling, window switching, drag-and-drop.
 **Target validation level:** 4.
 **Risks:** dialog/timing fragility.
 **Done criteria:**
-- [ ] Complete a browser form workflow.
-- [ ] Upload a file via native file picker.
-- [ ] Download and locate a file.
+- [x] Complete a browser form workflow (DW-WF-BROWSER; live = MANUAL-WF-4).
+- [x] Upload a file via native file picker (DW-WF-FILEPICKER; live = MANUAL-WF-2).
+- [x] Download and locate a file (DW-WF-DOWNLOAD; live = MANUAL-WF-3).
+- [x] Window switching + drag-and-drop (DW-WF-WINDOW; live = MANUAL-WF-1).
 **Complexity:** High.
 
-## Phase 6 — Multi-Agent Orchestration  ☐ not started
+## Phase 6 — Multi-Agent Orchestration  ✅ complete (schema + roles + coordinator)
 **Goal:** Formalize Strategist / Implementer / Codex Auditor / Northstar Auditor.
 **Scope:** roadmap state file (this workspace already seeds it), task handoff
 schema, implementer spawn protocol, auditor workflows + feedback integration.
@@ -114,12 +115,13 @@ schema, implementer spawn protocol, auditor workflows + feedback integration.
 **Target validation level:** 3.
 **Risks:** scope creep; keep agents narrow.
 **Done criteria:**
-- [ ] Strategist creates scoped tasks with acceptance criteria.
-- [ ] Implementers execute and return reports.
-- [ ] Auditors produce actionable findings; roadmap reflects completed/blocked.
+- [x] Strategist creates scoped tasks with acceptance criteria (DW-ORCH-SCHEMA/ROLES).
+- [x] Implementers execute and return reports (Implementer + injectable execute_fn).
+- [x] Auditors produce actionable findings; coordinator reflects accepted/blocked
+  (DW-ORCH-COORD). Live full run = MANUAL-ORCH-1.
 **Complexity:** Medium.
 
-## Phase 7 — Production Hardening  ☐ not started
+## Phase 7 — Production Hardening  ✅ complete (hardening + Tkinter control UI)
 **Goal:** Reliable enough for extended real use.
 **Scope:** permission profiles, session replay, recovery flows, artifact retention,
 privacy controls, robust UI (task input, status, screenshot preview, timeline,
@@ -129,9 +131,13 @@ long-running supervision.
 **Manual steps required:** YES — UI/UX validation.
 **Target validation level:** 4–6.
 **Done criteria:**
-- [ ] Multi-step tasks run with clear supervision.
-- [ ] Users can inspect/pause/approve/deny/stop.
-- [ ] Logs + artifacts suffice to debug failures.
+- [x] Multi-step tasks run with clear supervision (Tkinter `ui`: live timeline +
+  screenshot; loop on a worker thread). GUI interaction = MANUAL-UI-1.
+- [x] Users can inspect/pause/approve/deny/stop (UiController + ApprovalQueue
+  blocking handshake; STOP/Pause/Resume/Approve/Deny).
+- [x] Logs + artifacts suffice to debug failures (audit timeline + session replay
+  HTML + artifact retention via `clean-artifacts`).
+- [x] Permission profiles + app allow/deny + artifact retention (DW-HARDEN).
 **Complexity:** High.
 
 ---

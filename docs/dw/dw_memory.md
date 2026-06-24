@@ -35,6 +35,20 @@ Source of truth: `docs/requirements.md`.
 - `artifacts/` (generated output; git-ignored).
 
 ## Current roadmap position
+- **ALL 7 PHASES IMPLEMENTED (as of 2026-06-24).** Phases 5/6/7 completed in an
+  autonomous batch on branch `dw/roadmap-5-6-7` (10 cards, 350 tests, each phase
+  Codex-audited). NOT yet pushed — awaiting user approval + the MANUAL-* live tests.
+  - Phase 5 (Browser/Desktop workflows): `workflows/{window,file_dialog,downloads,
+    browser,browser_ui}.py`; CLI `switch-window`/`pick-file`/`wait-download`/`browse`;
+    `DragDropTool`. Live = MANUAL-WF-1..4.
+  - Phase 6 (Multi-agent orchestration): new `orchestration/` package
+    (`schema`/`roles`/`claude_io`/`coordinator`); CLI `orchestrate [--execute]`
+    (plan-only default; `--null` offline demo). Roles inject `ask` (default
+    broker-routed claude w/ agent/role); auditors fail CLOSED. Live = MANUAL-ORCH-1.
+  - Phase 7 (Hardening + UI): `PermissionPolicy.authorize_app` + app allow/deny +
+    profile persistence in Config; `audit/retention.py` + CLI `clean-artifacts`;
+    new `ui/` package — pure `UiController` (timeline/estop/pause/ApprovalQueue
+    blocking handshake) + thin Tkinter `ui/app_tk.py`; CLI `ui`. GUI = MANUAL-UI-1.
 - Phase 1 (Local Control Foundation): **implemented + tested**.
 - Phase 2 (Structured Action Loop): **complete** — loop + DW-LOOP-RECOVERY
   (bounded retry/re-plan/safe-stop + time limit), auditor-approved.

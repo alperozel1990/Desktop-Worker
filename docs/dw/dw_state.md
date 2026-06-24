@@ -4,7 +4,7 @@
 > for "where are we".
 
 ## Session info
-- **Last updated:** 2026-06-22
+- **Last updated:** 2026-06-24
 - **Repo path:** `C:\Desktop-Worker`
 - **Workspace path:** `C:\Desktop-Worker\docs\dw`
 - **Current branch:** `main`
@@ -46,9 +46,10 @@ Gate and only implement when the selected card is explicitly approved.
 | Perception — OCR (elements, schema, Perceiver) | complete (DW-PERCEPTION-OCR); real OCR = MANUAL-5 |
 | Perception — UI Automation (elements, UIA-preferred merge) | complete (DW-PERCEPTION-UIA); real UIA = MANUAL-6 |
 | Perception — loop wiring (elements → audit/AI) | complete (DW-PERCEPTION-WIRE) |
-| Browser/desktop workflows | not started (Phase 5) |
-| Multi-agent orchestration | not started (Phase 6) |
-| UI (inspect/control) | not started (Phase 7); CLI only today |
+| Browser/desktop workflows | complete (Phase 5): window/drag, file picker, download, Chrome form; live = MANUAL-WF-1..4 |
+| Multi-agent orchestration | complete (Phase 6): schema + roles + coordinator; `orchestrate` CLI; live = MANUAL-ORCH-1 |
+| UI (inspect/control) | complete (Phase 7): Tkinter control window over a pure controller; `ui` CLI; GUI = MANUAL-UI-1 |
+| Hardening: app allow/deny + profile persistence + artifact retention | complete (Phase 7, DW-HARDEN) |
 | AI planner (Claude Code CLI, no API key, via broker) | complete (DW-PLANNER-AI); real path verified, full task = MANUAL-7 |
 | Phase 5 workflow: create desktop text file (visible) | complete (DW-WORKFLOW-CREATEFILE); VERIFIED real desktop |
 | Input Unicode (Turkish ş/ı) via SendInput | fixed (was keybd_event byte-truncation) |
@@ -74,6 +75,19 @@ Gate and only implement when the selected card is explicitly approved.
 
 ## Current task
 None in progress.
+
+## Most recent batch (2026-06-24) — Phases 5→6→7 complete (10 cards)
+- **What:** Autonomous overnight run on branch `dw/roadmap-5-6-7` (13 commits).
+  Implemented ALL remaining roadmap phases: Phase 5 browser/desktop workflows
+  (DW-WF-WINDOW/FILEPICKER/DOWNLOAD/BROWSER), Phase 6 multi-agent orchestration
+  (DW-ORCH-SCHEMA/ROLES/COORD, new `orchestration/`), Phase 7 hardening + UI
+  (DW-HARDEN, DW-UI-CONTROLLER, DW-UI-TK with Tkinter `ui` command).
+- **Tests:** **350 pass** (+99). Each card Null-backend unit-tested; each phase
+  passed a Codex (code-reviewer) audit with findings fixed.
+- **New CLI:** `switch-window`, `pick-file`, `wait-download`, `browse`,
+  `orchestrate [--execute]`, `clean-artifacts`, `ui`.
+- **Status:** committed locally; **NOT pushed** (awaiting user approval). Live
+  validation pending: MANUAL-WF-1..4, MANUAL-ORCH-1, MANUAL-UI-1.
 
 ## Most recent task (2026-06-22) — Drawing v2
 - **Task:** DW-AGENT-DRAW — robust, best-of-N, multi-representation drawing. New
@@ -126,10 +140,12 @@ Also: deterministic `create-file` workflow (separate, reliable).
   `perception/uia_backend.py`, `broker/risk.py`, `tests/test_ai_loop.py`.
 
 ## Next recommended task
-Optional / not blocking: expose deterministic workflows as AI-callable tools
-(brain+hands); vision fallback for UIA-poor apps (Electron/Chromium); Phase 6
-(multi-agent), Phase 7 (UI with live approve/deny). User test: **MANUAL-9**
-(run `do "<task>"` and watch the AI) — the headline AI-control demo.
+All 7 roadmap phases are now implemented. Recommended next steps:
+1. **User runs the MANUAL-* live tests** (WF-1..4, ORCH-1, UI-1) and reports back so
+   we can tune UIA name candidates / timings from real-app behavior.
+2. After approval, **merge `dw/roadmap-5-6-7` → main and push**.
+3. Polish from live findings (e.g. screenshot auto-capture into the `ui` timeline;
+   richer env_context for `orchestrate --execute`; more locale name candidates).
 
 ## Open risks
 | Risk | Severity | Mitigation |
@@ -157,6 +173,14 @@ MANUAL-2 (install `[windows]` extra for real screenshots), MANUAL-3 (DONE — gi
 **MANUAL-7 (drive a real task end-to-end with the Claude CLI planner)**.
 
 ## Last validation results
+- **Date:** 2026-06-24.
+- **Type:** `python -m pytest` — **350 passed**. Null-backend CLI smokes for the new
+  commands (`switch-window`, `orchestrate --null`, `clean-artifacts`, `browse --null`,
+  `ui` parser/import). Each phase (5/6/7) passed a Codex code-review; findings fixed.
+- **Validation level reached:** **3** for all 10 new cards (unit + Null-backend CLI).
+  Live (Level 4) pending user tests: MANUAL-WF-1..4, MANUAL-ORCH-1, MANUAL-UI-1.
+
+## Earlier validation results
 - **Date:** 2026-06-22.
 - **Type:** `python -m pytest` (224 tests) + **LIVE real-desktop draw** of the `sketch`
   pipeline in real Win11 Paint.

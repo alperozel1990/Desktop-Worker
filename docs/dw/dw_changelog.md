@@ -714,3 +714,51 @@ path crash; director generate/draw exceptions) + path-separator nit.
 canvas hygiene (the red-chaos fix is proven). Full AI best-of-N run = MANUAL-11.
 
 **Next:** user runs `draw "a cat"` and observes best-of-N + judge live.
+
+## 2026-06-24 | Autonomous batch | Phases 5→6→7 (10 cards)
+
+**Type:** Autonomous multi-card implementation (user authorized overnight run; no
+approval prompts; commit locally per card, push deferred to user approval).
+**Branch:** `dw/roadmap-5-6-7` (13 commits off `e850563`).
+**Status:** Complete — **350 tests pass** (was 251; +99). Each card unit-tested on
+Null backends; live paths left as MANUAL-* for the user. Each phase passed a
+`feature-dev:code-reviewer` (Codex) audit; findings fixed (see per-phase commits).
+
+**Phase 5 — Browser & Desktop Workflows:**
+- DW-WF-WINDOW — `workflows/window.py`: `switch_window` (reuses FocusWindowTool
+  matcher; CLI routes via audited executor `tool.run`), `drag_drop` (audited
+  `mouse.drag`); new `DragDropTool` (risk=low, estop.check()). CLI `switch-window`.
+- DW-WF-FILEPICKER — `workflows/file_dialog.py`: FileDialogUi Protocol+Null/Windows
+  +factory; `choose_file`/`upload_file` (en+tr names, ENTER fallback). CLI `pick-file`.
+- DW-WF-DOWNLOAD — `workflows/downloads.py`: pure `wait_for_download`/`is_partial`/
+  `find_new_files` (injected fs+clock). CLI `wait-download`.
+- DW-WF-BROWSER — `workflows/browser.py`+`browser_ui.py`: open_chrome/navigate/
+  fill_field/click_control/submit_form (URL validated via open_url check). CLI `browse`.
+
+**Phase 6 — Multi-Agent Orchestration (new `orchestration/` package):**
+- DW-ORCH-SCHEMA — `schema.py`: AgentTask/AgentReport/AuditorFinding (camelCase
+  to_dict + strict parse_*; reject unexpected fields).
+- DW-ORCH-ROLES — `roles.py`+`claude_io.py`: Strategist/Implementer/Codex+Northstar,
+  injected `ask` (default broker-routed claude w/ agent/role); fail-safe (auditors
+  fail CLOSED). `load_json` single-pass raw_decode.
+- DW-ORCH-COORD — `coordinator.py`: deterministic Strategist→Implementer→auditors
+  state machine (accepted/blocked/revise), audited transitions. CLI `orchestrate`
+  (plan-only default; `--execute` gated; `--null` offline demo).
+
+**Phase 7 — Production Hardening + UI:**
+- DW-HARDEN — `PermissionPolicy.authorize_app` (denylist wins; wired dead app-list
+  stubs), `build_policy` app-list params, Config persists profile/app lists (+env);
+  `OpenAppTool` policy gate; new `audit/retention.py` (pure prune + CLI clean-artifacts).
+- DW-UI-CONTROLLER — `ui/controller.py`: pure UiController (timeline, artifacts,
+  estop/pause, task slot, ApprovalQueue blocking handshake; deny-by-default).
+- DW-UI-TK — `ui/app_tk.py`: thin Tkinter window over the controller (tkinter lazy);
+  CLI `ui` (approver→controller, loop on worker thread). GUI = MANUAL-UI-1.
+
+**Codex audit fixes:** P5 — DragDropTool estop.check(), switch-window audited path,
+submit_form ENTER result checked. P6 — load_json O(n) raw_decode, skipped→blocked,
+offline implementer real taskId. P7 — ApprovalQueue resolve()-set-outside-lock +
+1-slot semaphore serialization.
+
+**Validation level:** 3 (unit + Null-backend CLI smoke) for all cards. Live paths
+(real mouse/picker/download/browser, full orchestration, GUI interaction) =
+MANUAL-WF-1..4, MANUAL-ORCH-1, MANUAL-UI-1. **Push deferred to user approval.**
