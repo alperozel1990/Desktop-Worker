@@ -300,9 +300,14 @@ class DragDropTool:
             duration = max(1, int(duration))
         except (TypeError, ValueError):
             raise ToolError("drag_drop durationMs must be an integer")
-        if self._estop is not None and self._estop.is_stopped():
-            return {"success": False, "from": [fx, fy], "to": [tx, ty],
-                    "error": "emergency stop active"}
+        if self._estop is not None:
+            # check() honors BOTH stop and pause (is_stopped() would miss pause).
+            from desktop_worker.safety.emergency_stop import EmergencyStopError
+            try:
+                self._estop.check()
+            except EmergencyStopError as exc:
+                return {"success": False, "from": [fx, fy], "to": [tx, ty],
+                        "error": f"emergency stop: {exc}"}
         self._input.drag(fx, fy, tx, ty, duration)
         return {"success": True, "from": [fx, fy], "to": [tx, ty], "error": None}
 

@@ -158,8 +158,11 @@ def submit_form(fields: dict[str, str], *, executor, ui: BrowserUi,
                     return BrowserResult(False, "submit_form", steps=steps,
                                          error="could not submit the form")
     else:
-        _runner(executor, steps)({"type": "keyboard.press", "key": "ENTER"},
-                                 "press ENTER to submit")
+        ok = _runner(executor, steps)({"type": "keyboard.press", "key": "ENTER"},
+                                      "press ENTER to submit")
+        if not ok:
+            return BrowserResult(False, "submit_form", steps=steps,
+                                 error="could not submit the form")
 
     return BrowserResult(True, "submit_form", detail=f"{len(fields)} field(s)", steps=steps)
 

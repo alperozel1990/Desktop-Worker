@@ -125,12 +125,30 @@ def _cmd_create_file(args: argparse.Namespace) -> int:
 
 
 def _cmd_switch_window(args: argparse.Namespace) -> int:
-    """Bring an open window to the foreground by (part of) its title (Phase 5)."""
-    from desktop_worker.workflows import switch_window
+    """Bring an open window to the foreground by (part of) its title (Phase 5).
 
-    result = switch_window(args.title)
-    print(result.to_markdown())
-    return 0 if result.success else 1
+    Routes through the executor's `tool.run` (focus_window) so the focus change is
+    emergency-stop-gated and audited like any other action.
+    """
+    from desktop_worker.schema.actions import parse_action
+    from desktop_worker.tools import FocusWindowTool, ToolRegistry
+
+    cfg = Config(session_id="workflow", task_id="switch-window")
+    session = Session(cfg, prefer_real_backends=not args.null)
+    tools = ToolRegistry()
+    tools.register(FocusWindowTool())
+    session.executor.tools = tools
+
+    action = parse_action({"type": "tool.run", "tool": "focus_window",
+                           "args": {"title_contains": args.title}})
+    res = session.executor.execute(action)
+    ok = getattr(res, "success", False)
+    if ok:
+        print(f"OK: focused a window matching {args.title!r}")
+    else:
+        print(f"FAILED: {getattr(res, 'error', '') or 'no matching window'}")
+    print(f"Audit log: {cfg.audit_file}")
+    return 0 if ok else 1
 
 
 def _cmd_pick_file(args: argparse.Namespace) -> int:
