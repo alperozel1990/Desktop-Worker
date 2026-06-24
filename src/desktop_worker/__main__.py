@@ -218,6 +218,91 @@ def _cmd_browse(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
+def _live_implement(task, *, session, cwd):
+    """Run one orchestration task live (gated by --execute). Returns an AgentReport.
+
+    Builds a minimal Claude-driven loop for the task goal and maps the TaskReport
+    onto an AgentReport. This is the only side-effecting path and runs only under
+    an explicit opt-in; the deterministic coordinator/state-machine is unaffected.
+    """
+    from desktop_worker.config import Limits
+    from desktop_worker.loop.claude_cli_planner import ClaudeCliPlanner
+    from desktop_worker.loop.task_loop import TaskLoop
+    from desktop_worker.orchestration import AgentReport
+    from desktop_worker.perception import Perceiver, get_ocr_backend, get_uia_backend
+
+    planner = ClaudeCliPlanner(task=task.goal, broker=session.broker, cwd=cwd,
+                               audit=session.audit)
+    perceiver = Perceiver(ocr=get_ocr_backend(True), uia=get_uia_backend(True))
+    loop = TaskLoop(task_id=f"orch-{task.id}", planner=planner, observer=session.observer,
+                    executor=session.executor, audit=session.audit, estop=session.estop,
+                    perceiver=perceiver, settle_s=0.5, stall_guard=True,
+                    limits=Limits(max_actions_per_task=15, max_task_seconds=180))
+    report = loop.run()
+    status = "done" if report.completed else "failed"
+    return AgentReport(task_id=task.id, status=status,
+                       summary=planner.last_done_reason or f"{report.steps_run} steps",
+                       evidence=[f"{report.steps_run} steps", f"stop={report.stop_reason}"])
+
+
+def _cmd_orchestrate(args: argparse.Namespace) -> int:
+    """Decompose a goal and run it through the multi-agent pipeline (Phase 6).
+
+    Plan-only by default (Strategist + auditors propose; no desktop side effects).
+    Pass --execute to let the Implementer actually drive the desktop per task.
+    """
+    from desktop_worker.orchestration import (CodexAuditor, Coordinator, Implementer,
+                                              NorthstarAuditor, Strategist)
+    from desktop_worker.orchestration.claude_io import make_role_ask
+    from desktop_worker.loop.claude_cli_planner import claude_available
+
+    real = not args.null
+    cfg = Config(session_id="orchestrate", task_id="task")
+    session = Session(cfg, prefer_real_backends=real)
+    cwd = str(cfg.artifacts_root.parent)
+    broker = session.broker
+
+    if real and not claude_available(broker, cwd):
+        print("ERROR: the `claude` CLI is not logged in. Run `claude auth status`.")
+        return 2
+
+    # --null runs fully offline (like `demo`): canned role responses, no claude.
+    _OFFLINE = {
+        "strategist": '[{"id": "T1", "goal": "%(g)s (step 1)"}, '
+                      '{"id": "T2", "goal": "%(g)s (step 2)"}]',
+        "implementer": '{"taskId": "T1", "status": "done", "summary": "offline demo"}',
+        "codex_auditor": '{"severity": "low", "verdict": "approve", "message": "demo"}',
+        "northstar_auditor": '{"severity": "low", "verdict": "approve", "message": "demo"}',
+    }
+
+    def ask_for(agent, role):
+        if not real:
+            canned = _OFFLINE.get(role, "{}") % {"g": args.goal}
+            return lambda _prompt: canned
+        return make_role_ask(broker, cwd, agent=agent, role=role)
+
+    strategist = Strategist(ask=ask_for("Strategist", "strategist"), audit=session.audit)
+    if args.execute:
+        print("EXECUTE mode: the Implementer will drive the real desktop per task.")
+        implementer = Implementer(
+            execute_fn=lambda t: _live_implement(t, session=session, cwd=cwd),
+            audit=session.audit)
+    else:
+        implementer = Implementer(ask=ask_for("Implementer", "implementer"),
+                                  audit=session.audit)
+    codex = CodexAuditor(ask=ask_for("Codex Auditor", "codex_auditor"), audit=session.audit)
+    northstar = NorthstarAuditor(ask=ask_for("Northstar Auditor", "northstar_auditor"),
+                                 audit=session.audit)
+
+    coord = Coordinator(strategist=strategist, implementer=implementer,
+                        codex=codex, northstar=northstar, audit=session.audit)
+    print(f"GOAL: {args.goal}\n(plan-only)" if not args.execute else f"GOAL: {args.goal}")
+    result = coord.run(args.goal)
+    print(result.to_markdown())
+    print(f"Audit log: {cfg.audit_file}")
+    return 0 if (result.outcomes and result.blocked == 0) else 1
+
+
 def _console_approver(request) -> bool:
     """Interactive approval for high-risk actions; deny if not a TTY (headless)."""
     try:
@@ -503,6 +588,13 @@ def build_parser() -> argparse.ArgumentParser:
                     help="fill an input by (part of) its label; repeatable")
     br.add_argument("--submit", default=None, help="name of the submit button to click")
     br.set_defaults(func=_cmd_browse)
+
+    orc = sub.add_parser("orchestrate",
+                         help="decompose a goal and run it through the multi-agent pipeline")
+    orc.add_argument("goal", help="the high-level goal in plain language")
+    orc.add_argument("--execute", action="store_true",
+                     help="let the Implementer drive the real desktop (default: plan-only)")
+    orc.set_defaults(func=_cmd_orchestrate)
 
     do = sub.add_parser("do", help="give a natural-language task; the AI drives it live")
     do.add_argument("task", help="the task in plain language, e.g. \"open Notepad and type hi\"")

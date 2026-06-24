@@ -13,6 +13,11 @@ dataclass + camelCase ``to_dict()`` + standalone ``parse_*`` style as
 so no audit-schema change is needed to attribute orchestration actors.
 """
 
+from desktop_worker.orchestration.coordinator import (
+    CoordinationResult,
+    Coordinator,
+    TaskOutcome,
+)
 from desktop_worker.orchestration.roles import (
     CodexAuditor,
     Implementer,
@@ -33,4 +38,5 @@ __all__ = [
     "AgentTask", "AgentReport", "AuditorFinding", "OrchestrationValidationError",
     "parse_agent_task", "parse_agent_report", "parse_finding",
     "Strategist", "Implementer", "CodexAuditor", "NorthstarAuditor",
+    "Coordinator", "CoordinationResult", "TaskOutcome",
 ]
