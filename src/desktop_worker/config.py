@@ -50,6 +50,11 @@ class Config:
     dry_run: bool = False          # validate + log, never actually execute
     explain_before_execute: bool = False
 
+    # Permission profile + app allow/deny lists (requirements §12, Phase 7).
+    profile: str = "standard"      # standard | strict | headless
+    app_allowlist: tuple[str, ...] = ()
+    app_denylist: tuple[str, ...] = ()
+
     @property
     def task_dir(self) -> Path:
         return self.artifacts_root / "sessions" / self.session_id / self.task_id
@@ -82,8 +87,15 @@ class Config:
     @classmethod
     def from_env(cls) -> "Config":
         """Build config from environment, falling back to defaults."""
+        def _csv(name: str) -> tuple[str, ...]:
+            raw = os.environ.get(name, "").strip()
+            return tuple(p.strip() for p in raw.split(",") if p.strip()) if raw else ()
+
         return cls(
             session_id=os.environ.get("DW_SESSION_ID", "session-001"),
             task_id=os.environ.get("DW_TASK_ID", "task-001"),
             dry_run=os.environ.get("DW_DRY_RUN", "0") == "1",
+            profile=os.environ.get("DW_PROFILE", "standard"),
+            app_allowlist=_csv("DW_APP_ALLOWLIST"),
+            app_denylist=_csv("DW_APP_DENYLIST"),
         )

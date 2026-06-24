@@ -218,6 +218,23 @@ def _cmd_browse(args: argparse.Namespace) -> int:
     return 0 if result.success else 1
 
 
+def _cmd_clean_artifacts(args: argparse.Namespace) -> int:
+    """Prune old session artifacts by age and/or count (Phase 7 retention)."""
+    from desktop_worker.audit.retention import prune_artifacts
+
+    cfg = Config.from_env()
+    sessions_dir = str(cfg.artifacts_root / "sessions")
+    if args.max_age is None and args.max_count is None:
+        print("Nothing to do: pass --max-age and/or --max-count.")
+        return 0
+    removed = prune_artifacts(sessions_dir, max_age_days=args.max_age,
+                              max_count=args.max_count)
+    print(f"Pruned {len(removed)} session artifact(s) under {sessions_dir}.")
+    for path in removed:
+        print(f"  removed {path}")
+    return 0
+
+
 def _live_implement(task, *, session, cwd):
     """Run one orchestration task live (gated by --execute). Returns an AgentReport.
 
@@ -408,7 +425,8 @@ def _cmd_do(args: argparse.Namespace) -> int:
     cfg = Config(session_id="ai-do", task_id="task")
     # Permission profile (requirements §12): standard (low/med auto, high prompts),
     # strict (medium+ prompts), or headless (deny anything needing approval).
-    policy = build_policy(args.profile, _console_approver)
+    policy = build_policy(args.profile, _console_approver,
+                          app_allowlist=cfg.app_allowlist, app_denylist=cfg.app_denylist)
     if args.profile != "standard":
         print(f"Permission profile: {args.profile}.")
     session = Session(cfg, policy=policy, prefer_real_backends=real)
@@ -461,7 +479,7 @@ def _cmd_do(args: argparse.Namespace) -> int:
 
     tools = ToolRegistry()
     tools.register(CreateTextFileTool(desktop_dir=desktop_dir, broker=session.broker))
-    tools.register(OpenAppTool(desktop_dir=desktop_dir, broker=session.broker))
+    tools.register(OpenAppTool(desktop_dir=desktop_dir, broker=session.broker, policy=policy))
     tools.register(OpenUrlTool(desktop_dir=desktop_dir, broker=session.broker))
     tools.register(FocusWindowTool())
     tools.register(DragDropTool(input_backend=session.input_backend, estop=session.estop))
@@ -604,6 +622,14 @@ def build_parser() -> argparse.ArgumentParser:
     orc.add_argument("--execute", action="store_true",
                      help="let the Implementer drive the real desktop (default: plan-only)")
     orc.set_defaults(func=_cmd_orchestrate)
+
+    ca = sub.add_parser("clean-artifacts",
+                        help="prune old session artifacts by age and/or count")
+    ca.add_argument("--max-age", type=float, default=None,
+                    help="remove session artifacts older than this many days")
+    ca.add_argument("--max-count", type=int, default=None,
+                    help="keep only the newest N session artifacts")
+    ca.set_defaults(func=_cmd_clean_artifacts)
 
     do = sub.add_parser("do", help="give a natural-language task; the AI drives it live")
     do.add_argument("task", help="the task in plain language, e.g. \"open Notepad and type hi\"")

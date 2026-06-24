@@ -21,20 +21,27 @@ from desktop_worker.safety.policy import (
 PROFILES = ("standard", "strict", "headless")
 
 
-def build_policy(profile: str, approval_callback: ApprovalCallback) -> PermissionPolicy:
+def build_policy(profile: str, approval_callback: ApprovalCallback, *,
+                 app_allowlist=frozenset(), app_denylist=frozenset()) -> PermissionPolicy:
     """Build a :class:`PermissionPolicy` for the named profile.
 
     ``approval_callback`` is used by the interactive profiles (standard/strict);
-    headless ignores it and denies everything above LOW.
+    headless ignores it and denies everything above LOW. ``app_allowlist`` /
+    ``app_denylist`` further restrict which apps may be launched (Phase 7).
     """
     profile = (profile or "standard").lower()
+    allow = frozenset(app_allowlist)
+    deny = frozenset(app_denylist)
     if profile == "headless":
         return PermissionPolicy(approval_callback=deny_all,
-                                approval_threshold=RiskLevel.HIGH)
+                                approval_threshold=RiskLevel.HIGH,
+                                app_allowlist=allow, app_denylist=deny)
     if profile == "strict":
         return PermissionPolicy(approval_callback=approval_callback,
-                                approval_threshold=RiskLevel.MEDIUM)
+                                approval_threshold=RiskLevel.MEDIUM,
+                                app_allowlist=allow, app_denylist=deny)
     if profile == "standard":
         return PermissionPolicy(approval_callback=approval_callback,
-                                approval_threshold=RiskLevel.HIGH)
+                                approval_threshold=RiskLevel.HIGH,
+                                app_allowlist=allow, app_denylist=deny)
     raise ValueError(f"unknown permission profile: {profile!r} (choose from {PROFILES})")

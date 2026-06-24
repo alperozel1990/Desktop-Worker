@@ -90,6 +90,21 @@ class PermissionPolicy:
             return True
         return bool(self.approval_callback(request))
 
+    def authorize_app(self, app: str) -> bool:
+        """Return True if launching ``app`` is permitted by the allow/deny lists.
+
+        Deny-list wins (a denied app is never allowed). If an allow-list is set,
+        only apps in it may launch; an empty allow-list imposes no restriction
+        (the launching tool keeps its own curated allowlist). Matching is
+        case-insensitive on the bare app name.
+        """
+        name = (app or "").strip().lower()
+        if name in {a.lower() for a in self.app_denylist}:
+            return False
+        if self.app_allowlist:
+            return name in {a.lower() for a in self.app_allowlist}
+        return True
+
     def authorize_action(self, action: Action) -> tuple[bool, RiskLevel]:
         risk = self.classify_action(action)
         ok = self.authorize(ApprovalRequest(

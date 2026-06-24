@@ -112,9 +112,10 @@ class OpenAppTool:
     args_help = "app (one of the allowed names above)"
     risk = "medium"  # launches a known GUI app; non-destructive
 
-    def __init__(self, *, desktop_dir: str, broker: Any = None) -> None:
+    def __init__(self, *, desktop_dir: str, broker: Any = None, policy: Any = None) -> None:
         self._cwd = desktop_dir
         self._broker = broker
+        self._policy = policy  # optional PermissionPolicy app allow/deny gate (Phase 7)
 
     def run(self, args: dict[str, Any]) -> dict[str, Any]:
         app = str(args.get("app", "")).strip().lower()
@@ -122,6 +123,10 @@ class OpenAppTool:
         if token is None:
             raise ToolError(f"app not allowed: {args.get('app')!r}. "
                             f"Allowed: {', '.join(sorted(set(_APP_ALLOWLIST)))}")
+        # Optional user-configured allow/deny layer on top of the curated list.
+        if self._policy is not None and not self._policy.authorize_app(app):
+            return {"success": False, "app": app,
+                    "error": "app launch denied by permission policy"}
         if self._broker is None:
             return {"success": False, "app": app, "error": "no broker to launch the app"}
         res = self._broker.launch(f'start "" {token}', self._cwd, agent="open_app", role="tool")
