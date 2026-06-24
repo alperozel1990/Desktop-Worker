@@ -163,6 +163,43 @@ def _cmd_wait_download(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_browse(args: argparse.Namespace) -> int:
+    """Open Chrome, navigate to a URL, and optionally fill + submit a form (Phase 5)."""
+    import time
+
+    from desktop_worker.workflows import navigate, open_chrome, submit_form
+    from desktop_worker.workflows.browser_ui import get_browser_ui
+
+    real = not args.null
+    cfg = Config(session_id="workflow", task_id="browse")
+    session = Session(cfg, prefer_real_backends=real)
+    ui = get_browser_ui(prefer_real=real)
+    cwd = str(cfg.artifacts_root.parent)
+
+    fields: dict[str, str] = {}
+    for pair in args.fill or []:
+        if "=" not in pair:
+            print(f"--fill expects label=value, got {pair!r}")
+            return 2
+        k, v = pair.split("=", 1)
+        fields[k.strip()] = v
+
+    if real:
+        r = open_chrome(broker=session.broker, cwd=cwd)
+        print(r.to_markdown())
+        if not r.success:
+            return 1
+        time.sleep(3.0)
+
+    if fields:
+        result = submit_form(fields, executor=session.executor, ui=ui, url=args.url,
+                             submit_label=args.submit)
+    else:
+        result = navigate(args.url, executor=session.executor)
+    print(result.to_markdown())
+    return 0 if result.success else 1
+
+
 def _console_approver(request) -> bool:
     """Interactive approval for high-risk actions; deny if not a TTY (headless)."""
     try:
@@ -440,6 +477,14 @@ def build_parser() -> argparse.ArgumentParser:
     wd.add_argument("--dir", default=None, help="download directory (default: ~/Downloads)")
     wd.add_argument("--timeout", type=float, default=60.0, help="max seconds to wait")
     wd.set_defaults(func=_cmd_wait_download)
+
+    br = sub.add_parser("browse",
+                        help="open Chrome, navigate to a URL, optionally fill + submit a form")
+    br.add_argument("url", help="the http(s) URL to navigate to")
+    br.add_argument("--fill", action="append", metavar="LABEL=VALUE",
+                    help="fill an input by (part of) its label; repeatable")
+    br.add_argument("--submit", default=None, help="name of the submit button to click")
+    br.set_defaults(func=_cmd_browse)
 
     do = sub.add_parser("do", help="give a natural-language task; the AI drives it live")
     do.add_argument("task", help="the task in plain language, e.g. \"open Notepad and type hi\"")
