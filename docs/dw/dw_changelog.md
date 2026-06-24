@@ -762,3 +762,35 @@ offline implementer real taskId. P7 — ApprovalQueue resolve()-set-outside-lock
 **Validation level:** 3 (unit + Null-backend CLI smoke) for all cards. Live paths
 (real mouse/picker/download/browser, full orchestration, GUI interaction) =
 MANUAL-WF-1..4, MANUAL-ORCH-1, MANUAL-UI-1. **Push deferred to user approval.**
+
+## 2026-06-25 | Merge + live validation | Task: RELEASE-5-6-7
+
+**Type:** Branch integration + live (Level-4) validation session
+**Status:** Complete
+
+**Git:** Fast-forwarded `dw/roadmap-5-6-7` (14 commits, Phases 5/6/7) into `main`
+and pushed to `origin/main` (`e850563..cdcc763`). `main` == `origin/main`.
+
+**Tests:** `python -m pytest` — all green (~350) before merge.
+
+**Live validations performed this session (real desktop, with user observing):**
+- MANUAL-2 ✅ `observe` wrote a real 1920×1200 PNG; real active-window detection.
+- MANUAL-6 ✅ `WindowsUiaBackend` enumerated 13 controls (buttons/scrollbar/text
+  area) with bounds + `source=uia`.
+- MANUAL-8 ✅ `create-file` drove the real mouse: desktop right-click → New → Text
+  Document → name → open → type → Ctrl+S → verified `dw-demo.txt` = "başlıyoruz"
+  on disk (Turkish chars intact → re-confirms the SendInput Unicode fix).
+- MANUAL-1 ✅ (incidental) real mouse/keyboard motion via the above.
+- MANUAL-9 ✅ `do "Open Notepad using the Run dialog, then type merhaba"` — genuine
+  live AI control, 6/6 steps. The AI adapted to unexpected leftover `calc` text
+  (clicked field → Ctrl+A → typed `notepad`), launched Notepad, typed `merhaba`,
+  self-verified via UIA. Not scripted.
+- MANUAL-11 — user reports having watched the AI `draw` a cat previously; accepted.
+
+**Still pending (user-interactive, non-blocking):** MANUAL-WF-1..4 (window switch,
+file picker, download, browse), MANUAL-ORCH-1 (orchestrate), MANUAL-UI-1 (Tkinter).
+MANUAL-4 (UAC) not testable here — process already admin. MANUAL-5 (OCR) skipped —
+`pytesseract` not installed.
+
+**Validation level reached:** **4 (live real desktop)** for the core loop, input,
+perception (UIA + screenshot), deterministic workflow, and genuine AI control.

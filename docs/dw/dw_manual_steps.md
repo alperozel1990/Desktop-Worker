@@ -55,8 +55,10 @@ geometric fallback, so I can tune the insets.
 ---
 
 ## MANUAL-9 — ⭐⭐ Run the GENUINE live-AI demo (the real AI control)
-**Status:** [ ] Waiting  (Claude verified end-to-end: the AI opened Notepad via the
-Run dialog and typed text, deciding each step itself)
+**Status:** [x] DONE — validated live 2026-06-25 with the user observing. `do "Open
+Notepad using the Run dialog, then type merhaba"` ran 6/6 steps; the AI adapted to
+leftover `calc` text (clicked field → Ctrl+A → typed notepad), launched Notepad,
+typed merhaba, self-verified via UIA.
 **Blocking:** NO
 **Tool:** PowerShell + your `claude` login (no API key) + your desktop
 **Added by:** DW-AGENT-DO
@@ -73,8 +75,8 @@ Electron/Chromium apps hide their UI from accessibility.
 ---
 
 ## MANUAL-8 — ⭐ Run the create-file demo and watch (deterministic, scripted)
-**Status:** [ ] Waiting  (Claude already verified it end-to-end on disk; this is
-your watch-it-happen run)
+**Status:** [x] DONE — validated live 2026-06-25 with the user observing. 11/11 steps;
+`dw-demo.txt` created on the desktop with "başlıyoruz" (Turkish chars intact).
 **Blocking:** NO
 **Tool:** PowerShell + your desktop
 **Added by:** DW-WORKFLOW-CREATEFILE
@@ -91,7 +93,8 @@ Full how-to: `dw_test_guide.md`.
 ---
 
 ## MANUAL-1 — Validate real mouse/keyboard/drag on a live desktop
-**Status:** [ ] Waiting
+**Status:** [x] DONE — real mouse/keyboard motion confirmed live 2026-06-25 via the
+create-file + `do` runs (Notepad opened + typed; desktop right-click menu driven).
 **Blocking:** NO (logic is unit-tested via Null backends; this confirms Level 4)
 **Tool:** Windows desktop session
 **Added by:** BOOTSTRAP-1
@@ -106,7 +109,8 @@ misbehavior — dropped keys, wrong position) so DW-INPUT-HARDEN can target it.
 ---
 
 ## MANUAL-2 — Install the [windows] extra for real screenshots
-**Status:** [ ] Waiting
+**Status:** [x] DONE — `observe` wrote a real 1920×1200 PNG live 2026-06-25
+(`manual-0001.png`); real active-window detection confirmed.
 **Blocking:** NO (placeholder screenshots keep the loop working)
 **Tool:** Terminal
 **Added by:** BOOTSTRAP-1
@@ -141,7 +145,8 @@ any error. Press the emergency stop any time: `python -m desktop_worker estop`.
 ---
 
 ## MANUAL-6 — Install uiautomation + validate real UIA enumeration (DW-PERCEPTION-UIA)
-**Status:** [ ] Waiting
+**Status:** [x] DONE — `WindowsUiaBackend` enumerated 13 real controls live 2026-06-25
+(buttons / scrollbar / text area) with bounds + `source=uia`.
 **Blocking:** NO (mapping + merge logic unit-tested; without the lib it degrades to
 zero UIA elements and OCR still works)
 **Tool:** Terminal + a real foreground window (e.g. Notepad, Chrome)

@@ -4,7 +4,7 @@
 > for "where are we".
 
 ## Session info
-- **Last updated:** 2026-06-24
+- **Last updated:** 2026-06-25
 - **Repo path:** `C:\Desktop-Worker`
 - **Workspace path:** `C:\Desktop-Worker\docs\dw`
 - **Current branch:** `main`
@@ -139,13 +139,22 @@ Also: deterministic `create-file` workflow (separate, reliable).
 - **Files:** `__main__.py`, `loop/claude_cli_planner.py`, `loop/task_loop.py`,
   `perception/uia_backend.py`, `broker/risk.py`, `tests/test_ai_loop.py`.
 
+## Branch / release status (2026-06-25)
+- **`dw/roadmap-5-6-7` merged into `main` (fast-forward) and pushed to origin**
+  (`e850563..cdcc763`). `main` == `origin/main`. Phases 5/6/7 are now on the
+  default branch. Current working branch: `main`.
+- **Live-validated this session (Level 4):** MANUAL-1, -2, -6, -8, -9 (see changelog
+  RELEASE-5-6-7). Core loop + input + perception + AI control proven on real desktop.
+
 ## Next recommended task
-All 7 roadmap phases are now implemented. Recommended next steps:
-1. **User runs the MANUAL-* live tests** (WF-1..4, ORCH-1, UI-1) and reports back so
-   we can tune UIA name candidates / timings from real-app behavior.
-2. After approval, **merge `dw/roadmap-5-6-7` → main and push**.
-3. Polish from live findings (e.g. screenshot auto-capture into the `ui` timeline;
-   richer env_context for `orchestrate --execute`; more locale name candidates).
+All 7 roadmap phases implemented and merged to main. Remaining work is optional,
+user-interactive live validation + polish:
+1. **User-interactive MANUAL tests** still open: WF-1..4 (window switch, file picker,
+   download, browse), ORCH-1 (orchestrate), UI-1 (Tkinter window). Non-blocking.
+2. Polish from live findings (e.g. screenshot auto-capture into the `ui` timeline;
+   richer env_context for `orchestrate --execute`; more locale UIA name candidates).
+3. Not testable in current env: MANUAL-4 (UAC — process already admin),
+   MANUAL-5 (OCR — `pytesseract` not installed).
 
 ## Open risks
 | Risk | Severity | Mitigation |
