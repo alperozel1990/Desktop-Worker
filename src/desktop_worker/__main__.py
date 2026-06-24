@@ -267,16 +267,25 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
         return 2
 
     # --null runs fully offline (like `demo`): canned role responses, no claude.
+    import re as _re
+
     _OFFLINE = {
         "strategist": '[{"id": "T1", "goal": "%(g)s (step 1)"}, '
                       '{"id": "T2", "goal": "%(g)s (step 2)"}]',
-        "implementer": '{"taskId": "T1", "status": "done", "summary": "offline demo"}',
         "codex_auditor": '{"severity": "low", "verdict": "approve", "message": "demo"}',
         "northstar_auditor": '{"severity": "low", "verdict": "approve", "message": "demo"}',
     }
 
+    def _offline_implementer(prompt: str) -> str:
+        # Echo the actual task id (the implementer prompt embeds "taskId": "<id>").
+        m = _re.search(r'"taskId":\s*"([^"]+)"', prompt)
+        tid = m.group(1) if m else "T?"
+        return f'{{"taskId": "{tid}", "status": "done", "summary": "offline demo"}}'
+
     def ask_for(agent, role):
         if not real:
+            if role == "implementer":
+                return _offline_implementer
             canned = _OFFLINE.get(role, "{}") % {"g": args.goal}
             return lambda _prompt: canned
         return make_role_ask(broker, cwd, agent=agent, role=role)

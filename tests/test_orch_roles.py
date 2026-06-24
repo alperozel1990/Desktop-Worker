@@ -26,6 +26,12 @@ def test_load_json_embedded_in_prose():
     assert load_json(raw) == [{"id": "T1", "goal": "g"}]
 
 
+def test_load_json_handles_many_braces_fast():
+    # Adversarial-ish: many non-JSON '{' before a valid object must not hang.
+    raw = "{" * 5000 + ' here {"ok": true}'
+    assert load_json(raw) == {"ok": True}
+
+
 def test_load_json_raises_when_absent():
     try:
         load_json("no json here")

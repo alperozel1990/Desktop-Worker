@@ -87,7 +87,9 @@ class Coordinator:
     def _classify(report: AgentReport, codex: AuditorFinding,
                   northstar: AuditorFinding) -> str:
         verdicts = (codex.verdict, northstar.verdict)
-        if "block" in verdicts or report.status in ("failed", "blocked"):
+        # A never-completed task (failed/blocked/skipped) or any block verdict =>
+        # blocked; it can never be "accepted" or endlessly "revise"d.
+        if "block" in verdicts or report.status in ("failed", "blocked", "skipped"):
             return "blocked"
         if report.status == "done" and all(v == "approve" for v in verdicts):
             return "accepted"

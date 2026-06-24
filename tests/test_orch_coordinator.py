@@ -71,6 +71,13 @@ def test_blocked_when_implementer_failed():
     assert res.outcomes[0].outcome == "blocked"
 
 
+def test_skipped_is_blocked_not_revise():
+    c = _coord(StubStrategist([AgentTask(id="T1", goal="g")]),
+               StubImplementer("skipped"), StubAuditor("approve"), StubAuditor("approve"))
+    res = c.run("goal")
+    assert res.outcomes[0].outcome == "blocked"
+
+
 def test_revise_when_not_all_approve_but_no_block():
     c = _coord(StubStrategist([AgentTask(id="T1", goal="g")]),
                StubImplementer("done"), StubAuditor("approve"), StubAuditor("revise"))

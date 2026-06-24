@@ -74,12 +74,14 @@ def load_json(raw: str) -> Any:
         return json.loads(text)
     except ValueError:
         pass
-    # Scan for the first decodable JSON value starting at a { or [.
+    # Single forward pass: at each { or [, let the decoder consume one value
+    # (raw_decode advances past it in O(n)) — no quadratic reverse-shrink scan.
+    decoder = json.JSONDecoder()
     for i, ch in enumerate(text):
         if ch in "{[":
-            for j in range(len(text), i, -1):
-                try:
-                    return json.loads(text[i:j])
-                except ValueError:
-                    continue
+            try:
+                obj, _end = decoder.raw_decode(text, i)
+                return obj
+            except ValueError:
+                continue
     raise ValueError("no JSON value found in model response")
