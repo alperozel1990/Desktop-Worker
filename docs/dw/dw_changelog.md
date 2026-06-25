@@ -794,3 +794,33 @@ MANUAL-4 (UAC) not testable here — process already admin. MANUAL-5 (OCR) skipp
 
 **Validation level reached:** **4 (live real desktop)** for the core loop, input,
 perception (UIA + screenshot), deterministic workflow, and genuine AI control.
+
+## 2026-06-25 | WF live fixes | Tasks: DW-WF-PICKER-OPENBTN, DW-WF-BROWSE-FOREGROUND
+
+**Type:** Bug fixes from live WF validation (MANUAL-WF-2 / WF-4), TDD + live re-test.
+**Status:** Complete
+
+**Trigger:** Live WF test pass surfaced two real defects:
+- WF-2: `pick-file` typed the path correctly but clicked the wrong control — the Win11
+  Open dialog exposes ~5 elements named "Open" (split-button arrows); the dialog stayed
+  open until a manual ENTER.
+- WF-4: `browse` typed the URL into the address bar before Chrome was foregrounded, so
+  with Chrome already running the keystrokes raced to another window (tab stayed
+  "New Tab", focus ended on Unity). No disk damage.
+
+**Fixes:**
+- `workflows/file_dialog.py`: `choose_file` now confirms with a single ENTER on the
+  focused File name field — immune to the multiple "Open" controls. (DW-WF-PICKER-OPENBTN)
+- `workflows/browser.py`: new `ensure_foreground()` (re-uses `switch_window`, polls
+  `active_window` until title/process matches); `navigate(foreground=...)` and
+  `submit_form(foreground=...)` abort before typing if the browser isn't confirmed in
+  front. `__main__._cmd_browse` builds the gate from the real desktop backend.
+  (DW-WF-BROWSE-FOREGROUND)
+
+**Tests:** `python -m pytest` — **356 passed** (+6). New: ENTER-confirm immune to many
+"Open" buttons; foreground confirm/timeout/no-window; navigate abort-when-not-foreground
+and proceed-when-foreground.
+
+**Live re-validation (Level 4, user observing):**
+- WF-2 ✅ `pick-file` self-confirmed via ENTER → `dw-demo.txt` opened (no manual ENTER).
+- WF-4 ✅ `browse "https://www.google.com"` → active window "Google - Google Chrome".

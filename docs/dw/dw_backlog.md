@@ -8,6 +8,57 @@ Status legend: ☐ todo · ◑ partial · ✅ done
 
 ---
 
+## DW-WF-PICKER-OPENBTN — Disambiguate the file-dialog "Open" button  ✅ done (2026-06-25)
+**Purpose:** Live finding (2026-06-25, MANUAL-WF-2): `pick-file` correctly locates the
+File name field, selects, and types the path, but the final confirm clicks the wrong
+control — the Win11 Open dialog exposes **5 elements named "Open"** (the primary button
+plus split-button arrows next to the File-name / Files-of-type / Encoding dropdowns).
+The workflow clicked a non-primary "Open" so the dialog stayed open. Pressing ENTER
+confirmed correctly and `dw-demo.txt` opened, proving the typing path is sound.
+**Scope:** In `workflows/file_dialog.py`, disambiguate the confirm button: prefer the
+widest "Open"/"Save" button (or the one whose bounds are the largest / bottom-most),
+and/or fall back to pressing ENTER after the path is typed. Add a Null-backend test
+asserting the chosen target among several same-named candidates.
+**Non-goals:** Changing field-finding or typing (they work); other dialogs.
+**Files allowed:** `src/desktop_worker/workflows/file_dialog.py`, `tests/test_wf_file_dialog.py`.
+**Files forbidden:** `schema/`, `actions/`, `safety/`, `broker/`, `audit/`.
+**Done criteria:**
+- [x] Confirm uses ENTER on the focused File name field (immune to the multi-"Open" controls).
+- [x] Test covers ENTER-confirm even when a (wrong) button center is offered.
+- [x] MANUAL-WF-2 re-run opened the file without a manual ENTER (live 2026-06-25).
+**Diff budget:** 1 production file + 1 test file. Met.
+**Result:** Shipped. `choose_file` now presses ENTER to confirm. LIVE-validated: the
+Open dialog confirmed itself and `dw-demo.txt` opened (no manual ENTER). 356 tests green.
+
+---
+
+## DW-WF-BROWSE-FOREGROUND — Foreground + settle Chrome before address-bar typing  ✅ done (2026-06-25)
+**Purpose:** Live finding (2026-06-25, MANUAL-WF-4): `browse "https://www.google.com"`
+opened a new Chrome tab but did **not** navigate — the tab stayed "New Tab" and focus
+ended on an unrelated window (Unity). With Chrome already running, the workflow ran
+Ctrl+L → type URL → ENTER before Chrome was foregrounded/ready, so the keystrokes
+landed in whatever window had focus (a focus/timing race). No disk damage
+(`dw-demo.txt` intact), but navigation silently failed while reporting each step "ok".
+**Scope:** In `workflows/browser.py`/`browser_ui.py`: after launching/activating Chrome,
+explicitly bring a Chrome window to the foreground and wait for it (poll active_window
+until process == chrome, with a settle delay) BEFORE Ctrl+L/type/ENTER. Verify
+navigation actually happened (active window title changed / address reflects the URL)
+instead of reporting "ok" blindly. Re-use the window-switch helper.
+**Non-goals:** Fixing form fill/submit name candidates (separate; blocked on nav first).
+**Files allowed:** `src/desktop_worker/workflows/browser.py`,
+`src/desktop_worker/workflows/browser_ui.py`, `tests/test_wf_browser.py`.
+**Files forbidden:** `schema/`, `actions/`, `safety/`, `broker/`, `audit/`.
+**Done criteria:**
+- [x] Chrome is confirmed in the foreground (title/process match, polled) before any input.
+- [x] navigate aborts (types nothing) when the gate fails — no keystrokes to the wrong window.
+- [x] Null-backend tests assert the gate (confirm/timeout/abort/proceed); MANUAL-WF-4 re-run navigated.
+**Diff budget:** 2 production files (browser.py, __main__.py) + 1 test file. Met.
+**Result:** Shipped. `ensure_foreground` + `navigate(foreground=...)`/`submit_form(foreground=...)`.
+LIVE-validated: `browse "https://www.google.com"` → active window became
+"Google - Google Chrome" (was "New Tab" with focus lost before). 356 tests green.
+
+---
+
 ## DW-AGENT-DRAW — Robust drawing v2: SVG + canvas hygiene + best-of-N  ✅ done (2026-06-22)
 **Purpose:** v1 drew a clean cat but live the canvas still showed red scribbles. Make
 the AI draw "in the best way regardless": clean execution + a quality gate + a stronger

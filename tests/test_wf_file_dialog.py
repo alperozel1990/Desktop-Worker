@@ -8,8 +8,6 @@ from desktop_worker.safety.policy import PermissionPolicy, auto_approve
 from desktop_worker.workflows import choose_file, upload_file
 from desktop_worker.workflows.file_dialog import (
     NullFileDialogUi,
-    OPEN_BUTTON_NAMES,
-    SAVE_BUTTON_NAMES,
     get_file_dialog_ui,
 )
 
@@ -39,7 +37,7 @@ def _executor(tmp_path):
     return ex, ib
 
 
-def test_choose_file_types_path_and_clicks_open(tmp_path):
+def test_choose_file_types_path_and_confirms_with_enter(tmp_path):
     ex, ib = _executor(tmp_path)
     ui = FakeFileDialogUi(edit=(100, 50), button=(200, 80))
     res = choose_file(r"C:\docs\report.pdf", executor=ex, ui=ui,
@@ -48,19 +46,40 @@ def test_choose_file_types_path_and_clicks_open(tmp_path):
     names = [c[0] for c in ib.calls]
     assert "click" in names and "type_text" in names
     assert ("type_text", r"C:\docs\report.pdf") in ib.calls
-    # clicked the edit, then the open button
+    # clicked the File name field exactly once, then confirmed with ENTER —
+    # NOT a second click on any name-matched "Open" button (see DW-WF-PICKER-OPENBTN).
     clicks = [c for c in ib.calls if c[0] == "click"]
+    assert len(clicks) == 1
     assert (100, 50) == (clicks[0][2], clicks[0][3])
-    assert (200, 80) == (clicks[1][2], clicks[1][3])
-    assert ui.button_names == OPEN_BUTTON_NAMES
+    assert ("press_key", "ENTER") in ib.calls
 
 
-def test_choose_file_save_uses_save_button(tmp_path):
+def test_choose_file_save_confirms_with_enter(tmp_path):
     ex, ib = _executor(tmp_path)
     ui = FakeFileDialogUi()
     res = choose_file("out.txt", executor=ex, ui=ui, confirm="save", sleep=lambda s: None)
     assert res.success
-    assert ui.button_names == SAVE_BUTTON_NAMES
+    assert res.confirm == "save"
+    assert ("press_key", "ENTER") in ib.calls
+
+
+def test_choose_file_confirm_is_immune_to_multiple_open_buttons(tmp_path):
+    """The Win11 dialog exposes several controls named 'Open'; confirm must not
+    depend on clicking one of them — it uses ENTER regardless of what button_center
+    would return."""
+    ex, ib = _executor(tmp_path)
+
+    class ManyOpenUi(FakeFileDialogUi):
+        def button_center(self, names, timeout=2.0):
+            self.button_names = names
+            return (999, 999)  # a (wrong) "Open" split-arrow center
+
+    ui = ManyOpenUi(edit=(10, 20))
+    res = choose_file("x.txt", executor=ex, ui=ui, sleep=lambda s: None)
+    assert res.success
+    # Never clicked the bogus button center; confirmed via ENTER.
+    assert all((c[2], c[3]) != (999, 999) for c in ib.calls if c[0] == "click")
+    assert ("press_key", "ENTER") in ib.calls
 
 
 def test_choose_file_falls_back_to_enter_when_no_button(tmp_path):
@@ -95,7 +114,9 @@ def test_upload_file_delegates_to_open(tmp_path):
     ui = FakeFileDialogUi()
     res = upload_file(r"C:\f.png", executor=ex, ui=ui, sleep=lambda s: None)
     assert res.success
-    assert ui.button_names == OPEN_BUTTON_NAMES
+    assert res.confirm == "open"
+    assert ("type_text", r"C:\f.png") in ib.calls
+    assert ("press_key", "ENTER") in ib.calls
 
 
 def test_factory_falls_back_to_null_without_windows():

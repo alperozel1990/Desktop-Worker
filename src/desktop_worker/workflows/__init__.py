@@ -18,6 +18,7 @@ from desktop_worker.workflows.file_dialog import (
 from desktop_worker.workflows.browser import (
     BrowserResult,
     click_control,
+    ensure_foreground,
     fill_field,
     navigate,
     open_chrome,
@@ -35,4 +36,4 @@ __all__ = ["create_desktop_text_file", "CreateDesktopFileResult",
            "choose_file", "upload_file", "FileDialogResult",
            "wait_for_download", "is_partial", "get_downloads_dir",
            "open_chrome", "navigate", "fill_field", "click_control",
-           "submit_form", "BrowserResult"]
+           "submit_form", "ensure_foreground", "BrowserResult"]

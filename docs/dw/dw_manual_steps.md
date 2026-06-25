@@ -217,8 +217,10 @@ Commit + push are now allowed for this project going forward.
 
 ---
 
-## MANUAL-WF-1 — Window switch + drag-and-drop (live)  ☐
-**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-WF-WINDOW
+## MANUAL-WF-1 — Window switch + drag-and-drop (live)  ☑ (switch part)
+**Status:** [x] switch-window DONE live 2026-06-25 — `switch-window "merhaba"` focused
+the Notepad (verified active window changed terminal→Notepad). Drag-drop part not yet
+exercised live. · **Blocking:** NO · **Added by:** DW-WF-WINDOW
 **Tool:** Real Windows desktop with a couple of windows open.
 **Instructions:**
 1. Open Notepad (or any window). Run `python -m desktop_worker switch-window "Notepad"`.
@@ -227,23 +229,32 @@ Commit + push are now allowed for this project going forward.
    short script or the `do`/`ui` agent dragging a desktop icon. Confirm a real drag.
 **What Claude needs back:** Whether the window focused + whether a drag actually moved an item.
 
-## MANUAL-WF-2 — Native file picker upload (live)  ☐
-**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-WF-FILEPICKER
+## MANUAL-WF-2 — Native file picker upload (live)  ☑
+**Status:** [x] DONE live 2026-06-25. Initial run exposed a bug (5 "Open" controls →
+wrong click); fixed in **DW-WF-PICKER-OPENBTN** (confirm via ENTER). Re-run: `pick-file`
+typed the path and self-confirmed with ENTER → `dw-demo.txt` opened, no manual ENTER.
+· **Blocking:** NO · **Added by:** DW-WF-FILEPICKER
 **Tool:** Any app that opens the standard Open dialog (e.g. a browser upload).
 **Instructions:** With an Open dialog visible, run
 `python -m desktop_worker pick-file "C:\full\path\to\file.txt"`. Confirm the path is
 typed into the File name field and Open is clicked.
 **What Claude needs back:** Whether the file was selected / dialog confirmed.
 
-## MANUAL-WF-3 — Download wait + locate (live)  ☐
-**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-WF-DOWNLOAD
+## MANUAL-WF-3 — Download wait + locate (live)  ☑
+**Status:** [x] DONE live 2026-06-25 — `wait-download` caught a real Chrome download
+(`WhatsApp Image ....jpeg`) in ~/Downloads, ignored `.crdownload` partials, printed the
+completed path. (First 90s run timed out cleanly with no download — graceful.) · **Blocking:** NO · **Added by:** DW-WF-DOWNLOAD
 **Instructions:** Run `python -m desktop_worker wait-download --timeout 60`, then start
 a download in Chrome. Confirm the command prints the completed file's path once the
 `.crdownload` finishes.
 **What Claude needs back:** The printed path / whether partials were correctly ignored.
 
-## MANUAL-WF-4 — Chrome navigate + form fill (live)  ☐
-**Status:** [ ] To do · **Blocking:** NO · **Added by:** DW-WF-BROWSER
+## MANUAL-WF-4 — Chrome navigate + form fill (live)  ☑ (navigate)
+**Status:** [x] navigate DONE live 2026-06-25. Initial run exposed a focus-race bug
+(typed before Chrome was foreground → tab stayed "New Tab"); fixed in
+**DW-WF-BROWSE-FOREGROUND**. Re-run: `browse "https://www.google.com"` → active window
+became "Google - Google Chrome". Form fill/submit (`--fill`/`--submit`) still untested
+live (page-specific UIA names). · **Blocking:** NO · **Added by:** DW-WF-BROWSER
 **Instructions:** Run e.g.
 `python -m desktop_worker browse "https://www.google.com" --fill "Search=desktop worker" --submit "Google Search"`
 (label names depend on the page's accessibility names). Confirm Chrome opens, navigates,

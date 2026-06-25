@@ -141,10 +141,11 @@ Also: deterministic `create-file` workflow (separate, reliable).
 
 ## Branch / release status (2026-06-25)
 - **`dw/roadmap-5-6-7` merged into `main` (fast-forward) and pushed to origin**
-  (`e850563..cdcc763`). `main` == `origin/main`. Phases 5/6/7 are now on the
-  default branch. Current working branch: `main`.
-- **Live-validated this session (Level 4):** MANUAL-1, -2, -6, -8, -9 (see changelog
-  RELEASE-5-6-7). Core loop + input + perception + AI control proven on real desktop.
+  (`e850563..cdcc763`). Phases 5/6/7 on the default branch. Current branch: `main`.
+- **Live-validated this session (Level 4):** MANUAL-1, -2, -6, -8, -9, plus WF-1
+  (switch-window), WF-3 (download). WF-2 + WF-4 hit real bugs, **fixed + re-validated
+  live** (DW-WF-PICKER-OPENBTN, DW-WF-BROWSE-FOREGROUND). 356 tests green.
+- **Test count:** 350 → **356** (+6 for the two WF fixes).
 
 ## Next recommended task
 All 7 roadmap phases implemented and merged to main. Remaining work is optional,

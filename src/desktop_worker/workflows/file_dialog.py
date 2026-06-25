@@ -131,7 +131,6 @@ def choose_file(path: str, *, executor, ui: FileDialogUi, confirm: str = "open",
 
     nap = sleep or time.sleep
     confirm = confirm.lower().strip()
-    button_names = SAVE_BUTTON_NAMES if confirm == "save" else OPEN_BUTTON_NAMES
     steps: list[str] = []
 
     def fail(msg: str) -> FileDialogResult:
@@ -161,14 +160,13 @@ def choose_file(path: str, *, executor, ui: FileDialogUi, confirm: str = "open",
         return fail("could not type the path")
     nap(0.1)
 
-    button = ui.button_center(button_names)
-    if button is not None:
-        bx, by = button
-        ok = do({"type": "mouse.click", "x": bx, "y": by}, f"click {confirm} button")
-    else:
-        # No located button — fall back to ENTER, which confirms most dialogs.
-        steps.append("note: confirm button not found, pressing ENTER")
-        ok = do({"type": "keyboard.press", "key": "ENTER"}, "press ENTER to confirm")
+    # Confirm with ENTER. The path now sits in the *focused* File name field, so
+    # ENTER activates the dialog's default button (Open/Save). This is deliberately
+    # immune to the Win11 file dialog exposing several controls all named "Open"
+    # (the primary button plus split-button arrows next to the File-name / Files-of-
+    # type / Encoding dropdowns): a name-based button click landed on the wrong one
+    # and left the dialog open (live finding MANUAL-WF-2 → DW-WF-PICKER-OPENBTN).
+    ok = do({"type": "keyboard.press", "key": "ENTER"}, f"confirm ({confirm}) with ENTER")
 
     if not ok:
         return fail("could not confirm the dialog")

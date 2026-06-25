@@ -21,6 +21,7 @@ from desktop_worker.schema.actions import parse_action
 from desktop_worker.tools.builtin import _sanitize_url
 from desktop_worker.tools.registry import ToolError
 from desktop_worker.workflows.browser_ui import SUBMIT_NAMES, BrowserUi, NullBrowserUi
+from desktop_worker.workflows.window import switch_window
 
 
 @dataclass
@@ -62,8 +63,43 @@ def open_chrome(*, broker, cwd: str) -> BrowserResult:
     return BrowserResult(True, "open_chrome", detail="chrome", steps=["ok: launch chrome"])
 
 
-def navigate(url: str, *, executor, sleep=None) -> BrowserResult:
-    """Focus the address bar, type ``url``, and press Enter (URL is validated)."""
+def ensure_foreground(title_contains: str = "Chrome", *, active_window,
+                      switch=None, attempts: int = 12, delay: float = 0.25,
+                      sleep=None) -> bool:
+    """Bring a window matching ``title_contains`` to the front and confirm it.
+
+    Focuses the window (re-using :func:`switch_window` by default) then polls
+    ``active_window()`` until the foreground window's title or process matches —
+    so the caller never types into the wrong window (live finding MANUAL-WF-4).
+    ``switch`` and ``active_window`` are injectable for headless tests.
+    Returns True once the matching window is confirmed in the foreground.
+    """
+    import time
+
+    nap = sleep or time.sleep
+    needle = str(title_contains or "").strip().lower()
+    if switch is not None:
+        switch(title_contains)
+    else:
+        switch_window(title_contains)
+    for _ in range(max(1, int(attempts))):
+        w = active_window()
+        if w is not None:
+            title = (getattr(w, "title", "") or "").lower()
+            proc = (getattr(w, "process", "") or "").lower()
+            if needle and (needle in title or needle in proc):
+                return True
+        nap(delay)
+    return False
+
+
+def navigate(url: str, *, executor, foreground=None, sleep=None) -> BrowserResult:
+    """Focus the address bar, type ``url``, and press Enter (URL is validated).
+
+    If ``foreground`` (a zero-arg predicate) is given and returns False, the
+    navigation is aborted *before* any keystroke — so the URL is never typed into
+    whatever window happened to have focus (live finding MANUAL-WF-4).
+    """
     import time
 
     nap = sleep or time.sleep
@@ -72,6 +108,11 @@ def navigate(url: str, *, executor, sleep=None) -> BrowserResult:
         url = _sanitize_url(url)
     except ToolError as exc:
         return BrowserResult(False, "navigate", error=str(exc))
+
+    if foreground is not None and not foreground():
+        return BrowserResult(False, "navigate", detail=url, steps=steps,
+                             error="browser was not in the foreground; "
+                                   "aborted before typing the URL")
 
     do = _runner(executor, steps)
     do({"type": "keyboard.hotkey", "keys": ["CTRL", "L"]}, "focus address bar")
@@ -119,10 +160,12 @@ def click_control(name: str, *, executor, ui: BrowserUi) -> BrowserResult:
 
 def submit_form(fields: dict[str, str], *, executor, ui: BrowserUi,
                 url: Optional[str] = None, submit_label: Optional[str] = None,
-                sleep=None) -> BrowserResult:
+                foreground=None, sleep=None) -> BrowserResult:
     """Navigate (optional) → fill each field → click submit (or press Enter).
 
-    ``fields`` maps an input label substring to the text to type.
+    ``fields`` maps an input label substring to the text to type. ``foreground``
+    is forwarded to :func:`navigate` so the URL is only typed once the browser is
+    confirmed in the foreground.
     """
     import time
 
@@ -130,7 +173,7 @@ def submit_form(fields: dict[str, str], *, executor, ui: BrowserUi,
     steps: list[str] = []
 
     if url:
-        nav = navigate(url, executor=executor, sleep=sleep)
+        nav = navigate(url, executor=executor, foreground=foreground, sleep=sleep)
         steps += nav.steps
         if not nav.success:
             return BrowserResult(False, "submit_form", detail="navigate", steps=steps,

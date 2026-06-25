@@ -185,7 +185,8 @@ def _cmd_browse(args: argparse.Namespace) -> int:
     """Open Chrome, navigate to a URL, and optionally fill + submit a form (Phase 5)."""
     import time
 
-    from desktop_worker.workflows import navigate, open_chrome, submit_form
+    from desktop_worker.workflows import (ensure_foreground, navigate, open_chrome,
+                                          submit_form)
     from desktop_worker.workflows.browser_ui import get_browser_ui
 
     real = not args.null
@@ -193,6 +194,14 @@ def _cmd_browse(args: argparse.Namespace) -> int:
     session = Session(cfg, prefer_real_backends=real)
     ui = get_browser_ui(prefer_real=real)
     cwd = str(cfg.artifacts_root.parent)
+
+    # Foreground-gate: only type the URL once a Chrome window is confirmed in front,
+    # so keystrokes never land in whatever window had focus (MANUAL-WF-4 finding).
+    foreground = None
+    if real:
+        from desktop_worker.observation.backends import get_desktop_backend
+        _desk = get_desktop_backend()
+        foreground = lambda: ensure_foreground("Chrome", active_window=_desk.active_window)
 
     fields: dict[str, str] = {}
     for pair in args.fill or []:
@@ -211,9 +220,9 @@ def _cmd_browse(args: argparse.Namespace) -> int:
 
     if fields:
         result = submit_form(fields, executor=session.executor, ui=ui, url=args.url,
-                             submit_label=args.submit)
+                             submit_label=args.submit, foreground=foreground)
     else:
-        result = navigate(args.url, executor=session.executor)
+        result = navigate(args.url, executor=session.executor, foreground=foreground)
     print(result.to_markdown())
     return 0 if result.success else 1
 

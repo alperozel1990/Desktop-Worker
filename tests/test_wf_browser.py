@@ -5,8 +5,11 @@ from desktop_worker.actions.executor import ActionExecutor
 from desktop_worker.audit.log import AuditLog
 from desktop_worker.safety.emergency_stop import EmergencyStop
 from desktop_worker.safety.policy import PermissionPolicy, auto_approve
+from types import SimpleNamespace
+
 from desktop_worker.workflows import (
     click_control,
+    ensure_foreground,
     fill_field,
     navigate,
     open_chrome,
@@ -74,6 +77,58 @@ def test_navigate_rejects_unsafe_url(tmp_path):
     r = navigate("javascript:alert(1)", executor=ex, sleep=lambda s: None)
     assert not r.success
     assert ib.calls == []  # never typed anything
+
+
+def test_navigate_aborts_when_browser_not_foreground(tmp_path):
+    ex, ib = _executor(tmp_path)
+    r = navigate("https://example.com", executor=ex, foreground=lambda: False,
+                 sleep=lambda s: None)
+    assert not r.success
+    assert "foreground" in r.error
+    assert ib.calls == []  # never typed into the wrong window
+
+
+def test_navigate_proceeds_when_foreground_confirmed(tmp_path):
+    ex, ib = _executor(tmp_path)
+    r = navigate("https://example.com", executor=ex, foreground=lambda: True,
+                 sleep=lambda s: None)
+    assert r.success
+    assert ("hotkey", ("CTRL", "L")) in ib.calls
+    assert ("type_text", "https://example.com") in ib.calls
+
+
+def test_ensure_foreground_confirms_once_chrome_is_active():
+    switched = []
+    # Active window is something else twice, then Chrome.
+    seq = iter([
+        SimpleNamespace(title="dw-demo.txt - Notepad", process="Notepad.exe"),
+        SimpleNamespace(title="Project Settings", process="Unity.exe"),
+        SimpleNamespace(title="New Tab - Google Chrome", process="chrome.exe"),
+    ])
+    ok = ensure_foreground("Chrome", active_window=lambda: next(seq),
+                           switch=lambda t: switched.append(t),
+                           attempts=5, delay=0, sleep=lambda s: None)
+    assert ok
+    assert switched == ["Chrome"]  # re-used the window switch once
+
+
+def test_ensure_foreground_times_out_when_never_active():
+    polls = []
+
+    def active():
+        polls.append(1)
+        return SimpleNamespace(title="Project Settings", process="Unity.exe")
+
+    ok = ensure_foreground("Chrome", active_window=active, switch=lambda t: None,
+                           attempts=3, delay=0, sleep=lambda s: None)
+    assert not ok
+    assert len(polls) == 3  # polled exactly `attempts` times, then gave up
+
+
+def test_ensure_foreground_handles_no_active_window():
+    ok = ensure_foreground("Chrome", active_window=lambda: None, switch=lambda t: None,
+                           attempts=2, delay=0, sleep=lambda s: None)
+    assert not ok
 
 
 def test_fill_field_clicks_and_types(tmp_path):

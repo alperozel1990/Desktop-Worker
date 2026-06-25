@@ -34,3 +34,43 @@ real observation returns live desktop data; full ease-me workspace present.
 - [x] ease-me workspace + launchers created.
 **Stop conditions:** Stop and ask before implementing any further backlog card —
 each needs its own packet + Pre-Implementation Gate.
+
+---
+
+## Packet: DW-WF-PICKER-OPENBTN — File-dialog confirm via ENTER (2026-06-25)
+**Source card:** DW-WF-PICKER-OPENBTN (backlog). **Live finding:** MANUAL-WF-2.
+**Pre-Implementation Gate:** PASS — scope tiny, files scoped, Null-testable, no safety
+files touched, rollback trivial.
+**Files allowed:** `src/desktop_worker/workflows/file_dialog.py`,
+`tests/test_wf_file_dialog.py`.
+**Files forbidden:** `schema/`, `actions/`, `safety/`, `broker/`, `audit/`, `__main__.py`.
+**Plan:** `choose_file` confirms with a single `keyboard.press ENTER` after typing the
+path into the focused File name field, instead of clicking a name-matched "Open"/"Save"
+button. The Win11 dialog exposes ~5 controls named "Open" (split-button arrows), so a
+name-based click landed wrong; ENTER activates the dialog default and is immune to that.
+**Tests:** confirm-via-ENTER on open & save; ENTER even when a button center is offered
+(immune to multi-Open); existing empty-path / no-field fail-safe unchanged.
+**Rollback:** `git checkout -- src/desktop_worker/workflows/file_dialog.py`.
+**Diff budget:** 1 production file + 1 test file.
+
+---
+
+## Packet: DW-WF-BROWSE-FOREGROUND — Foreground-gate before address-bar typing (2026-06-25)
+**Source card:** DW-WF-BROWSE-FOREGROUND (backlog). **Live finding:** MANUAL-WF-4.
+**Pre-Implementation Gate:** PASS — additive, injectable, default path unchanged,
+no safety files, rollback trivial.
+**Files allowed:** `src/desktop_worker/workflows/browser.py`, `__main__.py`
+(`_cmd_browse` wiring only), `tests/test_wf_browser.py`.
+**Files forbidden:** `schema/`, `actions/`, `safety/`, `broker/`, `audit/`, `browser_ui.py`.
+**Plan:** Add `ensure_foreground(title_contains, *, active_window, switch=None, ...)` that
+focuses a matching window (re-using `switch_window`) then polls `active_window()` until the
+foreground window's title/process matches. `navigate(..., foreground=None)` and
+`submit_form(..., foreground=None)` gain an injectable zero-arg gate: if provided and it
+returns False, abort BEFORE any Ctrl+L/type/ENTER (never type into the wrong window).
+`_cmd_browse` builds the gate from the real desktop backend's `active_window`. Default
+`foreground=None` keeps existing behavior/tests.
+**Tests:** ensure_foreground succeeds once active is chrome / times out otherwise;
+navigate aborts (no input dispatched) when gate False; navigate proceeds when gate True;
+existing no-gate navigate/submit tests unchanged.
+**Rollback:** `git checkout -- src/desktop_worker/workflows/browser.py src/desktop_worker/__main__.py`.
+**Diff budget:** 2 production files + 1 test file.
