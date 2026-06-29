@@ -624,6 +624,34 @@ def _cmd_do(args: argparse.Namespace) -> int:
     return 0 if report.completed else 1
 
 
+def _cmd_mcp(args: argparse.Namespace) -> int:
+    """Serve Desktop-Worker over MCP (stdio) so external AI agents can drive it.
+
+    The external agent becomes the planner; this process exposes observe/perceive/
+    act/run_tool/run_cli as MCP tools, each routed through the same audited,
+    emergency-stop-gated, policy-checked executor. stdout is the JSON-RPC transport,
+    so ALL human-facing messages go to stderr.
+    """
+    from desktop_worker.mcp_server.bridge import build_agent_bridge
+    from desktop_worker.mcp_server.server import serve
+
+    real = not args.null
+    # Interactive profiles use the console approver; over stdio there is no TTY, so
+    # it denies (safe). Headless denies anything above LOW outright.
+    bridge = build_agent_bridge(real=real, profile=args.profile,
+                                approver=_console_approver)
+    print(f"Desktop-Worker MCP server starting (profile={args.profile}, "
+          f"backends={bridge.session.backend_names()}).", file=sys.stderr)
+    print("Connect an MCP client over stdio. Emergency stop: run "
+          "`python -m desktop_worker estop` in another window.", file=sys.stderr)
+    try:
+        serve(bridge)
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def _cmd_report(args: argparse.Namespace) -> int:
     """Build an HTML replay from a session/task's audit log."""
     from desktop_worker.audit.report import write_html_report
@@ -741,6 +769,15 @@ def build_parser() -> argparse.ArgumentParser:
     dr.add_argument("--no-refine", action="store_true",
                     help="skip the one-shot verify+correct pass (fewer Claude calls)")
     dr.set_defaults(func=_cmd_draw)
+
+    mc = sub.add_parser("mcp", help="serve Desktop-Worker over MCP (stdio) so external "
+                                    "AI agents can drive the desktop")
+    mc.add_argument("--profile", choices=("standard", "strict", "headless"),
+                    default="standard",
+                    help="permission profile for actions the external AI requests "
+                         "(standard: low/med auto, high denied over stdio; headless: "
+                         "deny anything above low)")
+    mc.set_defaults(func=_cmd_mcp)
 
     rep = sub.add_parser("report", help="build an HTML replay of a session's audit log")
     rep.add_argument("--session", default="ai-do", help="session id")

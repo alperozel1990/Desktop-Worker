@@ -4,10 +4,10 @@
 > for "where are we".
 
 ## Session info
-- **Last updated:** 2026-06-25
+- **Last updated:** 2026-06-30
 - **Repo path:** `C:\Desktop-Worker`
 - **Workspace path:** `C:\Desktop-Worker\docs\dw`
-- **Current branch:** `main`
+- **Current branch:** `dw/phase8-mcp` (Phase 8 MCP server; NOT pushed)
 - **Remote:** `origin` → https://github.com/alperozel1990/Desktop-Worker.git
 - **Last commit hash:** pushed to origin/main (see `dw_changelog.md` for hashes)
 - **Operating model:** autonomous per-card execution gated by **Codex Auditor**
@@ -61,6 +61,7 @@ Gate and only implement when the selected card is explicitly approved.
 | Drawing v2: SVG + canvas hygiene + best-of-N `draw` command (`drawing/`) | complete (DW-AGENT-DRAW); deterministic path LIVE-validated, AI best-of-N = MANUAL-11 |
 | Frugal mode (`--frugal`) | complete (leaner prompts, less Claude usage) |
 | Session replay HTML (`report` cmd + auto) | complete (DW-REPLAY); §16 audit viewer |
+| **External AI interface — MCP server** (`mcp` CLI) | complete (Phase 8, DW-MCP-SERVER); pure AgentBridge + thin FastMCP; live external client = MANUAL-MCP-1 |
 
 ## Last completed task
 - **Task:** DW-PLANNER-AI — Claude Code CLI planner (no API key), via the broker.
@@ -74,7 +75,23 @@ Gate and only implement when the selected card is explicitly approved.
 - **Files:** `loop/claude_cli_planner.py` (new), `tests/test_claude_cli_planner.py`.
 
 ## Current task
-None in progress.
+None in progress. (Just completed DW-MCP-SERVER — Phase 8.)
+
+## Last completed task (2026-06-30) — Phase 8: MCP server (DW-MCP-SERVER)
+- **What:** Made Desktop-Worker usable BY OTHER AI AGENTS via an MCP (stdio) server —
+  the user's new north-star ("another AI couldn't use this tool"). New `mcp_server/`
+  package: pure dependency-free `AgentBridge` (maps observe/perceive/screenshot/mouse+
+  keyboard+clipboard/`act`/`run_tool`/`run_cli`/status/estop onto the SAME audited,
+  estop-gated, policy-checked `executor.execute(parse_action(...))` path — the external
+  AI becomes the planner, all safety stays below) + thin `server.py` (lazy FastMCP;
+  `register()` is SDK-free + fake-server-tested) + new `mcp` CLI command + `[mcp]` extra.
+- **Tests:** 373 (372 pass + 1 skip), +17. **Validation level: 3+** — Null-backend unit
+  tests AND a real-FastMCP in-process e2e smoke (22 tools; observe/click/list_tools work;
+  malformed action rejected; emergency_stop halts following actions). Live external client
+  = MANUAL-MCP-1.
+- **Files:** new `src/desktop_worker/mcp_server/{__init__,bridge,server}.py`; changed
+  `__main__.py`, `pyproject.toml`; new `tests/test_mcp_bridge.py`,
+  `tests/test_mcp_server_register.py`. Branch `dw/phase8-mcp`, NOT pushed.
 
 ## Most recent batch (2026-06-24) — Phases 5→6→7 complete (10 cards)
 - **What:** Autonomous overnight run on branch `dw/roadmap-5-6-7` (13 commits).
@@ -148,14 +165,19 @@ Also: deterministic `create-file` workflow (separate, reliable).
 - **Test count:** 350 → **356** (+6 for the two WF fixes).
 
 ## Next recommended task
-All 7 roadmap phases implemented and merged to main. Remaining work is optional,
-user-interactive live validation + polish:
-1. **User-interactive MANUAL tests** still open: WF-1..4 (window switch, file picker,
-   download, browse), ORCH-1 (orchestrate), UI-1 (Tkinter window). Non-blocking.
-2. Polish from live findings (e.g. screenshot auto-capture into the `ui` timeline;
-   richer env_context for `orchestrate --execute`; more locale UIA name candidates).
-3. Not testable in current env: MANUAL-4 (UAC — process already admin),
-   MANUAL-5 (OCR — `pytesseract` not installed).
+Phase 8 (MCP server) is the project's functional finish line: an external AI agent can
+now drive Desktop-Worker. Remaining work is user-interactive live validation + tuning:
+1. **MANUAL-MCP-1 (headline):** register `python -m desktop_worker mcp` in a real MCP
+   client (Claude Desktop/Code) and drive the priority scenarios (multi-step app,
+   browser, file/system, draw, **Unity Editor manual tasks**). Report what worked vs.
+   failed + what `perceive` returned on failures → that drives the reliability tuning
+   that actually closes the "another AI couldn't do it" gap.
+2. Then approve **merge + push of `dw/phase8-mcp` → main**.
+3. Reliability follow-ups likely surfaced by MANUAL-MCP-1: richer perception for
+   low-UIA apps (vision-assist over MCP), perceive id-stability across calls, a
+   higher per-task action budget for complex chains.
+4. Still open (non-blocking): MANUAL-WF-4 form-fill, ORCH-1, UI-1. Not testable here:
+   MANUAL-4 (UAC — already admin), MANUAL-5 (OCR — `pytesseract` not installed).
 
 ## Open risks
 | Risk | Severity | Mitigation |
@@ -183,12 +205,16 @@ MANUAL-2 (install `[windows]` extra for real screenshots), MANUAL-3 (DONE — gi
 **MANUAL-7 (drive a real task end-to-end with the Claude CLI planner)**.
 
 ## Last validation results
-- **Date:** 2026-06-24.
-- **Type:** `python -m pytest` — **350 passed**. Null-backend CLI smokes for the new
-  commands (`switch-window`, `orchestrate --null`, `clean-artifacts`, `browse --null`,
-  `ui` parser/import). Each phase (5/6/7) passed a Codex code-review; findings fixed.
-- **Validation level reached:** **3** for all 10 new cards (unit + Null-backend CLI).
-  Live (Level 4) pending user tests: MANUAL-WF-1..4, MANUAL-ORCH-1, MANUAL-UI-1.
+- **Date:** 2026-06-30 (DW-MCP-SERVER, Phase 8).
+- **Type:** `python -m pytest` — **373** (372 passed + 1 skipped). New: 14 AgentBridge
+  Null-backend tests + 3 server-register tests. PLUS a real-FastMCP in-process e2e smoke:
+  built the actual `FastMCP` server, registered the bridge (22 tools, schemas inferred
+  from type hints), and called tools through it — `observe`→structured state, `click`→
+  routed through the executor, `list_tools`→6 tools, malformed `act`→rejected, and after
+  `emergency_stop` the next `click` was **halted**. Confirmed no SDK API drift.
+- **Validation level reached:** **3+** for DW-MCP-SERVER (unit + real-SDK in-process e2e).
+  Level 4 (external client process driving a live desktop) = MANUAL-MCP-1.
+- **Prior (2026-06-24):** `python -m pytest` — 350 passed; Phases 5/6/7 Codex-audited.
 
 ## Earlier validation results
 - **Date:** 2026-06-22.

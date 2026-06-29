@@ -140,6 +140,45 @@ long-running supervision.
 - [x] Permission profiles + app allow/deny + artifact retention (DW-HARDEN).
 **Complexity:** High.
 
+## Phase 8 — External AI Interface (MCP server)  ✅ complete (live = MANUAL-MCP-1)
+**Goal:** Make Desktop-Worker usable BY OTHER AI AGENTS. Today the only driver is
+the *built-in* Claude CLI planner (`do`/`draw`); there is no programmatic entry
+point, so an external agent (another Claude session, Cursor, Claude Desktop, a
+custom agent) cannot use Desktop-Worker as its "hands". This phase exposes the
+loop's capabilities over the **Model Context Protocol (MCP, stdio)** so any
+MCP-capable agent becomes the planner.
+**Scope:** A pure, dependency-free `AgentBridge` that maps MCP tool calls →
+existing `executor.execute(parse_action(...))` / observer / perceiver / tools
+registry / broker, returning JSON-serializable results. A thin `server.py`
+(lazy-imported `mcp` SDK / FastMCP) registers the bridge methods as MCP tools and
+serves over stdio. New CLI `mcp` command. The external AI can: `observe`,
+`perceive` (UIA/OCR elements with ids+bounds), `screenshot`, mouse/keyboard/
+clipboard primitives, `run_tool` (create_text_file/open_app/open_url/focus_window/
+drag_drop/sketch), `run_cli` (broker-gated), and `status/estop/clear_stop`.
+**Non-goals:** A network/SSE transport (stdio only for the MVP); bypassing any
+safety gate; a new action family (the existing schema + `tool.run` suffice);
+auto-approving high-risk actions (approval stays user-controlled via profiles).
+**Dependencies:** all prior phases (reuses executor, perception, tools, broker, safety).
+**Likely files touched:** new `mcp_server/` package; `__main__.py`; `pyproject.toml`.
+**Manual steps required:** YES — connect a real external MCP client and drive a
+complex task (MANUAL-MCP-1); prove reliability on the priority scenarios.
+**Target validation level:** 3 now (unit + Null-backend); 4 once an external
+client drives a live task.
+**Risks:** MCP SDK API drift (mitigate: lazy import + bridge fully testable
+without the SDK); approval model when headless (mitigate: profile-selectable,
+deny-by-default above the threshold); element-id stability across observe/act.
+**Done criteria:**
+- [x] `AgentBridge` maps every capability through the existing executor/observer/
+  perceiver/broker; malformed actions still rejected; estop+policy+audit below it.
+- [x] Thin MCP server registers the tools (22) and serves stdio; SDK lazy-imported.
+- [x] CLI `mcp` command starts the server; `--profile` selects the safety preset.
+- [x] Null-backend unit tests for the bridge + a registration test without the SDK.
+- [x] Real-FastMCP in-process e2e smoke (observe/click/list_tools work; malformed
+  rejected; estop halts) — no SDK API drift. 373 tests.
+- [ ] Live external-client validation queued as MANUAL-MCP-1 (priority scenarios:
+  multi-step app, browser, file/system, draw, Unity Editor manual tasks).
+**Complexity:** High.
+
 ---
 
 ## Dependency graph

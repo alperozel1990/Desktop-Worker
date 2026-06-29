@@ -4,6 +4,41 @@ Actions Claude cannot fully perform/validate itself.
 
 ---
 
+## MANUAL-MCP-1 — ⭐⭐⭐ Drive Desktop-Worker from an external AI agent over MCP  ☐
+**Status:** [ ] Waiting · **Blocking:** NO · **Added by:** DW-MCP-SERVER (Phase 8)
+**Why this is the headline test:** it proves the new north-star — *another AI agent
+can use this tool*. Claude validated the server in-process (real FastMCP: 22 tools, a
+full call → executor → result path, malformed rejected, estop halts). What only YOU can
+do is connect a real external MCP **client** and watch it drive the real desktop.
+**One-time setup:**
+1. Install the SDK: `python -m pip install -e ".[mcp]"` (adds `mcp`).
+2. Register the server in an MCP client. For **Claude Desktop** (or Claude Code's MCP
+   config), add a server entry like:
+   ```json
+   {
+     "mcpServers": {
+       "desktop-worker": {
+         "command": "python",
+         "args": ["-m", "desktop_worker", "mcp"]
+       }
+     }
+   }
+   ```
+   (Add `"--profile","strict"` to the args to be prompted/denied more; note: over
+   stdio there is no console to approve HIGH-risk, so `standard` auto-runs low/medium
+   and denies high. Emergency stop any time: `python -m desktop_worker estop`.)
+**What to try (the priority scenarios you chose):** ask the external agent to —
+- open Notepad, type text, save (multi-step app work);
+- open Chrome and navigate / fill a form (browser);
+- create/rename a file, run a short `run_cli` command (file/system);
+- `run_tool sketch` to draw a figure in Paint (draw);
+- in the **Unity Editor**, perform a manual GUI task (e.g. select a GameObject, click a
+  menu, set a field) by `perceive` → click `center` → `type_text` — desktop-level control,
+  complementary to the Unity MCP.
+**What Claude needs back:** which scenarios worked vs. failed, and for failures what
+`perceive` returned (UIA element coverage) — so we can tune perception/reliability
+(this is exactly where the "another AI couldn't do it" gap gets closed for real).
+
 ## MANUAL-11 — ⭐⭐⭐ Watch the AI draw with best-of-N + judge (`draw` command)
 **Status:** [ ] Waiting  (Claude live-validated the DETERMINISTIC half: clean canvas
 + SVG cat in real Paint — `artifacts/cat_attempts/cat_v2_clean_best.png`, no red; and

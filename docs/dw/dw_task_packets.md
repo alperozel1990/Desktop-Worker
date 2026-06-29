@@ -74,3 +74,54 @@ navigate aborts (no input dispatched) when gate False; navigate proceeds when ga
 existing no-gate navigate/submit tests unchanged.
 **Rollback:** `git checkout -- src/desktop_worker/workflows/browser.py src/desktop_worker/__main__.py`.
 **Diff budget:** 2 production files + 1 test file.
+
+---
+
+## Packet: DW-MCP-SERVER — Expose Desktop-Worker as an MCP server (2026-06-30)
+**Source card:** DW-MCP-SERVER (backlog, Phase 8). **Driver:** user — "this tool must be
+usable BY other AI agents" + chose MCP server + scenarios: multi-step app / browser /
+file-system / draw / Unity Editor manual tasks.
+**Pre-Implementation Gate:** PASS (see session report) — additive package, reuses the
+existing executor/observer/perceiver/tools/broker choke points, no safety/schema/executor
+edits, SDK lazy-imported so core stays dep-free, Null-backend testable, rollback trivial.
+**Branch:** `dw/phase8-mcp`.
+**Current state before:** All 7 phases done + merged to `main`; only driver is the
+built-in Claude CLI planner (`do`/`draw`). No programmatic interface for external agents.
+**Exact files inspected before coding:** `app.py` (Session wiring), `actions/executor.py`
+(execute choke point + dispatch table), `tools/registry.py` + `tools/builtin.py`,
+`schema/actions.py` (`parse_action`/ACTION_SPECS), `safety/profiles.py` (`build_policy`),
+`perception/perceiver.py` (`perceive`), `__main__.py` (`_cmd_do` wiring), `pyproject.toml`,
+`tests/test_tools.py` (style). Confirmed MCP SDK NOT installed (lazy import required).
+**Files allowed:** new `src/desktop_worker/mcp_server/{__init__,bridge,server}.py`,
+`src/desktop_worker/__main__.py`, `pyproject.toml`, new `tests/test_mcp_bridge.py`,
+`tests/test_mcp_server_register.py`.
+**Files forbidden:** `schema/`, `actions/executor.py`, `safety/`, `audit/`,
+`broker/cli_broker.py`, `docs/requirements.md`, `artifacts/`.
+**Plan:**
+1. `bridge.py` — pure `AgentBridge(session, tools, perceiver)`: each capability builds a
+   dict, calls `parse_action` then `session.executor.execute(...)` (or observer/perceiver/
+   broker), returns a JSON-safe dict `{ok, error, detail/...}`. `perceive()` returns
+   elements with per-observe integer ids + type + text + bounds + center so the external
+   AI can target controls; `act(action_dict)` is the general escape hatch (any valid
+   structured action). `run_tool`/`run_cli`/`list_tools`/`status`/`emergency_stop`/
+   `clear_stop`. Factory `build_agent_bridge(real, profile, approver)` wires real backends +
+   the same tool set as `_cmd_do` (CreateTextFile/OpenApp/OpenUrl/FocusWindow/DragDrop/Sketch).
+2. `server.py` — lazy `from mcp.server.fastmcp import FastMCP` inside `serve()`. Pure
+   `register(server, bridge)` decorates bridge methods as MCP tools (works with a fake
+   server object → testable without the SDK). `serve(bridge, name)` runs stdio.
+3. `__main__.py` — add `mcp` subcommand: `_cmd_mcp` builds the bridge via the factory and
+   calls `serve`; `--profile` selects the safety preset (default standard); `--null` for a
+   backend-free smoke. Helpful error if the SDK is missing (`pip install -e ".[mcp]"`).
+4. `pyproject.toml` — add `[mcp]` extra: `mcp>=1.2`.
+**Validation commands:** `python -m pytest`; `python -m desktop_worker mcp --help`;
+`python -m desktop_worker --null mcp` (expects a clear "install mcp" message since the SDK
+isn't installed) — proves wiring without the SDK.
+**Manual validation:** MANUAL-MCP-1 — register the server in a real MCP client (Claude
+Desktop/Code config) and drive a complex multi-step task end-to-end; prove the priority
+scenarios incl. Unity Editor manual work.
+**Rollback:** `git checkout -- src/desktop_worker/__main__.py pyproject.toml` and
+`rm -r src/desktop_worker/mcp_server tests/test_mcp_*`.
+**Diff budget:** 3 new production files + 1 changed (`__main__.py`) + pyproject; 2 test files.
+**Done criteria:** see backlog card DW-MCP-SERVER.
+**Stop conditions:** Stop before adding a network transport or any new schema action —
+those are separate cards.

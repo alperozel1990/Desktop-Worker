@@ -35,6 +35,19 @@ Source of truth: `docs/requirements.md`.
 - `artifacts/` (generated output; git-ignored).
 
 ## Current roadmap position
+- **PHASE 8 — EXTERNAL AI INTERFACE (MCP server) DONE (2026-06-30).** Desktop-Worker is
+  now usable BY OTHER AI AGENTS (the user's north-star: "another AI couldn't use this
+  tool"). New `mcp_server/` package: pure dep-free `AgentBridge` maps observe/perceive/
+  screenshot/mouse+keyboard+clipboard/`act`/`run_tool`/`run_cli`/status/estop onto the
+  SAME `executor.execute(parse_action(...))` path — the external AI becomes the planner;
+  validation/policy/estop/audit all stay BELOW it (it's exactly as constrained as the
+  internal planner). Thin `server.py` registers 22 tools via lazily-imported FastMCP
+  (`register()` is SDK-free + fake-server-tested); new `mcp` CLI command; `[mcp]` extra
+  (`mcp>=1.2`). 373 tests. Validated Level 3+ (Null unit + real-FastMCP in-process e2e:
+  observe/click/list_tools work, malformed rejected, estop halts). Branch `dw/phase8-mcp`,
+  NOT pushed. Live external client = MANUAL-MCP-1 (priority scenarios incl. Unity Editor).
+  KEY: package is named `mcp_server` (NOT `mcp`) so it never shadows the installed SDK;
+  over stdio stdout is the JSON-RPC channel so human messages go to STDERR.
 - **ALL 7 PHASES IMPLEMENTED (as of 2026-06-24).** Phases 5/6/7 completed in an
   autonomous batch on branch `dw/roadmap-5-6-7` (10 cards, 350 tests, each phase
   Codex-audited). NOT yet pushed — awaiting user approval + the MANUAL-* live tests.
@@ -147,9 +160,10 @@ Source of truth: `docs/requirements.md`.
   prompt, real browser, Tesseract install). Batch those as a "test this" list.
 
 ## Current next action
-Pick from `dw_backlog.md`. Recommended: **DW-CLI-ELEVATE** (real per-command
-elevation) or **DW-INPUT-HARDEN** (input reliability) or **DW-PERCEPTION-OCR**
-(start Phase 4). All have acceptance criteria in the backlog.
+**MANUAL-MCP-1** (user-interactive): register `python -m desktop_worker mcp` in a real
+MCP client (Claude Desktop/Code) and drive a complex task incl. Unity Editor manual work;
+report what worked/failed + `perceive` output → drives reliability tuning. Then approve
+merge+push of `dw/phase8-mcp` → main. (All implementation phases 1–8 are complete.)
 
 ## Important assumptions
 - Python 3.11+ (dev machine has 3.14.0). Windows 11. `claude.exe` at

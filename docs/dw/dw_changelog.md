@@ -824,3 +824,61 @@ and proceed-when-foreground.
 **Live re-validation (Level 4, user observing):**
 - WF-2 ✅ `pick-file` self-confirmed via ENTER → `dw-demo.txt` opened (no manual ENTER).
 - WF-4 ✅ `browse "https://www.google.com"` → active window "Google - Google Chrome".
+
+## 2026-06-30 | Phase 8 — External AI Interface (MCP server) | Task: DW-MCP-SERVER
+
+**Type:** New phase — make Desktop-Worker usable BY OTHER AI AGENTS.
+**Status:** Complete (code + tests + in-process e2e). Branch `dw/phase8-mcp`, NOT pushed.
+
+**Driver:** User report — "another AI couldn't do work with this tool; it must be
+usable by other AI agents." Chosen direction: an MCP server; priority scenarios:
+multi-step app work, browser, file/system, draw, and Unity Editor manual tasks.
+
+**Root gap found:** the only driver was the *built-in* Claude CLI planner (`do`/`draw`);
+no programmatic entry point existed (grep confirmed: no MCP/JSON-RPC anywhere). So the
+"AI-control-ready" north star was unmet for *external* agents.
+
+**What shipped (new `mcp_server/` package):**
+- `bridge.py` — pure, dependency-free `AgentBridge`: maps observe / perceive (UIA+OCR
+  elements with ids + click `center`) / screenshot / mouse+keyboard+clipboard / `act`
+  (any structured action) / `run_tool` / `run_cli` (broker) / `list_tools` / `status` /
+  `emergency_stop` / `clear_stop` onto the SAME `executor.execute(parse_action(...))`
+  path. The external AI becomes the planner; validation, approval, estop, and audit all
+  stay BELOW the bridge. Factory `build_agent_bridge(real, profile, approver)` wires the
+  same tool set as `do` (create_text_file/open_app/open_url/focus_window/drag_drop/sketch).
+- `server.py` — thin wrapper: lazy `from mcp.server.fastmcp import FastMCP` inside
+  `serve()` (core stays zero-dep); pure `register(server, bridge)` decorates 22 bridge
+  methods as MCP tools (the docstrings are the agent-facing tool descriptions) and is
+  unit-tested with a fake server — no SDK needed.
+- `__main__.py` — new `mcp` subcommand (`_cmd_mcp`): builds the bridge via the factory and
+  serves stdio; `--profile {standard|strict|headless}`; human messages go to STDERR
+  (stdout is the JSON-RPC channel); clear "install [mcp]" error if the SDK is absent.
+- `pyproject.toml` — new `[mcp]` extra (`mcp>=1.2`).
+
+**Tests:** `python -m pytest` → **373** (372 passed + 1 skipped) (+17). New:
+`tests/test_mcp_bridge.py` (route-through-executor + audit identity; malformed/unknown
+rejected; tool/cli routing + fail-safe; estop halts then clear resumes; perceive click
+centers; high-risk denied under deny policy; factory wires default tools) and
+`tests/test_mcp_server_register.py` (all 22 tools registered via a fake server;
+calls reach the bridge; `serve` raises a clear error without the SDK — skipped when present).
+
+**Validation level reached: 3+** — Null-backend unit tests AND a real-FastMCP in-process
+end-to-end smoke: built the actual `FastMCP` server, registered the bridge, and called
+tools through it — `observe` returned structured state, `click` routed through the
+executor, `list_tools` returned the 6 tools, a malformed `act` was rejected with the
+schema error, and after `emergency_stop` the next `click` was **halted** (safety below the
+bridge). Confirmed the SDK's `tool()` decorator + type-hint schema inference match
+`register` (no API drift). **Level 4 (external client process driving a live desktop) =
+MANUAL-MCP-1.**
+
+**Files:** new `src/desktop_worker/mcp_server/{__init__,bridge,server}.py`; changed
+`src/desktop_worker/__main__.py`, `pyproject.toml`; new `tests/test_mcp_bridge.py`,
+`tests/test_mcp_server_register.py`. Diff budget met (3 new prod + 1 changed + pyproject).
+
+**Safety invariant preserved:** the external AI can only *propose* structured actions;
+it cannot bypass `parse_action` validation, the permission policy, the emergency stop, or
+the audit log — it is exactly as constrained as the internal planner.
+
+**Lesson:** an isolated-Config test must override BOTH `artifacts_root` AND `estop_file`
+— they're independent fields, so a test that only isolates artifacts still reads/pollutes
+the shared default EMERGENCY_STOP sentinel (this bit once during integration).

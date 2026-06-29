@@ -27,6 +27,9 @@ ocr = [
     "pytesseract>=0.3.10",
     "Pillow>=10.0",
 ]
+mcp = [
+    "mcp>=1.2",          # Model Context Protocol SDK (Phase 8 external-AI server)
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

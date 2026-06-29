@@ -41,10 +41,10 @@ const DATA = {
   northStar: "AI-control-ready Windows desktop automation (observe-plan-act-verify-log)",
   repo: "C:\\Desktop-Worker",
   workspace: "C:\\Desktop-Worker\\docs\\dw",
-  updated: "2026-06-24",
+  updated: "2026-06-30",
   implementationAllowed: "YES (autonomous; auditor-gated)",
-  validationLevel: "350 unit tests pass. ALL 7 roadmap phases implemented (Phases 5/6/7 done 2026-06-24 on branch dw/roadmap-5-6-7, 10 cards, each phase Codex-audited). Null-backend CLI smokes for every new command. Live paths pending user tests: MANUAL-WF-1..4 (window/drag, file picker, download, Chrome form), MANUAL-ORCH-1 (multi-agent), MANUAL-UI-1 (Tkinter control window). Branch NOT pushed — awaiting user approval.",
-  cardsDone: 27, cardsTotal: 27,
+  validationLevel: "373 tests pass (372 + 1 skip). Phase 8 (DW-MCP-SERVER) DONE: Desktop-Worker is now an MCP (stdio) server so ANY external AI agent can drive it. Validated Level 3+ : Null-backend unit tests for the AgentBridge + a real-FastMCP in-process end-to-end smoke (observe/click/list_tools all work; a malformed action is rejected; emergency_stop halts subsequent actions — safety stays below the bridge). All 7 prior phases done + merged to main. Live external-client test pending = MANUAL-MCP-1. Branch dw/phase8-mcp NOT pushed — awaiting user approval.",
+  cardsDone: 28, cardsTotal: 28,
   phases: [
     {id:"P1", name:"Local Control Foundation", status:"done"},
     {id:"P2", name:"Structured Action Loop", status:"done"},
@@ -53,8 +53,10 @@ const DATA = {
     {id:"P5", name:"Browser & Desktop Workflows", status:"done"},
     {id:"P6", name:"Multi-Agent Orchestration", status:"done"},
     {id:"P7", name:"Production Hardening + UI", status:"done"},
+    {id:"P8", name:"External AI Interface (MCP server)", status:"done"},
   ],
   cards: [
+    {id:"DW-MCP-SERVER", t:"Expose Desktop-Worker as an MCP server for external AI agents (Phase 8)", s:"done"},
     {id:"BOOTSTRAP-1", t:"Bootstrap + Phase 1 foundation", s:"done"},
     {id:"DW-LOOP-RECOVERY", t:"Retry / re-plan / safe-stop + time limit", s:"done"},
     {id:"DW-CLI-ELEVATE", t:"True per-command UAC elevation w/ captured output", s:"done"},
@@ -78,8 +80,8 @@ const DATA = {
     {id:"DW-UI-CONTROLLER", t:"Pure control-UI controller + ApprovalQueue (Phase 7)", s:"done"},
     {id:"DW-UI-TK", t:"Tkinter control window + ui command (Phase 7)", s:"done"},
   ],
-  current: "none in progress — ALL 7 phases implemented (2026-06-24). Branch dw/roadmap-5-6-7 (13 commits, 350 tests), committed locally, NOT pushed. New CLI: switch-window, pick-file, wait-download, browse, orchestrate, clean-artifacts, ui.",
-  nextCard: "User: run MANUAL-WF-1..4 / MANUAL-ORCH-1 / MANUAL-UI-1 live tests, then approve merge+push of dw/roadmap-5-6-7 to main.",
+  current: "Phase 8 DW-MCP-SERVER complete on branch dw/phase8-mcp. New mcp_server/ package (pure AgentBridge + thin FastMCP server) + `mcp` CLI command. 373 tests. NOT pushed.",
+  nextCard: "User: run MANUAL-MCP-1 (register the server in a real MCP client — Claude Desktop/Code — and drive a complex task incl. Unity Editor manual work), then approve merge+push of dw/phase8-mcp to main. Other live tests still open: MANUAL-WF-4 form-fill, ORCH-1, UI-1.",
   risks: [
     ["Broker shell=True runs cmd.exe strings","Medium","Gated by classify+approval+audit; no passthrough API"],
     ["'Elevated by default' not yet true per-command from non-admin","Medium","Broker reports actual token; DW-CLI-ELEVATE closes gap"],
@@ -92,6 +94,7 @@ const DATA = {
     ["Make initial git commit now","No","Left to user (no commit without ask)"],
   ],
   manual: [
+    ["MANUAL-MCP-1","MCP: register `python -m desktop_worker mcp` in an MCP client (Claude Desktop/Code); drive a complex task (multi-step app, browser, file/system, draw, Unity Editor)","Phase 8 headline"],
     ["MANUAL-UI-1","Tkinter UI: python -m desktop_worker ui (timeline, approve/deny, estop)","Phase 7 GUI"],
     ["MANUAL-ORCH-1","Multi-agent: python -m desktop_worker orchestrate \"<goal>\" [--execute]","Phase 6"],
     ["MANUAL-WF-4","Chrome form: python -m desktop_worker browse <url> --fill ... --submit ...","Phase 5"],
@@ -115,6 +118,8 @@ const DATA = {
   doNotTouch: ["docs/requirements.md (read-only source of truth)","artifacts/ (generated)",
     "*/backends.py Protocol signatures"],
   changelog: [
+    "2026-06-30 DW-MCP-SERVER (Phase 8) — Desktop-Worker is now usable BY OTHER AI AGENTS via an MCP (stdio) server. New mcp_server/ package: pure dependency-free AgentBridge maps observe/perceive/screenshot/mouse+keyboard+clipboard/act/run_tool/run_cli/status/estop onto the SAME audited, estop-gated, policy-checked executor (the external AI becomes the planner; all safety stays below it); thin server.py registers them as MCP tools via lazily-imported FastMCP (register() is SDK-free + fake-server-tested); new `mcp` CLI command with --profile. pyproject [mcp] extra (mcp>=1.2). 373 tests (+17). Validated Level 3+: Null-backend unit tests + real-FastMCP in-process e2e smoke (22 tools registered; observe/click/list_tools work; malformed action rejected; emergency_stop halts following actions). Live external-client = MANUAL-MCP-1.",
+    "2026-06-25 WF live fixes — DW-WF-PICKER-OPENBTN (file dialog confirms via ENTER, immune to the ~5 'Open' split-button controls) + DW-WF-BROWSE-FOREGROUND (foreground-gate Chrome before address-bar typing; abort if not in front). 356 tests; both LIVE re-validated. Phases 5/6/7 merged to main + pushed.",
     "2026-06-24 Phases 5→6→7 autonomous batch (10 cards, branch dw/roadmap-5-6-7, 350 tests, each phase Codex-audited): Phase 5 browser/desktop workflows (window+drag DragDropTool, native file picker, download wait, Chrome navigate/form-fill) with CLIs switch-window/pick-file/wait-download/browse; Phase 6 NEW orchestration/ package (AgentTask/Report/Finding schema, Strategist/Implementer/Codex+Northstar roles with injected broker-routed claude + fail-closed auditors, deterministic coordinator) with CLI orchestrate [--execute]; Phase 7 hardening (authorize_app allow/deny, profile+app-list persistence, audit/retention.py + clean-artifacts) and a Tkinter control UI (pure UiController + blocking ApprovalQueue, thin app_tk window) with CLI ui. Committed locally, NOT pushed; live = MANUAL-WF-1..4/ORCH-1/UI-1.",
     "2026-06-22 DW-AGENT-DRAW — drawing v2 (robust + best-of-N + SVG): fixes the 'red scribbles' gap with canvas hygiene (clean canvas + Pencil + Black via UIA) + a PROPOSE-only AI role. New `draw \"<subject>\"` command: AI proposes several SVGs → rendered offline → AI judge picks best → only winner drawn on a cleaned canvas → one verify/correct. New modules geometry/{svg,preview,paint_setup}, drawing/{director,claude_io}; sketch tool accepts SVG or primitives. 251 tests; deterministic path LIVE-validated (red canvas cleaned → clean SVG cat, cat_v2_clean_best.png); two review CRITICALs fixed; full AI run = MANUAL-11.",
     "2026-06-22 DW-AGENT-SKETCH — smart, controlled drawing: new geometry/ package (0..100-grid DSL + deterministic tessellation + UIA-first canvas detection) exposed as the `sketch` AI tool; AI plans a whole figure in ONE tool.run, code renders it precisely (smooth circles, one stroke per primitive → no stray slash); planner forces ONE cropped vision look after a sketch; 223 tests; offline render proof = clean cat; live = MANUAL-10.",
@@ -129,7 +134,7 @@ const DATA = {
     "2026-06-20 DW-LOOP-RECOVERY — bounded retry/re-plan/safe-stop + time limit; Codex APPROVE, Northstar ALIGNED; 80 tests; Phase 2 complete.",
     "2026-06-20 BOOTSTRAP-1 — Python foundation across 8 layers; 71 tests; loop end-to-end; real observation; ease-me workspace + launchers."
   ],
-  nextPrompt: "/ease-me continue  Repo: C:\\Desktop-Worker  Workspace: docs\\dw. Read dw_memory.md + dw_state.md. GENUINE live AI control shipped: `python -m desktop_worker do \"<task>\"`. Next options: workflows as AI-callable tools, vision fallback for UIA-poor apps, Phase 6 (multi-agent), Phase 7 (UI approve/deny)."
+  nextPrompt: "/ease-me continue  Repo: C:\\Desktop-Worker  Workspace: docs\\dw. Read dw_memory.md + dw_state.md. Phase 8 DONE: Desktop-Worker is an MCP server (`python -m desktop_worker mcp`) so external AI agents drive it. Next: run MANUAL-MCP-1 (register in Claude Desktop/Code, drive a complex task incl. Unity), report results so we tune perception/reliability; then approve merge+push of dw/phase8-mcp."
 };
 
 const SB = {done:["Done","b-done"],prog:["In progress","b-prog"],todo:["Not started","b-todo"],

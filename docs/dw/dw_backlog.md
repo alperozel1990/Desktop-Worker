@@ -8,6 +8,54 @@ Status legend: ☐ todo · ◑ partial · ✅ done
 
 ---
 
+## DW-MCP-SERVER — Expose Desktop-Worker as an MCP server (Phase 8)  ✅ done (2026-06-30)
+**Purpose:** The user's new north-star ask: *another AI agent must be able to use
+this tool*. Today only the built-in Claude CLI planner drives the loop; there is no
+programmatic interface. Expose the loop's capabilities over MCP (stdio) so ANY
+MCP-capable agent (another Claude session, Claude Desktop, Cursor, a custom agent)
+becomes the planner, with all safety (estop/policy/audit) staying below.
+**Scope:** New `mcp_server/` package:
+- `bridge.py` — pure, dependency-free `AgentBridge`: holds a `Session` + `ToolRegistry`
+  + `Perceiver`; methods (`observe`, `perceive`, `screenshot`, `click/double_click/
+  right_click/move/scroll/drag`, `type_text/press_key/hotkey`, `clipboard_set/get`,
+  `wait`, `act` [general structured action], `run_tool`, `run_cli`, `list_tools`,
+  `status/emergency_stop/clear_stop`) each route through
+  `executor.execute(parse_action(...))` (or observer/perceiver/broker) and return
+  JSON-serializable dicts. A `build_agent_bridge(real, profile, approver)` factory
+  wires real backends + the same tool set as `do`.
+- `server.py` — thin: lazy-import `mcp` (FastMCP); `register(server, bridge)` maps
+  each bridge method to an MCP tool (testable with a fake server, no SDK needed);
+  `serve(bridge)` runs stdio.
+- `__init__.py` — exports.
+**Non-goals:** SSE/HTTP transport; new schema action family; auto-approving high-risk;
+changing executor/safety/broker behavior; perceive id-stability beyond per-observe ids.
+**Files allowed:** new `src/desktop_worker/mcp_server/{__init__,bridge,server}.py`,
+`src/desktop_worker/__main__.py`, `pyproject.toml`, new
+`tests/test_mcp_bridge.py`, `tests/test_mcp_server_register.py`.
+**Files forbidden:** `schema/`, `actions/executor.py`, `safety/`, `audit/`,
+`broker/cli_broker.py`, `docs/requirements.md`, `artifacts/`.
+**Done criteria:**
+- [x] Every bridge method routes through the existing executor/observer/perceiver/
+  broker; malformed actions rejected; estop+policy+audit unchanged below.
+- [x] `perceive` returns elements with per-observe ids + bounds + text + click `center`
+  so the external AI can target controls; `act` accepts any valid structured action.
+- [x] `run_cli` is broker-only and risk-gated; `run_tool` uses declared tool risk.
+- [x] Thin server: SDK lazy-imported; `register` (22 tools) covered by a fake-server test.
+- [x] CLI `mcp` command starts the server; `--profile {standard|strict|headless}`.
+- [x] `python -m pytest` green (373); new Null-backend tests pass. Live = MANUAL-MCP-1.
+**Diff budget:** 3 new production files + 1 changed (`__main__.py`) + pyproject. 2 test files. Met.
+**Rollback plan:** `git checkout -- src/desktop_worker/__main__.py pyproject.toml` and
+`rm -r src/desktop_worker/mcp_server tests/test_mcp_*`.
+**Result:** Shipped. `mcp_server/` (pure `AgentBridge` + thin FastMCP `server`); `mcp` CLI;
+`[mcp]` extra. 373 tests (+17). Validated Level 3+ : Null unit tests + a real-FastMCP
+in-process e2e smoke (22 tools registered; observe/click/list_tools work; malformed `act`
+rejected; `emergency_stop` halts the next action — safety stays below the bridge; no SDK
+API drift). The external AI is exactly as constrained as the internal planner. Live
+external-client drive = MANUAL-MCP-1 (multi-step app / browser / file-system / draw /
+Unity Editor). Branch `dw/phase8-mcp`, NOT pushed.
+
+---
+
 ## DW-WF-PICKER-OPENBTN — Disambiguate the file-dialog "Open" button  ✅ done (2026-06-25)
 **Purpose:** Live finding (2026-06-25, MANUAL-WF-2): `pick-file` correctly locates the
 File name field, selects, and types the path, but the final confirm clicks the wrong
