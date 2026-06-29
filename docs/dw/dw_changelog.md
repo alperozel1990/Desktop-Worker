@@ -882,3 +882,13 @@ the audit log — it is exactly as constrained as the internal planner.
 **Lesson:** an isolated-Config test must override BOTH `artifacts_root` AND `estop_file`
 — they're independent fields, so a test that only isolates artifacts still reads/pollutes
 the shared default EMERGENCY_STOP sentinel (this bit once during integration).
+
+## 2026-06-30 | Phase 8 follow-up — real-server e2e regression guard | Task: DW-MCP-SERVER
+
+**Type:** Test hardening (no production change). Converts the throwaway in-process
+FastMCP smoke into a permanent pytest, `tests/test_mcp_server_e2e.py` (5 tests; skips
+cleanly when the `mcp` SDK is absent). Builds the REAL FastMCP server on Null backends,
+registers the bridge, and calls tools through it: 22 tools registered; observe/click flow
+through the executor; list_tools reports the named tools; a malformed `act` is rejected;
+`emergency_stop` halts the next action and `clear_stop` resumes. Catches SDK API drift in
+CI and raises confidence ahead of MANUAL-MCP-1. `python -m pytest` → **378** (377 + 1 skip).

@@ -206,12 +206,14 @@ MANUAL-2 (install `[windows]` extra for real screenshots), MANUAL-3 (DONE — gi
 
 ## Last validation results
 - **Date:** 2026-06-30 (DW-MCP-SERVER, Phase 8).
-- **Type:** `python -m pytest` — **373** (372 passed + 1 skipped). New: 14 AgentBridge
-  Null-backend tests + 3 server-register tests. PLUS a real-FastMCP in-process e2e smoke:
-  built the actual `FastMCP` server, registered the bridge (22 tools, schemas inferred
-  from type hints), and called tools through it — `observe`→structured state, `click`→
-  routed through the executor, `list_tools`→6 tools, malformed `act`→rejected, and after
-  `emergency_stop` the next `click` was **halted**. Confirmed no SDK API drift.
+- **Type:** `python -m pytest` — **378** (377 passed + 1 skipped). New: 14 AgentBridge
+  Null-backend tests + 3 server-register tests + **5 real-FastMCP e2e tests**
+  (`test_mcp_server_e2e.py`, skipped when the SDK is absent): built the actual `FastMCP`
+  server, registered the bridge (22 tools, schemas inferred from type hints), and called
+  tools through it — `observe`→structured state, `click`→routed through the executor,
+  `list_tools`→6 tools, malformed `act`→rejected, and after `emergency_stop` the next
+  `click` was **halted**. The in-process smoke is now a permanent regression guard against
+  SDK API drift.
 - **Validation level reached:** **3+** for DW-MCP-SERVER (unit + real-SDK in-process e2e).
   Level 4 (external client process driving a live desktop) = MANUAL-MCP-1.
 - **Prior (2026-06-24):** `python -m pytest` — 350 passed; Phases 5/6/7 Codex-audited.
