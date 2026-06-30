@@ -953,3 +953,21 @@ validation (empty/too-many/unknown-step/bad-labels), estop abort, montage skips 
 screenshots → the montage's actual usefulness to Claude needs a live Blender validation (MANUAL).
 **Files:** new `src/desktop_worker/tools/inspect3d.py`; changed `tools/__init__.py`,
 `mcp_server/bridge.py`, `__main__.py`, `pyproject.toml`; new `tests/test_inspect3d.py`.
+
+## 2026-06-30 | inspect_3d v2 — eased orbit + crop (live-finding fix) | Task: DW-3D-INSPECT
+
+**Type:** Fix from live Blender validation (playbook blender-07). Branch dw/phase8-mcp.
+**Finding:** inspect_3d's `{orbit:[dx,dy]}` was a NO-OP on Blender — 3 views came out pixel-identical.
+Proven not a Blender-state issue: a manual `act` MMB-drag (separate calls, spaced in time) DID rotate.
+Root cause = timing: the tool issued mouse_down→move→up in a tight loop (microseconds), and Blender's
+GHOST input layer drops a single instantaneous jump (matches the research: too-fast motion isn't tracked
+— eased drags only).
+**Fix:** `_orbit()` now holds MMB, settles (~80ms), moves in ~10 eased sub-steps (~20ms each) summing to
+the exact (dx,dy), then settles before release — a real drag the app registers. Also added optional
+`crop:[l,t,r,b]` (the live montage feedback: tiles were full-window so the subject was tiny) to crop each
+tile to the viewport. Description now tells the agent to put `{move:[cx,cy]}` before each orbit, frame the
+object large first, and SANITY-CHECK that tiles differ. (Grid is a ruler overlay, not a layout — confirmed.)
+**Tests:** +2 (eased multi-step orbit sums to exact net dx/dy; crop validation+apply). `python -m pytest`
+→ **388** (387 passed + 1 skipped).
+**Needs live re-test:** confirm the eased orbit now actually rotates Blender's view (playbook blender-07).
+**Files:** `src/desktop_worker/tools/inspect3d.py`, `tests/test_inspect3d.py`.

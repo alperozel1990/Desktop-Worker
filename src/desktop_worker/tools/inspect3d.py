@@ -34,11 +34,13 @@ _MAX_VIEWS = 6  # cost cap: each tile is part of one vision look; K≈3 is the s
 
 
 def build_montage(tile_paths: list[str], labels: list[str], grid: int,
-                  out_path: Path, cell_w: int = 480) -> str | None:
+                  out_path: Path, cell_w: int = 480, crop: Any = None) -> str | None:
     """Assemble tiles into one labelled montage PNG (optional NxN grid overlay).
 
-    Lazy-imports Pillow; returns the montage path, or None if Pillow is missing or
-    no tile is a real image (e.g. Null-backend placeholders). Best-effort per tile.
+    ``crop`` (optional [left, top, right, bottom]) crops every tile to that box
+    first — pass the viewport bounds so the 3D subject fills the tile instead of the
+    full window. Lazy-imports Pillow; returns the montage path, or None if Pillow is
+    missing or no tile is a real image (e.g. Null-backend placeholders).
     """
     try:
         from PIL import Image, ImageDraw
@@ -55,6 +57,9 @@ def build_montage(tile_paths: list[str], labels: list[str], grid: int,
             img = Image.open(p).convert("RGB")
         except Exception:
             continue
+        if crop:
+            l, t, r, b = crop
+            img = img.crop((max(0, l), max(0, t), min(img.width, r), min(img.height, b)))
         w, h = img.size
         ih = max(1, int(h * cell_w / w))
         img = img.resize((cell_w, ih))
@@ -98,13 +103,18 @@ class Inspect3DTool:
         "into ONE labelled montage image so you can reason about 3D shape/orientation in a "
         "single vision look. Pass `views`: a list (<=6, K~3 ideal) of view-setups; each view "
         "is a list of VIEW-ONLY steps applied before a screenshot — {key:'KP_1'} (press), "
-        "{hotkey:['CTRL','KP_1']}, {orbit:[dx,dy]} (middle-drag, the verified Blender orbit), "
-        "{move:[x,y]} (cursor into the viewport first), {wait_ms:200}. Optional `labels` "
-        "(per view), `grid` (NxN coordinate overlay), `settle_ms`. Returns the montage path "
-        "+ tile paths; then READ the montage to perceive the 3D structure."
+        "{hotkey:['CTRL','KP_1']}, {orbit:[dx,dy]} (eased middle-drag orbit; ~250-330 px = a "
+        "big swing), {move:[x,y]} (cursor INTO the viewport — include this before EACH orbit, "
+        "the app orbits around the cursor area), {wait_ms:200}. Screenshots are full-window, so "
+        "pass `crop:[left,top,right,bottom]` (the viewport bounds, from a prior screenshot) so "
+        "the subject fills each tile, and/or frame the object large first. Optional `labels` "
+        "(per view), `grid` (NxN ruler overlay), `settle_ms`. Returns the montage path + tile "
+        "paths; then READ the montage. SANITY-CHECK the tiles actually differ — if identical, the "
+        "orbit didn't register (move the cursor into the viewport and retry, or orbit via `act`)."
     )
     args_help = ("views (list of step-lists; steps: {key}|{hotkey}|{orbit:[dx,dy]}|{move:[x,y]}|"
-                 "{wait_ms}); optional labels (list[str]), grid (int NxN), settle_ms (int)")
+                 "{wait_ms}); optional labels (list[str]), grid (int NxN), crop ([l,t,r,b]), "
+                 "settle_ms (int)")
     risk = "low"  # view-only navigation + screenshots; non-destructive
 
     def __init__(self, *, input_backend: Any, screenshot_fn: Any, estop: Any = None,
@@ -136,7 +146,7 @@ class Inspect3DTool:
             ib.hotkey([str(k) for k in keys])
         elif "orbit" in step:
             dx, dy = self._point(step["orbit"], "orbit")
-            ib.mouse_down("middle"); ib.move_relative(dx, dy); ib.mouse_up("middle")
+            self._orbit(dx, dy)
         elif "move" in step:
             x, y = self._point(step["move"], "move")
             ib.move(x, y)
@@ -145,6 +155,31 @@ class Inspect3DTool:
         else:
             raise ToolError(f"unknown view step {sorted(step)!r}; "
                             "allowed: key, hotkey, orbit, move, wait_ms")
+
+    def _orbit(self, dx: int, dy: int, steps: int = 10,
+               settle: float = 0.08, step_delay: float = 0.02) -> None:
+        """Middle-drag orbit as an EASED, time-spaced motion.
+
+        A single instantaneous jump while MMB is held is dropped by apps that
+        integrate mouse-move deltas (Blender's GHOST layer) — the live finding
+        (playbook blender-07). Holding the button, pausing, then moving in several
+        small sub-steps with short sleeps emulates a real drag the app registers.
+        """
+        ib = self._input
+        ib.mouse_down("middle")
+        try:
+            time.sleep(settle)  # let the button-down register before motion
+            acc_x = acc_y = 0
+            for i in range(1, steps + 1):
+                tx, ty = round(dx * i / steps), round(dy * i / steps)
+                mx, my = tx - acc_x, ty - acc_y
+                acc_x, acc_y = tx, ty
+                if mx or my:
+                    ib.move_relative(mx, my)
+                time.sleep(step_delay)
+            time.sleep(settle)
+        finally:
+            ib.mouse_up("middle")
 
     @staticmethod
     def _point(value: Any, field: str) -> tuple[int, int]:
@@ -168,6 +203,16 @@ class Inspect3DTool:
         labels = [str(l) for l in labels] if labels else [f"view {i+1}" for i in range(len(views))]
         grid = int(args.get("grid", 0) or 0)
         settle_ms = int(args.get("settle_ms", 250) or 0)
+        crop = args.get("crop")
+        if crop is not None:
+            if not isinstance(crop, (list, tuple)) or len(crop) != 4:
+                raise ToolError("crop must be [left, top, right, bottom]")
+            try:
+                crop = [int(v) for v in crop]
+            except (TypeError, ValueError):
+                raise ToolError("crop must be four integers")
+            if crop[2] <= crop[0] or crop[3] <= crop[1]:
+                raise ToolError("crop must have right>left and bottom>top")
 
         self._work_dir.mkdir(parents=True, exist_ok=True)
         tiles: list[str] = []
@@ -188,7 +233,8 @@ class Inspect3DTool:
             return {"success": False, "error": "no screenshots were captured",
                     "views": len(views)}
 
-        montage = build_montage(tiles, labels, grid, self._work_dir / "inspect_montage.png")
+        montage = build_montage(tiles, labels, grid, self._work_dir / "inspect_montage.png",
+                                crop=crop)
         return {"success": True, "montage": montage, "tiles": tiles,
                 "labels": labels, "views": len(views),
                 "note": None if montage else

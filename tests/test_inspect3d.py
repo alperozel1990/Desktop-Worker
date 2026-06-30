@@ -56,6 +56,25 @@ def test_orbit_step_emits_middle_drag(tmp_path):
     assert "move" in kinds
 
 
+def test_orbit_is_eased_multistep_with_correct_total(tmp_path):
+    tool, ib, _ = _tool(tmp_path)
+    tool.run({"views": [[{"orbit": [200, -60]}]]})
+    moves = [c for c in ib.calls if c[0] == "move_relative"]
+    assert len(moves) > 1  # eased into sub-steps, not one instant jump
+    assert sum(m[1] for m in moves) == 200   # exact net dx
+    assert sum(m[2] for m in moves) == -60    # exact net dy
+    kinds = [c[0] for c in ib.calls]
+    assert kinds[0] == "mouse_down" and kinds[-1] == "mouse_up"
+
+
+def test_crop_validated_and_applied(tmp_path):
+    tool, _, _ = _tool(tmp_path)
+    with pytest.raises(ToolError):
+        tool.run({"views": [[{"key": "A"}]], "crop": [10, 10, 5, 5]})  # right<left
+    out = tool.run({"views": [[{"key": "A"}]], "crop": [5, 5, 35, 25]})
+    assert out["success"] is True and out["montage"]
+
+
 def test_grid_overlay_builds(tmp_path):
     tool, ib, calls = _tool(tmp_path)
     out = tool.run({"views": [[{"key": "KP_1"}]], "grid": 4})
