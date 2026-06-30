@@ -35,6 +35,19 @@ Source of truth: `docs/requirements.md`.
 - `artifacts/` (generated output; git-ignored).
 
 ## Current roadmap position
+- **PROJECT COMPLETE (2026-06-30), all merged to main + pushed (origin/main @ cb7f835), 400 tests.**
+  On top of Phase 8: a **3D capability tier** + **input-reliability closeout**, all LIVE-validated:
+  - 9 AI-callable tools now (added `inspect_3d` = multi-view montage 3D perception, `orbit` = eased
+    middle-drag, `capture_burst` = timestamped snapshots-while-rotating; DXcam opt-in via `[capture]`).
+    Eased/time-spaced orbit is REQUIRED — an instant mouse jump is dropped by Blender's GHOST layer.
+  - Input fixes: clipboard set/get 64-bit handle bug (OverflowError) FIXED; `press_key`/`hotkey` gained
+    numpad+nav keys; **`type_text` now reaches GHOST apps (Blender/games)** via VK keystrokes
+    (VkKeyScanW), Unicode fallback for AltGr/off-layout — so typing into Blender works directly.
+  - **User-scope `desktop-worker` skill** (`~/.claude/skills/desktop-worker/`): thin SKILL.md + living
+    REFERENCE.md + per-app **playbooks** (INDEX + ltspice/blender/unity) with a verify-before-save,
+    generic-entry, read-before/write-after protocol so ANY AI session can use the tool and self-improve
+    from real runs. Update the skill's REFERENCE/playbooks (not core code) as the tool grows.
+    See [[desktop-worker-skill-living-doc]], [[desktop-worker-playbook-generic]].
 - **PHASE 8 — EXTERNAL AI INTERFACE (MCP server) DONE (2026-06-30).** Desktop-Worker is
   now usable BY OTHER AI AGENTS (the user's north-star: "another AI couldn't use this
   tool"). New `mcp_server/` package: pure dep-free `AgentBridge` maps observe/perceive/
@@ -160,10 +173,10 @@ Source of truth: `docs/requirements.md`.
   prompt, real browser, Tesseract install). Batch those as a "test this" list.
 
 ## Current next action
-**MANUAL-MCP-1** (user-interactive): register `python -m desktop_worker mcp` in a real
-MCP client (Claude Desktop/Code) and drive a complex task incl. Unity Editor manual work;
-report what worked/failed + `perceive` output → drives reliability tuning. Then approve
-merge+push of `dw/phase8-mcp` → main. (All implementation phases 1–8 are complete.)
+**None mandatory — project complete + live-validated + merged to main.** Optional: install
+`[capture]` and live-test `capture_burst fast:true` (DXcam high-FPS); delete merged feature
+branches. Otherwise growth comes from real runs feeding the per-app **playbooks** in the
+user-scope `desktop-worker` skill — update REFERENCE.md/playbooks, not core code.
 
 ## Important assumptions
 - Python 3.11+ (dev machine has 3.14.0). Windows 11. `claude.exe` at

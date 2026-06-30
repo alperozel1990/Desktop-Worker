@@ -179,6 +179,26 @@ deny-by-default above the threshold); element-id stability across observe/act.
   multi-step app, browser, file/system, draw, Unity Editor manual tasks).
 **Complexity:** High.
 
+## Phase 9 — 3D capabilities + input reliability (skill + playbooks)  ✅ complete (LIVE-validated)
+**Goal:** Make the tool genuinely usable for real desktop work by other AI agents — close the
+input-reliability gaps found in live use and add 3D-app perception/control — and ship a reusable,
+self-improving usage layer (a user-scope skill + per-app playbooks) so any AI session benefits.
+**Scope (all done + LIVE-validated on the real desktop):**
+- **Input fixes:** clipboard set/get 64-bit handle bug (`OverflowError`) fixed; `press_key`/`hotkey`
+  numpad+nav keys; `type_text` now reaches GHOST apps (Blender/games) via VkKeyScanW VK keystrokes
+  (Unicode fallback for AltGr/off-layout). (DW-CLIP-FIX, DW-KEYS-NUMPAD, DW-INPUT-GHOST.)
+- **3D tools:** `inspect_3d` (multi-view montage 3D perception; eased orbit that registers on GHOST;
+  crop; identical-tile warning), `orbit` (eased middle-drag), `capture_burst` (timestamped
+  snapshots-while-rotating; DXcam opt-in). Research-grounded (Agent3D-Zero/Think3D/Set-of-Mark; DXcam).
+  (DW-3D-INSPECT Tier 3, DW-3D-CAPTURE Tier 2, Tier 1 = docs.)
+- **Usage layer:** user-scope `desktop-worker` skill (thin SKILL.md + living REFERENCE.md) + per-app
+  **playbooks** (INDEX + ltspice/blender/unity) with verify-before-save / generic-entry /
+  read-before-write-after rules (deep-research-designed) so AI sessions self-improve from real runs.
+**Validation:** Level 4 (live real desktop) — an external MCP agent built an LTSpice voltage divider
+(sim verified 1.5V) and a low-poly Blender car; inspect_3d/capture_burst/type_text confirmed in Blender.
+**Done criteria:** [x] input gaps closed + live-verified · [x] 3D perception + capture tools, live ·
+[x] reusable skill + self-improving playbooks shipped. **Complexity:** High.
+
 ---
 
 ## Dependency graph

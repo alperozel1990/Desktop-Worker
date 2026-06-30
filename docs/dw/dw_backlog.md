@@ -51,8 +51,30 @@ changing executor/safety/broker behavior; perceive id-stability beyond per-obser
 in-process e2e smoke (22 tools registered; observe/click/list_tools work; malformed `act`
 rejected; `emergency_stop` halts the next action — safety stays below the bridge; no SDK
 API drift). The external AI is exactly as constrained as the internal planner. Live
-external-client drive = MANUAL-MCP-1 (multi-step app / browser / file-system / draw /
-Unity Editor). Branch `dw/phase8-mcp`, NOT pushed.
+external-client drive = MANUAL-MCP-1. Merged to main + pushed; **MANUAL-MCP-1 PASSED LIVE** — an
+external MCP agent built an LTSpice voltage divider (sim verified 1.5V) and a low-poly Blender car.
+
+---
+
+## Phase 9 cards — 3D capabilities + input reliability (2026-06-30)  ✅ all done, LIVE-validated
+
+> All merged to main + pushed. Agent-facing usage docs live in the user-scope `desktop-worker` skill
+> (REFERENCE.md + per-app playbooks), not the repo. See `dw_changelog.md` for full entries.
+
+- **DW-CLIP-FIX** ✅ — `clipboard_set/get` 64-bit ctypes handle truncation (`OverflowError` on every
+  call) fixed via 64-bit-safe argtypes/restypes + NULL guards + `GlobalFree`. LIVE round-trip verified.
+- **DW-KEYS-NUMPAD** ✅ — `press_key`/`hotkey` gained numpad (`KP_*`/`NUMPAD*`/`NUM*`) + operators +
+  PageUp/PageDown/Insert.
+- **DW-INPUT-GHOST** ✅ — `type_text` reaches GHOST apps (Blender/games): maps chars to VK+Shift via
+  `VkKeyScanW` and emits real VK keystrokes (Unicode fallback for AltGr/off-layout). LIVE in Blender.
+- **DW-3D-INSPECT (Tier 3)** ✅ — `inspect_3d`: K≈3 caller-specified views → ONE labelled montage for
+  single-look 3D reasoning; eased time-spaced orbit (registers on GHOST); crop; identical-tile warning.
+  `tools/inspect3d.py`. LIVE-validated on Blender.
+- **DW-3D-CAPTURE (Tier 2)** ✅ — `capture_burst` (N timestamped frames while orbiting → contact sheet;
+  DXcam opt-in via `[capture]`, mss fallback) + `orbit` (one-call eased middle-drag). `tools/capture3d.py`.
+  LIVE-validated on Blender.
+- **DW-SKILL (usage layer)** ✅ — user-scope `desktop-worker` skill + per-app playbooks
+  (verify-before-save / generic-entry / read-before-write-after), deep-research-designed.
 
 ---
 
