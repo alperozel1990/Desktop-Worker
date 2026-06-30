@@ -7,7 +7,8 @@
 - **Last updated:** 2026-06-30
 - **Repo path:** `C:\Desktop-Worker`
 - **Workspace path:** `C:\Desktop-Worker\docs\dw`
-- **Current branch:** `dw/phase8-mcp` (Phase 8 MCP server; NOT pushed)
+- **Current branch:** `main` (Phase 8 + clipboard/keys fixes + 3D Tier 1/Tier 3 merged & pushed
+  2026-06-30, `10942cd..797e75d`). Tier 2 (DXcam capture_burst + orbit) on a fresh branch next.
 - **Remote:** `origin` → https://github.com/alperozel1990/Desktop-Worker.git
 - **Last commit hash:** pushed to origin/main (see `dw_changelog.md` for hashes)
 - **Operating model:** autonomous per-card execution gated by **Codex Auditor**
@@ -166,8 +167,13 @@ Also: deterministic `create-file` workflow (separate, reliable).
 - **Test count:** 350 → **356** (+6 for the two WF fixes).
 
 ## Next recommended task
-Phase 8 (MCP server) is the project's functional finish line: an external AI agent can
-now drive Desktop-Worker. Remaining work is user-interactive live validation + tuning:
+**Tier 2 (3D capabilities):** DXcam fast-capture backend (`[capture]` extra, mss fallback) +
+`capture_burst` tool (N timestamped frames captured DURING a drag — "snapshots while orbiting",
+the user's original ask) + a standalone `orbit` convenience tool (reuse inspect_3d's eased-drag).
+Tier 1 (3D docs) + Tier 3 (inspect_3d, LIVE-validated on Blender) are done + merged to main.
+
+Earlier context — Phase 8 (MCP server) is the project's functional finish line: an external AI
+agent can now drive Desktop-Worker. Live MANUAL items remaining are user-interactive validation:
 1. **MANUAL-MCP-1 (headline):** register `python -m desktop_worker mcp` in a real MCP
    client (Claude Desktop/Code) and drive the priority scenarios (multi-step app,
    browser, file/system, draw, **Unity Editor manual tasks**). Report what worked vs.
