@@ -1007,3 +1007,22 @@ earns its keep only for genuine snapshots-during-continuous-motion. Live validat
 Blender = MANUAL.
 **Files:** new `src/desktop_worker/tools/capture3d.py`; changed `tools/__init__.py`,
 `mcp_server/bridge.py`, `__main__.py`, `pyproject.toml`; new `tests/test_capture3d.py`.
+
+## 2026-06-30 | type_text reaches GHOST apps (Blender/games) | Task: DW-INPUT-GHOST
+
+**Type:** Input reliability fix from the Blender live finding (playbook blender-02). Branch
+dw/input-ghost-fix.
+**Problem:** `type_text` emitted `KEYEVENTF_UNICODE` events, which Blender's GHOST input layer (and
+many games) drop — typed text never appeared in Blender fields (the agent had to clipboard-paste).
+But `press_key`/`hotkey` use `keybd_event(vk,...)` and DO reach Blender.
+**Fix:** `type_text` now maps each char to a virtual key + Shift via `VkKeyScanW` and emits real VK
+keystrokes (the same mechanism as `press_key`) so the text reaches GHOST/raw-input apps. Chars not on
+the current layout, or needing AltGr/Ctrl, fall back to the existing `KEYEVENTF_UNICODE` path. Pure,
+testable planner `plan_typing(text, vk_scan)` + a thin `_vk_scan` using VkKeyScanW.
+**Validated:** live `_vk_scan` mapping confirmed on the real backend — a→(65,False), A→(65,True),
+!→(49,True), space→(32,False); on the user's Turkish layout ş→(186,False) (so Turkish reaches Blender
+too); € / @ (AltGr) → None → Unicode fallback. +3 pure planner tests. `python -m pytest` → **400**
+(399 passed + 1 skipped).
+**Needs live re-test:** confirm `type_text` now actually lands in a Blender field (playbook blender-02);
+clipboard-paste remains the route for exotic Unicode not on the active layout.
+**Files:** `src/desktop_worker/actions/windows_input.py`, `tests/test_input_hardening.py`.

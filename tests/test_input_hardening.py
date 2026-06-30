@@ -9,9 +9,37 @@ import pytest
 
 from desktop_worker.actions.windows_input import (
     plan_hotkey,
+    plan_typing,
     resolve_vk,
     should_paste,
 )
+
+
+def _fake_scan(ch):
+    """ASCII letters/digits map to (vk, shift); everything else -> None (unicode)."""
+    if ch.isascii() and (ch.isalpha() or ch.isdigit()):
+        return (ord(ch.upper()), ch.isupper())
+    return None
+
+
+def test_plan_typing_uses_vk_for_layout_chars_unicode_otherwise():
+    plan = plan_typing("Ab9€", _fake_scan)
+    assert plan == [
+        ("key", ord("A"), True),
+        ("key", ord("B"), False),
+        ("key", ord("9"), False),
+        ("unicode", ord("€")),
+    ]
+
+
+def test_plan_typing_all_unicode_when_not_on_layout():
+    plan = plan_typing("şğ", lambda ch: None)
+    assert [p[0] for p in plan] == ["unicode", "unicode"]
+    assert plan == [("unicode", ord("ş")), ("unicode", ord("ğ"))]
+
+
+def test_plan_typing_empty():
+    assert plan_typing("", _fake_scan) == []
 
 
 def test_resolve_vk_known_and_aliases():

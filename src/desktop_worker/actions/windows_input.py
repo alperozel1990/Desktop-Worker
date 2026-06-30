@@ -82,6 +82,27 @@ def should_paste(text: str, threshold: int = DEFAULT_PASTE_THRESHOLD) -> bool:
     return len(text) > threshold
 
 
+def plan_typing(text, vk_scan):
+    """Plan typing as virtual-key keystrokes where possible, Unicode fallback else.
+
+    Pure + testable. ``vk_scan(ch)`` returns ``(vk, shift)`` for a char typeable on the
+    current keyboard layout with at most Shift, or ``None`` if it needs AltGr/Ctrl or
+    isn't on the layout. VK keystrokes (like ``press_key``) reach apps that read raw
+    scancodes/virtual keys — notably Blender's GHOST layer and games — where synthetic
+    Unicode (``KEYEVENTF_UNICODE``) is dropped. Returns a list of
+    ``("key", vk, shift)`` | ``("unicode", codepoint)``.
+    """
+    plan = []
+    for ch in text:
+        hit = vk_scan(ch)
+        if hit is None:
+            plan.append(("unicode", ord(ch)))
+        else:
+            vk, shift = hit
+            plan.append(("key", int(vk), bool(shift)))
+    return plan
+
+
 class WindowsInputBackend:
     def __init__(self, *, inter_key_delay_s: float = 0.0,
                  paste_threshold: int = DEFAULT_PASTE_THRESHOLD) -> None:
@@ -252,11 +273,42 @@ class WindowsInputBackend:
             self.clipboard_set(text)
             self.hotkey(["CTRL", "V"])
             return
-        for ch in text:
-            # KEYEVENTF_UNICODE lets us emit any character regardless of layout.
-            self._unicode_key(ord(ch))
+        SHIFT, KEYUP = 0x10, 0x0002
+        # Prefer real virtual-key keystrokes (like press_key) so the text reaches apps
+        # that read scancodes/VKs — Blender's GHOST layer, games — where synthetic
+        # Unicode is dropped. Chars not on the current layout fall back to Unicode.
+        for item in plan_typing(text, self._vk_scan):
+            if item[0] == "unicode":
+                self._unicode_key(item[1])
+            else:
+                _, vk, shift = item
+                if shift:
+                    self.user32.keybd_event(SHIFT, 0, 0, 0)
+                self.user32.keybd_event(vk, 0, 0, 0)
+                self.user32.keybd_event(vk, 0, KEYUP, 0)
+                if shift:
+                    self.user32.keybd_event(SHIFT, 0, KEYUP, 0)
             if self.inter_key_delay_s:
                 time.sleep(self.inter_key_delay_s)
+
+    def _vk_scan(self, ch: str):
+        """Map a char to (vk, shift) on the current layout, or None for Unicode fallback.
+
+        Uses VkKeyScanW; returns None when the char isn't on the layout (-1) or needs a
+        Ctrl/Alt/AltGr combo (we only synthesize plain or Shift), so exotic chars keep the
+        reliable Unicode path.
+        """
+        ctypes = self.ctypes
+        self.user32.VkKeyScanW.argtypes = [ctypes.c_wchar]
+        self.user32.VkKeyScanW.restype = ctypes.c_short
+        res = self.user32.VkKeyScanW(ch)
+        if res == -1:
+            return None
+        vk = res & 0xFF
+        shift_state = (res >> 8) & 0xFF
+        if vk in (0, 0xFF) or (shift_state & ~0x01):  # no VK, or needs Ctrl/Alt
+            return None
+        return (vk, bool(shift_state & 0x01))
 
     def _unicode_key(self, codepoint: int) -> None:
         # SendInput with 16-bit wScan handles the full BMP (incl. Turkish ş/ı);
