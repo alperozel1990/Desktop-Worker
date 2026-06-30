@@ -985,3 +985,25 @@ no-op finding (playbook blender-07).
 again masquerade as success; (2) optional `cols` to control montage layout. +3 tests.
 `python -m pytest` → **391** (390 passed + 1 skipped).
 **Files:** `src/desktop_worker/tools/inspect3d.py`, `tests/test_inspect3d.py`.
+
+## 2026-06-30 | Tier 2 — orbit + capture_burst (+DXcam opt-in) | Task: DW-3D-CAPTURE
+
+**Type:** Tier 2 3D capabilities. Branch dw/tier2-capture.
+**What (the user's original ask — "time-based fast snapshots while mouse-rotating"):**
+- `capture_burst` — holds ONE middle-drag across the whole sweep (continuous orbit) and grabs a
+  frame at each eased sub-step with a relative ms timestamp, then assembles a contact-sheet montage.
+  `fast:true` uses DXcam (DXGI Desktop Duplication, `[capture]` extra) for tight in-motion frames;
+  otherwise the normal screenshot path (mss). Args: orbit/frames(2-12)/move/crop/grid/cols/fast.
+- `orbit` — one-call eased middle-drag (the convenience version of inspect_3d's internal orbit;
+  eased + time-spaced so it registers on Blender's GHOST input). Args: delta/move/steps.
+Both VIEW-ONLY + estop-gated. New `tools/capture3d.py` (shared `eased_orbit()` + guarded
+`make_dxcam_grabber()` with full fallback). Registered in the MCP bridge + `do` (now 9 named tools).
+`[capture]` extra = dxcam + Pillow.
+**Tests:** `tests/test_capture3d.py` (6) — eased orbit (move-first, exact net delta, estop), burst
+frames/timestamps/montage/held-button, frames bounds, fast-without-dxcam falls back. `python -m pytest`
+→ **397** (396 passed + 1 skipped).
+**Honest note:** for discrete-view reasoning `inspect_3d` (mss) already suffices; capture_burst/DXcam
+earns its keep only for genuine snapshots-during-continuous-motion. Live validation of capture_burst on
+Blender = MANUAL.
+**Files:** new `src/desktop_worker/tools/capture3d.py`; changed `tools/__init__.py`,
+`mcp_server/bridge.py`, `__main__.py`, `pyproject.toml`; new `tests/test_capture3d.py`.

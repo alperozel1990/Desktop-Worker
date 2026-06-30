@@ -33,6 +33,10 @@ mcp = [
 vision = [
     "Pillow>=10.0",      # montage assembly for the inspect_3d multi-view 3D perception tool
 ]
+capture = [
+    "dxcam>=0.0.5",      # fast DXGI capture for capture_burst fast:true (mss is the fallback)
+    "Pillow>=10.0",      # save grabbed numpy frames to PNG
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

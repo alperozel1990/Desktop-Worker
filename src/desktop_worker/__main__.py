@@ -552,9 +552,9 @@ def _cmd_do(args: argparse.Namespace) -> int:
     # through the same audited/estop-gated executor for each of its sub-actions.
     from desktop_worker.geometry import get_canvas_locator
     from desktop_worker.geometry.paint_setup import get_paint_ui
-    from desktop_worker.tools import (CreateTextFileTool, DragDropTool, FocusWindowTool,
-                                      Inspect3DTool, OpenAppTool, OpenUrlTool, SketchTool,
-                                      ToolRegistry)
+    from desktop_worker.tools import (CaptureBurstTool, CreateTextFileTool, DragDropTool,
+                                      FocusWindowTool, Inspect3DTool, OpenAppTool, OpenUrlTool,
+                                      OrbitTool, SketchTool, ToolRegistry)
 
     tools = ToolRegistry()
     tools.register(CreateTextFileTool(desktop_dir=desktop_dir, broker=session.broker))
@@ -568,6 +568,10 @@ def _cmd_do(args: argparse.Namespace) -> int:
     tools.register(Inspect3DTool(input_backend=session.input_backend,
                                  screenshot_fn=session.desktop_backend.capture_screenshot,
                                  estop=session.estop, work_dir=cfg.task_dir / "inspect"))
+    tools.register(OrbitTool(input_backend=session.input_backend, estop=session.estop))
+    tools.register(CaptureBurstTool(input_backend=session.input_backend,
+                                    screenshot_fn=session.desktop_backend.capture_screenshot,
+                                    estop=session.estop, work_dir=cfg.task_dir / "burst"))
     session.executor.tools = tools
 
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))

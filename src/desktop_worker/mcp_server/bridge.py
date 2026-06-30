@@ -227,9 +227,9 @@ def build_agent_bridge(
     from desktop_worker.geometry.paint_setup import get_paint_ui
     from desktop_worker.perception import Perceiver, get_ocr_backend, get_uia_backend
     from desktop_worker.safety import build_policy
-    from desktop_worker.tools import (CreateTextFileTool, DragDropTool, FocusWindowTool,
-                                      Inspect3DTool, OpenAppTool, OpenUrlTool, SketchTool,
-                                      ToolRegistry)
+    from desktop_worker.tools import (CaptureBurstTool, CreateTextFileTool, DragDropTool,
+                                      FocusWindowTool, Inspect3DTool, OpenAppTool, OpenUrlTool,
+                                      OrbitTool, SketchTool, ToolRegistry)
     from desktop_worker.workflows.desktop_ui import get_desktop_dir
 
     cfg = config or Config(session_id="mcp", task_id="task")
@@ -250,6 +250,10 @@ def build_agent_bridge(
     tools.register(Inspect3DTool(input_backend=session.input_backend,
                                  screenshot_fn=session.desktop_backend.capture_screenshot,
                                  estop=session.estop, work_dir=cfg.task_dir / "inspect"))
+    tools.register(OrbitTool(input_backend=session.input_backend, estop=session.estop))
+    tools.register(CaptureBurstTool(input_backend=session.input_backend,
+                                    screenshot_fn=session.desktop_backend.capture_screenshot,
+                                    estop=session.estop, work_dir=cfg.task_dir / "burst"))
 
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))
     return AgentBridge(session, tools=tools, perceiver=perceiver)

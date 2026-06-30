@@ -14,7 +14,9 @@ from desktop_worker.tools.builtin import (CreateTextFileTool, DragDropTool,
                                           FocusWindowTool, OpenAppTool, OpenUrlTool,
                                           SketchTool)
 from desktop_worker.tools.inspect3d import Inspect3DTool, build_montage
+from desktop_worker.tools.capture3d import CaptureBurstTool, OrbitTool
 
 __all__ = ["Tool", "ToolRegistry", "ToolError", "CreateTextFileTool",
            "OpenAppTool", "OpenUrlTool", "FocusWindowTool", "SketchTool",
-           "DragDropTool", "Inspect3DTool", "build_montage"]
+           "DragDropTool", "Inspect3DTool", "build_montage",
+           "CaptureBurstTool", "OrbitTool"]
