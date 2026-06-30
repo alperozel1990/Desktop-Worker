@@ -971,3 +971,17 @@ object large first, and SANITY-CHECK that tiles differ. (Grid is a ruler overlay
 → **388** (387 passed + 1 skipped).
 **Needs live re-test:** confirm the eased orbit now actually rotates Blender's view (playbook blender-07).
 **Files:** `src/desktop_worker/tools/inspect3d.py`, `tests/test_inspect3d.py`.
+
+## 2026-06-30 | inspect_3d v3 — live-validated + sanity-check & cols | Task: DW-3D-INSPECT
+
+**Type:** Tier 3 LIVE-VALIDATED + polish from the re-test. Branch dw/phase8-mcp.
+**Live result (Level 4):** the eased-orbit fix WORKS — one `inspect_3d` call produced three genuinely
+different views (front 3/4 → yaw → near top-down), the montage read 3D shape + orientation in a single
+look, and `crop` removed the surrounding panels so the subject filled each tile. Confirms the whole
+Tier-3 multi-view 3D-perception path on a real Blender viewport (low-poly car). Supersedes the earlier
+no-op finding (playbook blender-07).
+**Polish (from the re-test suggestions):** (1) the tool now hashes captured tiles and reports
+`distinct_views` + auto-warns in `note` when tiles are pixel-identical — the silent no-op orbit can never
+again masquerade as success; (2) optional `cols` to control montage layout. +3 tests.
+`python -m pytest` → **391** (390 passed + 1 skipped).
+**Files:** `src/desktop_worker/tools/inspect3d.py`, `tests/test_inspect3d.py`.

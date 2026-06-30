@@ -22,6 +22,7 @@ Each view-setup step is one of (all gated by the emergency stop):
 
 from __future__ import annotations
 
+import hashlib
 import math
 import time
 from pathlib import Path
@@ -34,7 +35,8 @@ _MAX_VIEWS = 6  # cost cap: each tile is part of one vision look; K≈3 is the s
 
 
 def build_montage(tile_paths: list[str], labels: list[str], grid: int,
-                  out_path: Path, cell_w: int = 480, crop: Any = None) -> str | None:
+                  out_path: Path, cell_w: int = 480, crop: Any = None,
+                  cols: int | None = None) -> str | None:
     """Assemble tiles into one labelled montage PNG (optional NxN grid overlay).
 
     ``crop`` (optional [left, top, right, bottom]) crops every tile to that box
@@ -81,7 +83,8 @@ def build_montage(tile_paths: list[str], labels: list[str], grid: int,
     if not cells:
         return None
 
-    cols = min(len(cells), 3)
+    cols = cols or min(len(cells), 3)
+    cols = max(1, min(int(cols), len(cells)))
     rows = math.ceil(len(cells) / cols)
     cw = cell_w
     ch = max(c.size[1] for c in cells)
@@ -108,13 +111,14 @@ class Inspect3DTool:
         "the app orbits around the cursor area), {wait_ms:200}. Screenshots are full-window, so "
         "pass `crop:[left,top,right,bottom]` (the viewport bounds, from a prior screenshot) so "
         "the subject fills each tile, and/or frame the object large first. Optional `labels` "
-        "(per view), `grid` (NxN ruler overlay), `settle_ms`. Returns the montage path + tile "
-        "paths; then READ the montage. SANITY-CHECK the tiles actually differ — if identical, the "
-        "orbit didn't register (move the cursor into the viewport and retry, or orbit via `act`)."
+        "(per view), `grid` (NxN ruler overlay), `cols` (montage columns), `settle_ms`. Returns the "
+        "montage path, tile paths, and `distinct_views` — it auto-warns in `note` when tiles are "
+        "pixel-identical (the orbit didn't register: move the cursor into the viewport and retry, "
+        "or orbit via `act`). READ the montage to perceive the 3D structure."
     )
     args_help = ("views (list of step-lists; steps: {key}|{hotkey}|{orbit:[dx,dy]}|{move:[x,y]}|"
                  "{wait_ms}); optional labels (list[str]), grid (int NxN), crop ([l,t,r,b]), "
-                 "settle_ms (int)")
+                 "cols (int), settle_ms (int)")
     risk = "low"  # view-only navigation + screenshots; non-destructive
 
     def __init__(self, *, input_backend: Any, screenshot_fn: Any, estop: Any = None,
@@ -233,11 +237,30 @@ class Inspect3DTool:
             return {"success": False, "error": "no screenshots were captured",
                     "views": len(views)}
 
+        cols = args.get("cols")
+        cols = int(cols) if cols else None
+
+        # Sanity-check: pixel-identical tiles mean a view change (orbit) didn't
+        # register — exactly the silent no-op that made the montage useless before.
+        notes: list[str] = []
+        digs = []
+        for t in tiles:
+            try:
+                digs.append(hashlib.md5(Path(t).read_bytes()).hexdigest())
+            except OSError:
+                digs.append(None)
+        real = [h for h in digs if h]
+        distinct = len(set(real))
+        if len(real) > 1 and distinct < len(real):
+            notes.append("WARNING: some views are pixel-identical — the orbit/view change may "
+                         "not have registered. Put a {move:[cx,cy]} into the viewport before each "
+                         "{orbit}, increase the orbit delta, or orbit via an `act` MMB-drag.")
+
         montage = build_montage(tiles, labels, grid, self._work_dir / "inspect_montage.png",
-                                crop=crop)
+                                crop=crop, cols=cols)
+        if not montage:
+            notes.append("montage skipped (Pillow missing or captures are not real images); "
+                         "read the individual tile paths instead")
         return {"success": True, "montage": montage, "tiles": tiles,
-                "labels": labels, "views": len(views),
-                "note": None if montage else
-                "montage skipped (Pillow missing or captures are not real images); "
-                "read the individual tile paths instead",
-                "error": None}
+                "labels": labels, "views": len(views), "distinct_views": distinct,
+                "note": " | ".join(notes) or None, "error": None}

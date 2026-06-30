@@ -15,12 +15,13 @@ def _png(path, size=(40, 30), color=(120, 160, 200)):
 
 
 def _shotter(tmp_path):
-    """Fake screenshot_fn that writes a small real PNG and returns its path."""
+    """Fake screenshot_fn writing a DISTINCT small PNG per call (realistic views)."""
     calls = []
 
     def shot(dest):
+        i = len(calls)
         calls.append(str(dest))
-        return _png(dest)
+        return _png(dest, color=((40 * i) % 256, 80, 120))
 
     return shot, calls
 
@@ -95,6 +96,35 @@ def test_rejects_unknown_step_and_bad_labels(tmp_path):
         tool.run({"views": [[{"frobnicate": 1}]]})
     with pytest.raises(ToolError):
         tool.run({"views": [[{"key": "A"}]], "labels": ["a", "b"]})
+
+
+def test_identical_views_warn(tmp_path):
+    ib = NullInputBackend()
+    calls = []
+
+    def shot(dest):  # SAME image every call -> a view change didn't register
+        calls.append(str(dest))
+        return _png(dest, color=(100, 100, 100))
+
+    tool = Inspect3DTool(input_backend=ib, screenshot_fn=shot, estop=EmergencyStop(),
+                         work_dir=tmp_path / "i")
+    out = tool.run({"views": [[{"key": "A"}], [{"key": "B"}], [{"key": "C"}]]})
+    assert out["success"] is True
+    assert out["distinct_views"] == 1
+    assert out["note"] and "identical" in out["note"]
+
+
+def test_distinct_views_no_identical_warning(tmp_path):
+    tool, _, _ = _tool(tmp_path)  # varying shotter -> all tiles differ
+    out = tool.run({"views": [[{"key": "A"}], [{"key": "B"}]]})
+    assert out["distinct_views"] == 2
+    assert not (out["note"] and "identical" in out["note"])
+
+
+def test_cols_param_builds(tmp_path):
+    tool, _, _ = _tool(tmp_path)
+    out = tool.run({"views": [[{"key": k}] for k in "ABCD"], "cols": 2})
+    assert out["success"] is True and out["montage"]
 
 
 def test_emergency_stop_aborts(tmp_path):
