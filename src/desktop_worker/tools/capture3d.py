@@ -199,9 +199,14 @@ class CaptureBurstTool:
         labels = [f"{s} ms" for s in stamps]
         montage = build_montage(tiles, labels, grid,
                                 self._work_dir / "burst_montage.png", crop=crop, cols=cols)
+        notes: list[str] = []
+        if args.get("fast") and grabber is None:
+            notes.append("fast requested but DXcam (the [capture] extra) is not installed — "
+                         "used the default capture instead")
+        if not montage:
+            notes.append("montage skipped (Pillow missing or non-image captures); read the frames")
         return {"success": True, "montage": montage, "frames": tiles,
                 "timestamps_ms": stamps, "count": len(tiles),
                 "fast": bool(grabber),
-                "note": None if montage else
-                "montage skipped (Pillow missing or non-image captures); read the frames",
+                "note": " | ".join(notes) or None,
                 "error": None}

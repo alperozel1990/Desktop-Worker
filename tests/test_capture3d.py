@@ -89,3 +89,4 @@ def test_capture_burst_no_fast_without_dxcam(tmp_path):
     out = tool.run({"orbit": [120, 0], "frames": 3, "fast": True})
     # dxcam isn't installed in test env -> falls back to the injected screenshot path.
     assert out["success"] is True and out["fast"] is False and out["count"] == 3
+    assert out["note"] and "DXcam" in out["note"]   # honest fallback note

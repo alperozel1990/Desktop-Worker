@@ -64,6 +64,9 @@ Gate and only implement when the selected card is explicitly approved.
 | Frugal mode (`--frugal`) | complete (leaner prompts, less Claude usage) |
 | Session replay HTML (`report` cmd + auto) | complete (DW-REPLAY); §16 audit viewer |
 | **External AI interface — MCP server** (`mcp` CLI) | complete (Phase 8, DW-MCP-SERVER); pure AgentBridge + thin FastMCP; live external client = MANUAL-MCP-1 |
+| 3D perception: `inspect_3d` (multi-view montage) | complete (Tier 3, DW-3D-INSPECT); LIVE-validated on Blender (eased orbit + crop + distinct-view warning) |
+| 3D capability: `orbit` + `capture_burst` (+DXcam opt-in) | complete (Tier 2, DW-3D-CAPTURE); capture_burst LIVE-validated on Blender (turntable + ms timestamps) |
+| Clipboard 64-bit fix + numpad/nav keys | complete (DW-CLIP-FIX, DW-KEYS-NUMPAD); clipboard LIVE round-trip verified |
 
 ## Last completed task
 - **Task:** DW-PLANNER-AI — Claude Code CLI planner (no API key), via the broker.
@@ -167,10 +170,12 @@ Also: deterministic `create-file` workflow (separate, reliable).
 - **Test count:** 350 → **356** (+6 for the two WF fixes).
 
 ## Next recommended task
-**Tier 2 (3D capabilities):** DXcam fast-capture backend (`[capture]` extra, mss fallback) +
-`capture_burst` tool (N timestamped frames captured DURING a drag — "snapshots while orbiting",
-the user's original ask) + a standalone `orbit` convenience tool (reuse inspect_3d's eased-drag).
-Tier 1 (3D docs) + Tier 3 (inspect_3d, LIVE-validated on Blender) are done + merged to main.
+**All three 3D tiers done + LIVE-validated** (Tier 1 docs, Tier 3 `inspect_3d`, Tier 2
+`orbit`/`capture_burst`+DXcam). Branch `dw/tier2-capture` merges to main. Remaining is optional:
+- DXcam `fast:true` path only verified by fallback (dxcam not installed here) → install
+  `[capture]` + live-test the genuine high-FPS grab if real continuous-motion capture is wanted.
+- Otherwise the desktop tool + the user-scope `desktop-worker` skill (REFERENCE + per-app playbooks)
+  are the product; growth now comes from real runs feeding the playbooks, not new core code.
 
 Earlier context — Phase 8 (MCP server) is the project's functional finish line: an external AI
 agent can now drive Desktop-Worker. Live MANUAL items remaining are user-interactive validation:
