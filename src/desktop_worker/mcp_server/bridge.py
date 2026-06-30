@@ -228,7 +228,8 @@ def build_agent_bridge(
     from desktop_worker.perception import Perceiver, get_ocr_backend, get_uia_backend
     from desktop_worker.safety import build_policy
     from desktop_worker.tools import (CreateTextFileTool, DragDropTool, FocusWindowTool,
-                                      OpenAppTool, OpenUrlTool, SketchTool, ToolRegistry)
+                                      Inspect3DTool, OpenAppTool, OpenUrlTool, SketchTool,
+                                      ToolRegistry)
     from desktop_worker.workflows.desktop_ui import get_desktop_dir
 
     cfg = config or Config(session_id="mcp", task_id="task")
@@ -246,6 +247,9 @@ def build_agent_bridge(
     tools.register(SketchTool(input_backend=session.input_backend,
                               canvas_locator=get_canvas_locator(real),
                               estop=session.estop, paint_ui=get_paint_ui(real)))
+    tools.register(Inspect3DTool(input_backend=session.input_backend,
+                                 screenshot_fn=session.desktop_backend.capture_screenshot,
+                                 estop=session.estop, work_dir=cfg.task_dir / "inspect"))
 
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))
     return AgentBridge(session, tools=tools, perceiver=perceiver)

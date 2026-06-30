@@ -553,7 +553,8 @@ def _cmd_do(args: argparse.Namespace) -> int:
     from desktop_worker.geometry import get_canvas_locator
     from desktop_worker.geometry.paint_setup import get_paint_ui
     from desktop_worker.tools import (CreateTextFileTool, DragDropTool, FocusWindowTool,
-                                      OpenAppTool, OpenUrlTool, SketchTool, ToolRegistry)
+                                      Inspect3DTool, OpenAppTool, OpenUrlTool, SketchTool,
+                                      ToolRegistry)
 
     tools = ToolRegistry()
     tools.register(CreateTextFileTool(desktop_dir=desktop_dir, broker=session.broker))
@@ -564,6 +565,9 @@ def _cmd_do(args: argparse.Namespace) -> int:
     tools.register(SketchTool(input_backend=session.input_backend,
                               canvas_locator=get_canvas_locator(real),
                               estop=session.estop, paint_ui=get_paint_ui(real)))
+    tools.register(Inspect3DTool(input_backend=session.input_backend,
+                                 screenshot_fn=session.desktop_backend.capture_screenshot,
+                                 estop=session.estop, work_dir=cfg.task_dir / "inspect"))
     session.executor.tools = tools
 
     perceiver = Perceiver(ocr=get_ocr_backend(real), uia=get_uia_backend(real))

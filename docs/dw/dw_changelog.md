@@ -932,3 +932,24 @@ returns the right codes. NOTE: whether a synthetic numpad VK fires an app's nump
 orbit remains the proven path. Doc rot corrected in the desktop-worker skill (REFERENCE.md 3D section
 + playbook blender-04 marked corrected-by blender-05). `python -m pytest` → 379 (378 + 1 skip).
 **Files:** `src/desktop_worker/actions/windows_input.py`.
+
+## 2026-06-30 | Tier 3 — inspect_3d multi-view 3D perception | Task: DW-3D-INSPECT
+
+**Type:** New AI-callable tool (3D-research Tier 3). Branch dw/phase8-mcp.
+**What:** `inspect_3d` captures several views of a GPU-drawn 3D viewport (Blender/Unity/CAD) and
+assembles ONE labelled montage image so the agent perceives 3D shape/orientation in a SINGLE vision
+look (research: Agent3D-Zero / Think3D / Set-of-Mark, K≈3 bounds cost). The caller passes app-specific,
+VIEW-ONLY setup steps per view — `{key}` (e.g. Numpad), `{hotkey}`, `{orbit:[dx,dy]}` (the verified
+Blender middle-drag), `{move}`, `{wait_ms}` — so it's generic and non-destructive (no clicks/typing
+that could modify the model). Optional NxN `grid` overlay (Set-of-Line) + per-view `labels`. Each step
+is emergency-stop-gated; runs through the injected input backend like Sketch/DragDrop.
+**New module:** `tools/inspect3d.py` (`Inspect3DTool` + pure `build_montage()` lazy-importing Pillow;
+degrades to tile paths if Pillow/real images absent). Registered in the MCP bridge factory AND `do`
+(now 7 named tools). `[vision]` extra = Pillow.
+**Tests:** `tests/test_inspect3d.py` (7) — captures+montage, orbit→middle-drag, grid overlay,
+validation (empty/too-many/unknown-step/bad-labels), estop abort, montage skips non-images.
+`python -m pytest` → **386** (385 passed + 1 skipped). Bridge exposes `inspect_3d`.
+**Caveat:** the multi-view-perception research used GPT-4V + point-cloud renders, not Claude + raw GUI
+screenshots → the montage's actual usefulness to Claude needs a live Blender validation (MANUAL).
+**Files:** new `src/desktop_worker/tools/inspect3d.py`; changed `tools/__init__.py`,
+`mcp_server/bridge.py`, `__main__.py`, `pyproject.toml`; new `tests/test_inspect3d.py`.

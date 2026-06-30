@@ -13,7 +13,8 @@ from desktop_worker.tools.registry import Tool, ToolRegistry, ToolError
 from desktop_worker.tools.builtin import (CreateTextFileTool, DragDropTool,
                                           FocusWindowTool, OpenAppTool, OpenUrlTool,
                                           SketchTool)
+from desktop_worker.tools.inspect3d import Inspect3DTool, build_montage
 
 __all__ = ["Tool", "ToolRegistry", "ToolError", "CreateTextFileTool",
            "OpenAppTool", "OpenUrlTool", "FocusWindowTool", "SketchTool",
-           "DragDropTool"]
+           "DragDropTool", "Inspect3DTool", "build_montage"]

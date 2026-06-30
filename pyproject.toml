@@ -30,6 +30,9 @@ ocr = [
 mcp = [
     "mcp>=1.2",          # Model Context Protocol SDK (Phase 8 external-AI server)
 ]
+vision = [
+    "Pillow>=10.0",      # montage assembly for the inspect_3d multi-view 3D perception tool
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
