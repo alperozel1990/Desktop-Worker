@@ -918,3 +918,17 @@ Tier 3 `inspect_3d` multi-view tool, Tier 2 `orbit`/`capture_burst` primitives +
 
 **Tests:** `python -m pytest` → **379** (378 passed + 1 skipped; clipboard roundtrip passes on Windows).
 **Files:** `src/desktop_worker/actions/windows_input.py`, `tests/test_clipboard_roundtrip.py`.
+
+## 2026-06-30 | press_key numpad/nav keys | Task: DW-KEYS-NUMPAD
+
+**Type:** Input backend gap found via live Blender use (playbook blender-05). Branch dw/phase8-mcp.
+`press_key`/`hotkey` could not send numpad or several navigation keys — the `_VK` map had only
+A-Z/0-9/F-keys/arrows/basic editing keys, so `resolve_vk("KP_1")` returned None and the agent's
+attempt to drive Blender's Numpad view ops did nothing (it fell back to a verified MMB-drag orbit).
+Added VK_NUMPAD0-9 (0x60-0x69) with `KP_*`/`NUMPAD*`/`NUM*` aliases, the numpad operators
+(`KP_PLUS/MINUS/MULTIPLY/DIVIDE/DECIMAL/ENTER`), and PageUp/PageDown/Insert. Verified `resolve_vk`
+returns the right codes. NOTE: whether a synthetic numpad VK fires an app's numpad-specific shortcut
+(e.g. Blender view ops) still depends on the app's input layer — flagged for live re-test; MMB-drag
+orbit remains the proven path. Doc rot corrected in the desktop-worker skill (REFERENCE.md 3D section
++ playbook blender-04 marked corrected-by blender-05). `python -m pytest` → 379 (378 + 1 skip).
+**Files:** `src/desktop_worker/actions/windows_input.py`.

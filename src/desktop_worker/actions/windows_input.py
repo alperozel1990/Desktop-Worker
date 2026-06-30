@@ -25,12 +25,28 @@ _VK = {
     "UP": 0x26, "DOWN": 0x28, "LEFT": 0x25, "RIGHT": 0x27,
     "F1": 0x70, "F2": 0x71, "F3": 0x72, "F4": 0x73, "F5": 0x74, "F6": 0x75,
     "F7": 0x76, "F8": 0x77, "F9": 0x78, "F10": 0x79, "F11": 0x7A, "F12": 0x7B,
+    # Navigation + numpad operators (added DW-KEYS-NUMPAD).
+    "PAGEUP": 0x21, "PGUP": 0x21, "PAGEDOWN": 0x22, "PGDN": 0x22,
+    "INSERT": 0x2D, "INS": 0x2D,
+    "MULTIPLY": 0x6A, "KP_MULTIPLY": 0x6A, "KP_ASTERIX": 0x6A,
+    "ADD": 0x6B, "KP_PLUS": 0x6B, "KP_ADD": 0x6B,
+    "SUBTRACT": 0x6D, "KP_MINUS": 0x6D, "KP_SUBTRACT": 0x6D,
+    "DIVIDE": 0x6F, "KP_DIVIDE": 0x6F, "KP_SLASH": 0x6F,
+    "DECIMAL": 0x6E, "KP_DECIMAL": 0x6E, "KP_DEL": 0x6E,
+    "KP_ENTER": 0x0D,
 }
 # Letters A-Z (VK == ASCII uppercase) and digits 0-9 (VK == ASCII digit).
 for _c in range(ord("A"), ord("Z") + 1):
     _VK[chr(_c)] = _c
 for _d in range(ord("0"), ord("9") + 1):
     _VK[chr(_d)] = _d
+# Numpad digits 0-9 (VK_NUMPAD0..9 = 0x60..0x69) with KP_/NUMPAD/NUM aliases so an
+# agent can name them (e.g. Blender Numpad view ops). NOTE: whether a synthesized
+# numpad VK triggers an app's numpad-specific shortcut still depends on that app's
+# input layer — confirm live (e.g. Blender view ops; MMB-drag orbit is the proven path).
+for _n in range(10):
+    for _pfx in ("KP_", "NUMPAD", "NUM"):
+        _VK[f"{_pfx}{_n}"] = 0x60 + _n
 
 # Default: paste text longer than this many chars via the clipboard instead of
 # synthesizing each keystroke (faster + far more reliable for long strings).
