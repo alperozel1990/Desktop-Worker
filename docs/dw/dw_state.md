@@ -67,6 +67,7 @@ Gate and only implement when the selected card is explicitly approved.
 | 3D perception: `inspect_3d` (multi-view montage) | complete (Tier 3, DW-3D-INSPECT); LIVE-validated on Blender (eased orbit + crop + distinct-view warning) |
 | 3D capability: `orbit` + `capture_burst` (+DXcam opt-in) | complete (Tier 2, DW-3D-CAPTURE); capture_burst LIVE-validated on Blender (turntable + ms timestamps) |
 | Clipboard 64-bit fix + numpad/nav keys | complete (DW-CLIP-FIX, DW-KEYS-NUMPAD); clipboard LIVE round-trip verified |
+| `type_text` reaches GHOST apps (Blender/games) | complete (DW-INPUT-GHOST); VK keystrokes via VkKeyScanW; LIVE-validated in Blender (console/rename/Turkish); Unicode fallback for AltGr/off-layout |
 
 ## Last completed task
 - **Task:** DW-PLANNER-AI — Claude Code CLI planner (no API key), via the broker.
