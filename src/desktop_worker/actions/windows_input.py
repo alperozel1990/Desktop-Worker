@@ -276,31 +276,62 @@ class WindowsInputBackend:
             self.user32.keybd_event(vk, 0, flags, 0)
 
     # --- clipboard -----------------------------------------------------
+    def _clipboard_prototypes(self):
+        """Declare 64-bit-safe argtypes/restypes for the Win32 clipboard calls.
+
+        Without this, ctypes defaults every HANDLE/pointer return to a 32-bit
+        ``c_int`` and truncates real 64-bit handles, which raises
+        ``OverflowError: int too long to convert`` (clipboard was fully broken on
+        64-bit Python). Setting the prototypes is idempotent and scoped to these
+        clipboard functions only.
+        """
+        ctypes = self.ctypes
+        c_void_p, c_size_t = ctypes.c_void_p, ctypes.c_size_t
+        c_uint, c_int = ctypes.c_uint, ctypes.c_int
+        user32 = self.user32
+        kernel32 = ctypes.windll.kernel32
+        user32.OpenClipboard.argtypes = [c_void_p]; user32.OpenClipboard.restype = c_int
+        user32.SetClipboardData.argtypes = [c_uint, c_void_p]
+        user32.SetClipboardData.restype = c_void_p
+        user32.GetClipboardData.argtypes = [c_uint]; user32.GetClipboardData.restype = c_void_p
+        kernel32.GlobalAlloc.argtypes = [c_uint, c_size_t]; kernel32.GlobalAlloc.restype = c_void_p
+        kernel32.GlobalLock.argtypes = [c_void_p]; kernel32.GlobalLock.restype = c_void_p
+        kernel32.GlobalUnlock.argtypes = [c_void_p]; kernel32.GlobalUnlock.restype = c_int
+        kernel32.GlobalFree.argtypes = [c_void_p]; kernel32.GlobalFree.restype = c_void_p
+        return kernel32
+
     def clipboard_set(self, text: str) -> None:
         ctypes = self.ctypes
         user32 = self.user32
-        kernel32 = ctypes.windll.kernel32
+        kernel32 = self._clipboard_prototypes()
         CF_UNICODETEXT = 13
         GMEM_MOVEABLE = 0x0002
-        if not user32.OpenClipboard(0):
+        if not user32.OpenClipboard(None):
             return
         try:
             user32.EmptyClipboard()
             data = text.encode("utf-16-le") + b"\x00\x00"
             h = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(data))
+            if not h:
+                return
             ptr = kernel32.GlobalLock(h)
+            if not ptr:
+                kernel32.GlobalFree(h)
+                return
             ctypes.memmove(ptr, data, len(data))
             kernel32.GlobalUnlock(h)
-            user32.SetClipboardData(CF_UNICODETEXT, h)
+            # On success the system owns the memory; only free if it refused it.
+            if not user32.SetClipboardData(CF_UNICODETEXT, h):
+                kernel32.GlobalFree(h)
         finally:
             user32.CloseClipboard()
 
     def clipboard_get(self) -> str:
         ctypes = self.ctypes
         user32 = self.user32
-        kernel32 = ctypes.windll.kernel32
+        kernel32 = self._clipboard_prototypes()
         CF_UNICODETEXT = 13
-        if not user32.OpenClipboard(0):
+        if not user32.OpenClipboard(None):
             return ""
         try:
             h = user32.GetClipboardData(CF_UNICODETEXT)

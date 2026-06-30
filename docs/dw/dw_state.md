@@ -53,6 +53,7 @@ Gate and only implement when the selected card is explicitly approved.
 | AI planner (Claude Code CLI, no API key, via broker) | complete (DW-PLANNER-AI); real path verified, full task = MANUAL-7 |
 | Phase 5 workflow: create desktop text file (visible) | complete (DW-WORKFLOW-CREATEFILE); VERIFIED real desktop |
 | Input Unicode (Turkish ş/ı) via SendInput | fixed (was keybd_event byte-truncation) |
+| Clipboard set/get (64-bit handles) | fixed (DW-CLIP-FIX); was OverflowError on every call; LIVE round-trip verified |
 | **GENUINE live AI control** (`do "<task>"`) | complete (DW-AGENT-DO); VERIFIED real desktop |
 | Perception: context menus + editable values | complete (AI sees menus + what it typed) |
 | AI action/outcome memory + vision fallback (`--vision`) | complete (DW-AGENT-MEMORY / VISION) |

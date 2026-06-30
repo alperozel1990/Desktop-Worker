@@ -892,3 +892,29 @@ registers the bridge, and calls tools through it: 22 tools registered; observe/c
 through the executor; list_tools reports the named tools; a malformed `act` is rejected;
 `emergency_stop` halts the next action and `clear_stop` resumes. Catches SDK API drift in
 CI and raises confidence ahead of MANUAL-MCP-1. `python -m pytest` → **378** (377 + 1 skip).
+
+## 2026-06-30 | Clipboard fix + 3D research (Tier 1) | Tasks: DW-CLIP-FIX, DW-3D-RESEARCH
+
+**Type:** Bugfix (real defect found in live MCP use) + research-driven docs. Branch dw/phase8-mcp.
+
+**DW-CLIP-FIX:** `clipboard_set`/`clipboard_get` were fully broken on 64-bit Python — every call
+raised `OverflowError: int too long to convert` (even for "hello"). Cause: ctypes left the Win32
+`GlobalAlloc`/`GlobalLock`/`GetClipboardData`/`SetClipboardData` return+arg types at the default
+32-bit `c_int`, truncating real 64-bit HANDLE/pointer values. Fix: a `_clipboard_prototypes()` helper
+declares 64-bit-safe argtypes/restypes (`c_void_p`/`c_size_t`), plus NULL-handle guards and a
+`GlobalFree` on the failure path (no leak). **LIVE-verified** round-trip for "hello", Turkish
+(ş ı ğ), multi-line, and 500 chars. This also unbroke long-text `type_text` (it pastes via the
+clipboard). New guarded test `tests/test_clipboard_roundtrip.py` (skips off-Windows). Found via the
+Blender playbook (blender-03) during the user's live LTSpice/Blender runs over MCP.
+
+**DW-3D-RESEARCH (Tier 1 docs):** deep-research report on giving the agent 3D-modeling capabilities
+(continuous mouse/orbit, fast capture-while-moving, VLM 3D perception). Verdict: hybrid — script-first
+(Blender-MCP/bpy, Unity MCP) for deterministic edits; mouse+vision only for GPU-drawn viewports.
+Cheap training-free 3D perception = multi-view montage (Set-of-Mark/Set-of-Line overlays + a bounded
+K≈3 observe-rotate-reflect loop; Agent3D-Zero/Think3D). Capture: DXcam/BetterCam (DXGI, ~239 FPS) >>
+mss (~76). Baked into the user-scope desktop-worker skill: REFERENCE.md "3D / GPU-drawn apps" section +
+Blender playbook blender-04 (Numpad deterministic viewpoints; multi-view inspection). Planned next:
+Tier 3 `inspect_3d` multi-view tool, Tier 2 `orbit`/`capture_burst` primitives + DXcam backend.
+
+**Tests:** `python -m pytest` → **379** (378 passed + 1 skipped; clipboard roundtrip passes on Windows).
+**Files:** `src/desktop_worker/actions/windows_input.py`, `tests/test_clipboard_roundtrip.py`.
