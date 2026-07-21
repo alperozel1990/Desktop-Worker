@@ -70,11 +70,11 @@ Gate and only implement when the selected card is explicitly approved.
 | `type_text` reaches GHOST apps (Blender/games) | complete (DW-INPUT-GHOST); VK keystrokes via VkKeyScanW; LIVE-validated in Blender (console/rename/Turkish); Unicode fallback for AltGr/off-layout |
 | **Eval harness — success rate / steps / latency / round-trips** | complete (Phase 10, DW-EVAL-HARNESS); `eval/` package + `eval` CLI; **A1 + A2 baselines recorded, MANUAL-EVAL-1 DONE (Level 4)** |
 | **`focus_window` actually foregrounds windows** | complete (DW-FOCUS-RELIABLE); AttachThreadInput + verify vs GetForegroundWindow; **0/5 -> 5/5 apps live** |
-| Phase 11 — inline screenshot image over MCP | **NOT STARTED** (DW-MCP-IMAGE) — measured RED in baseline |
-| Phase 11 — stable element ids + click_element | **NOT STARTED** (DW-ELEM-STABLE) — measured RED |
-| Phase 11 — perceive ranking + truncation signal | **NOT STARTED** (DW-PERCEIVE-RANK) — measured RED |
-| Phase 11 — act_many batching | **NOT STARTED** (DW-ACT-BATCH) — measured RED |
-| Phase 11 — settle_ms + post-action diff | **NOT STARTED** (DW-ACT-SETTLE) — measured RED |
+| Phase 11 — inline screenshot image over MCP | complete (DW-MCP-IMAGE); A2 INLINE-IMAGE 0/3 -> **3/3** live |
+| Phase 11 — stable element ids + click_element | complete (DW-ELEM-STABLE); A2 ID-STABLE 0/5 -> **5/5**; zero positional ids remain |
+| Phase 11 — perceive ranking + truncation signal | complete (DW-PERCEIVE-RANK); TRUNCATION 0/5 -> **5/5**; Paint drops only labels |
+| Phase 11 — act_many batching | complete (DW-ACT-BATCH); 4 round-trips -> **1**; safety still per-action |
+| Phase 11 — settle_ms + post-action diff | complete (DW-ACT-SETTLE); settle honored + silentNoOp surfaced |
 
 ## Last completed task
 - **Task:** DW-PLANNER-AI — Claude Code CLI planner (no API key), via the broker.
@@ -88,7 +88,22 @@ Gate and only implement when the selected card is explicitly approved.
 - **Files:** `loop/claude_cli_planner.py` (new), `tests/test_claude_cli_planner.py`.
 
 ## Current task
-None in progress. (Just completed DW-EVAL-HARNESS + DW-FOCUS-RELIABLE; MANUAL-EVAL-1 done.)
+None in progress. **PHASE 11 COMPLETE** (all 5 cards, each with a live measured delta).
+
+## PHASE 11 RESULT (2026-07-21) — measured, not asserted
+| Suite | Before | After |
+|---|---|---|
+| **A1 feasible** | 33.3% (CI [19.2, 51.2]) | **100%, 8/8** |
+| **A2 feasible** | 33.3% (CI [24.4, 43.6]) | **70.0% (CI [59.9, 78.5])** |
+| A2 FOCUS / ID-STABLE / TRUNCATION | 0/5 each | **5/5 each** |
+| A2 INLINE-IMAGE | 0/3 | **3/3** |
+| 4-action sequence | 4 MCP round-trips | **1 (-75%)** |
+Tests **400 -> 492**. MCP tools 22 -> 24 (`click_element`, `act_many`).
+Commits: 103749e, 0c3a5ed, ea837a5, b01fddd (+ the Phase 10 harness work). NOT pushed.
+
+Remaining A2 red is ENVIRONMENTAL, not product: Notepad would not stay open on this
+machine (Win11 session restore), and Unity needs an open project — deliberately not opened,
+since a version-upgrade prompt would modify the user's real projects.
 
 ## Last completed task (2026-07-21) — DW-FOCUS-RELIABLE + honest A2 baseline
 - **Found by running the harness, not by reading code.** The first live A2 run scored

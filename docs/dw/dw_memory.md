@@ -54,7 +54,23 @@ Source of truth: `docs/requirements.md`.
   - Lesson from validating it: a measurement run must never block on an interactive
     approval prompt, and the "Null tier" must actually force Null backends — both were
     real bugs caught only by running it for real.
-- **PHASE 11 — agent-facing surface gaps: PLANNED, NOT STARTED.** Five audit-driven cards,
+- **PHASE 11 — agent-facing surface gaps: COMPLETE (2026-07-21), all 5 cards LIVE-measured.**
+  A1 feasible 33.3% -> **100%**; A2 feasible 33.3% -> **70.0%**. 492 tests. 24 MCP tools.
+  - DW-PERCEIVE-RANK: interactables ranked first, truncation ALWAYS signalled, filters
+    (control_type/text_contains/region/max_elements). Paint now drops only static labels;
+    filtering to buttons cut ~8315 -> ~2898 tokens (-65%). `detect()` protocol untouched —
+    ranking rides on an additive `detect_detailed()`.
+  - DW-MCP-IMAGE: `screenshot` returns real image bytes + path; `region` crop = 33% payload.
+    Every failure sets `inlineError` — silent degradation is what hid the original defect.
+  - DW-ELEM-STABLE: ids are AutomationId > RuntimeId > handle > content hash (`a:`/`r:`/
+    `h:`/`n:`). ZERO positional ids remain. `click_element(id)` re-verifies and REFUSES a
+    stale id rather than clicking the wrong thing.
+  - DW-ACT-BATCH / DW-ACT-SETTLE: `act_many` (4 round-trips -> 1), `settle_ms`,
+    `report_change` with `silentNoOp`. Batching shares transport, NEVER the safety checks.
+  - DW-FOCUS-RELIABLE (found by the harness): bare `SetForegroundWindow` fails for a
+    background process — the MCP server is one. AttachThreadInput + verify vs
+    `GetForegroundWindow`. 0/5 -> 5/5 apps.
+- **Superseded — the old Phase 11 plan:** Five audit-driven cards,
   all measured RED in the baseline: DW-MCP-IMAGE (screenshots are file paths only — the
   vision half is disconnected over MCP), DW-ELEM-STABLE (`uia_backend.py:160` positional
   counter ids, unusable across calls), DW-PERCEIVE-RANK (silent 200-element truncation),
