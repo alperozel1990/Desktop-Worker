@@ -70,9 +70,11 @@ def register(server: Any, bridge: AgentBridge) -> Any:
         return bridge.click_element(element_id=element_id, button=button)
 
     @tool()
-    def click(x: Optional[int] = None, y: Optional[int] = None, button: str = "left") -> dict:
+    def click(x: Optional[int] = None, y: Optional[int] = None, button: str = "left",
+              settle_ms: int = 0, report_change: bool = False) -> dict:
         """Click the mouse, optionally moving to absolute screen (x, y) first. button is left|right|middle. Omit x/y to click at the current cursor."""
-        return bridge.click(x=x, y=y, button=button)
+        return bridge.click(x=x, y=y, button=button, settle_ms=settle_ms,
+                            report_change=report_change)
 
     @tool()
     def double_click(x: Optional[int] = None, y: Optional[int] = None, button: str = "left") -> dict:
@@ -141,9 +143,15 @@ def register(server: Any, bridge: AgentBridge) -> Any:
         return bridge.run_cli(command, cwd=cwd, elevated=elevated, timeout_ms=timeout_ms)
 
     @tool()
-    def act(action: dict) -> dict:
+    def act(action: dict, settle_ms: int = 0, report_change: bool = False) -> dict:
         """Escape hatch: execute any validated structured action as a dict, e.g. {"type":"mouse.click","x":10,"y":20} or {"type":"keyboard.hotkey","keys":["CTRL","A"]}. Malformed actions are rejected, not executed."""
-        return bridge.act(action)
+        return bridge.act(action, settle_ms=settle_ms, report_change=report_change)
+
+    @tool()
+    def act_many(actions: list, stop_on_failure: bool = True, settle_ms: int = 0) -> dict:
+        """Run SEVERAL structured actions in one call, stopping at the first failure. Use this for known sequences (click a field, type, Tab, click Save) instead of one call per action - round-trips are the dominant cost in a task, not the input itself. Every action is still validated, policy-checked, emergency-stop-gated and audited individually; only the transport is shared. `settle_ms` waits between actions so the UI can repaint."""
+        return bridge.act_many(actions=actions, stop_on_failure=stop_on_failure,
+                               settle_ms=settle_ms)
 
     @tool()
     def list_tools() -> dict:

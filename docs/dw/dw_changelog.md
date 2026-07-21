@@ -1327,3 +1327,63 @@ Live evidence, which matters more than the pass count:
 **Note on the earlier false green:** the A2 probe that reported ids "stable" was
 strengthened during Phase 10 to detect `uia-<index>` structurally. Without that fix this
 card would have looked unnecessary.
+
+---
+
+## 2026-07-21 — DW-ACT-BATCH + DW-ACT-SETTLE (Phase 11, cards 4 and 5) — PHASE 11 COMPLETE
+
+**Validation level: 4 (live real desktop).** 492 tests, 1 skipped.
+
+**Defects:** `act()` took exactly one action, so a four-step form fill cost four MCP
+round-trips (eight with confirming perceives). And the MCP action path had no settle at
+all — `click` returned the instant SendInput returned — so an agent had to guess a `wait()`
+duration, and nothing told it whether the action changed anything.
+
+**Shipped:**
+- `bridge.act_many(actions, stop_on_failure=True, settle_ms=0)` — one round-trip for a
+  known sequence. Stops at the first failure by default because later steps assume earlier
+  ones worked; typing into a field that was never focused sends the text elsewhere.
+- `bridge.act(action, settle_ms=0, report_change=False)` and `click(...)` gained the same —
+  plus a `changed` flag and a `silentNoOp` marker built from a cheap active-window
+  signature (deliberately not a screenshot hash: it must be affordable twice per action).
+- `mcp_server/server.py` — `act_many` registered (24 tools); descriptions tell the agent
+  why to batch.
+
+**MEASURED:**
+| Metric | Before | After |
+|---|---|---|
+| A1-SURFACE-BATCH | 0/5 | **5/5** |
+| A1-SURFACE-SETTLE | 0/5 | **5/5** |
+| 4-action sequence | 4 MCP round-trips | **1 (-75%)** |
+| A1 feasible overall | 33.3% | **100% (8/8)** |
+
+Live: stop-on-failure gave `failedAt=1` with only 2 of 3 attempted — the third never ran.
+`click(settle_ms=150, report_change=True)` took 165 ms and reported
+`changed=False, silentNoOp=True`.
+
+**Batching is not a safety bypass** — every action is still parsed, policy-checked,
+emergency-stop-gated and audited individually. Tests pin this: a denied HIGH-risk tool
+inside a batch stays denied, and emergency stop halts mid-batch with `completed=0`.
+
+**Honest note on the timing number:** in-process wall clock barely moved (3.1 ms -> 2.5 ms),
+because input injection is only 1-3% of end-to-end latency. Quoting that as the win would
+be misleading. The real saving is 4 model turns becoming 1 — the 87-97% term (OSWorld-Human).
+
+**One eval task was mis-specified and fixed, not weakened.** `A1-SURFACE-INLINE-IMAGE`
+demanded real image bytes on Null backends, which write a `.txt` placeholder — a test that
+could never pass. It now grades what IS checkable on Null: that the bridge either returns
+the image or SAYS why it cannot. Silent degradation to path-only is the property that let
+the original defect hide. Real bytes are still graded live by `A2-SURFACE-INLINE-IMAGE`.
+
+## PHASE 11 COMPLETE — cumulative measured result
+| Suite | Before (2026-07-21 baseline) | After |
+|---|---|---|
+| **A1 feasible** | 33.3% (CI [19.2, 51.2]) | **100%, 8/8** |
+| **A2 feasible** | 33.3% (CI [24.4, 43.6]) | **70.0% (CI [59.9, 78.5])** |
+| A2 FOCUS | 0/5 | 5/5 |
+| A2 ID-STABLE | 0/5 | 5/5 |
+| A2 TRUNCATION | 0/5 | 5/5 |
+| A2 INLINE-IMAGE | 0/3 | 3/3 |
+Tests 400 -> **492**. Every card landed with a live measured delta, not an assertion.
+Remaining A2 red is environmental, not product: Notepad would not stay open on this machine
+and Unity needs an open project.

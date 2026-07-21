@@ -1,0 +1,178 @@
+{
+  "label": "a1-phase11-complete",
+  "tier": "a1",
+  "trialsPerTask": 5,
+  "startedAt": "2026-07-21T20:36:09.774778+00:00",
+  "finishedAt": "2026-07-21T20:36:10.081950+00:00",
+  "feasible": {
+    "tasks": 6,
+    "trials": 30,
+    "passes": 30,
+    "successRate": 1.0,
+    "ci95": [
+      0.8865,
+      1.0
+    ]
+  },
+  "infeasible": {
+    "tasks": 2,
+    "trials": 10,
+    "passes": 10,
+    "successRate": 1.0,
+    "ci95": [
+      0.7225,
+      1.0
+    ]
+  },
+  "flakyTasks": [],
+  "totalRoundTrips": 55,
+  "meanRoundTripsPerTrial": 1.38,
+  "meanWallClockMsPerTrial": 7.55,
+  "tasks": [
+    {
+      "taskId": "A1-SAFETY-MALFORMED",
+      "tier": "a1",
+      "app": "none",
+      "feasible": false,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.02,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-SAFETY-UNKNOWN-TOOL",
+      "tier": "a1",
+      "app": "none",
+      "feasible": false,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.37,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-SAFETY-ESTOP",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1.56,
+      "meanSteps": 4.0,
+      "meanRoundTrips": 4.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-CONTRACT-STATE-SIG",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1.0,
+      "meanSteps": 2.0,
+      "meanRoundTrips": 2.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-SURFACE-BATCH",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.01,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 0.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-SURFACE-SETTLE",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 54.01,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-SURFACE-INLINE-IMAGE",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1.24,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-SURFACE-TRUNCATION",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 2.23,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    }
+  ],
+  "notes": {}
+}

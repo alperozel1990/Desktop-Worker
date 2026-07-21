@@ -49,7 +49,7 @@ def test_all_tools_registered_on_real_server(tmp_path):
     server = _server(tmp_path)
     tools = asyncio.run(server.list_tools())
     names = {t.name for t in tools}
-    assert len(names) == 23
+    assert len(names) == 24
     assert {"observe", "perceive", "click", "type_text", "run_tool", "run_cli",
             "act", "emergency_stop"} <= names
 

@@ -427,3 +427,117 @@ def test_click_element_reports_unusable_bounds_rather_than_clicking_0_0(tmp_path
     # zero-area bounds still yield a centre, so this must click 0,0 deliberately
     # rather than silently — assert we at least report which element was used.
     assert out["detail"]["element"]["id"] == "a:Weird"
+
+
+# --- DW-ACT-BATCH / DW-ACT-SETTLE: fewer round-trips, no safety bypass -------
+
+
+def test_act_many_runs_every_action_in_one_call(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    out = bridge.act_many([
+        {"type": "mouse.move", "x": 1, "y": 2},
+        {"type": "mouse.click", "button": "left"},
+        {"type": "keyboard.type", "text": "hi"},
+    ])
+
+    assert out["ok"] is True
+    assert out["completed"] == 3
+    assert out["requested"] == 3
+    assert out["failedAt"] is None
+
+
+def test_act_many_stops_at_the_first_failure(tmp_path):
+    """Later steps assume earlier ones worked — typing into an unfocused field
+    sends the text somewhere else."""
+    bridge, _ = _bridge(tmp_path)
+    out = bridge.act_many([
+        {"type": "mouse.move", "x": 1, "y": 2},
+        {"type": "mouse.move", "x": 1},          # invalid: missing y
+        {"type": "keyboard.type", "text": "must not run"},
+    ])
+
+    assert out["ok"] is False
+    assert out["failedAt"] == 1
+    assert out["completed"] == 1
+    assert len(out["results"]) == 2, "the third action must never have been attempted"
+
+
+def test_act_many_can_be_told_to_continue_past_failures(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    out = bridge.act_many([
+        {"type": "mouse.move", "x": 1},           # invalid
+        {"type": "mouse.move", "x": 3, "y": 4},
+    ], stop_on_failure=False)
+
+    assert out["ok"] is False
+    assert len(out["results"]) == 2
+    assert out["completed"] == 1
+
+
+def test_act_many_still_validates_every_action(tmp_path):
+    """Batching shares the transport, never the checks."""
+    bridge, _ = _bridge(tmp_path)
+    out = bridge.act_many([{"type": "totally.bogus"}])
+    assert out["ok"] is False
+    assert "invalid action" in out["results"][0]["error"]
+
+
+def test_act_many_halts_mid_batch_on_emergency_stop(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    bridge.emergency_stop("mid-batch")
+    out = bridge.act_many([
+        {"type": "mouse.move", "x": 1, "y": 2},
+        {"type": "mouse.move", "x": 3, "y": 4},
+    ])
+
+    assert out["ok"] is False
+    assert out["completed"] == 0, "emergency stop must halt the batch, not be batched past"
+
+
+def test_act_many_respects_policy_denial_for_high_risk_tools(tmp_path):
+    reg = ToolRegistry()
+
+    class HighTool(FakeTool):
+        name = "danger"
+        risk = "high"
+
+    reg.register(HighTool())
+    bridge, _ = _bridge(tmp_path, approve=False, tools=reg)
+    out = bridge.act_many([{"type": "tool.run", "tool": "danger", "args": {}}])
+
+    assert out["ok"] is False, "a batch must not launder a denied action"
+
+
+def test_act_many_rejects_an_empty_or_non_list_payload(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    assert bridge.act_many([])["ok"] is False
+    assert bridge.act_many("not a list")["ok"] is False
+
+
+def test_act_reports_whether_anything_changed(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    out = bridge.act({"type": "mouse.move", "x": 5, "y": 5}, report_change=True)
+
+    assert "changed" in out
+    assert "silentNoOp" in out["change"]
+    # Null backends never change the active window, so this IS a silent no-op —
+    # which is exactly what the field is meant to surface.
+    assert out["change"]["silentNoOp"] is True
+
+
+def test_act_without_report_change_stays_lean(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    out = bridge.act({"type": "mouse.move", "x": 5, "y": 5})
+    assert "changed" not in out
+    assert "change" not in out
+
+
+def test_settle_ms_is_honoured_on_click(tmp_path):
+    import time
+
+    bridge, _ = _bridge(tmp_path)
+    started = time.perf_counter()
+    bridge.click(1, 1, settle_ms=120)
+    elapsed_ms = (time.perf_counter() - started) * 1000
+
+    assert elapsed_ms >= 100, f"settle was not honoured (took {elapsed_ms:.0f} ms)"

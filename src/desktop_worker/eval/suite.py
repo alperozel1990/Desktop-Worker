@@ -56,6 +56,7 @@ def probe_screenshot_inline(ctx: Any) -> dict[str, Any]:
         except Exception:
             raw = None
     decodable = bool(raw) and raw.startswith(_IMAGE_MAGIC)
+    explained = bool(res.get("inlineError"))
     return {
         "steps": 1,
         "inlineImage": decodable,
@@ -63,6 +64,15 @@ def probe_screenshot_inline(ctx: Any) -> dict[str, Any]:
             "image bytes returned"
             if decodable
             else f"no decodable image; keys={sorted(res.keys())}"
+        ),
+        # Either we got the picture, or we were told why not. A path with no
+        # explanation is the failure mode that let the original defect survive:
+        # the caller cannot tell "capture failed" from "here, look at this".
+        "inlineAccountedFor": decodable or explained,
+        "inlineAccountedForReason": (
+            "image bytes returned" if decodable
+            else f"no image, but explained: {res.get('inlineError')}" if explained
+            else f"SILENT degradation to path-only; keys={sorted(res.keys())}"
         ),
         "pathStillReturned": bool(res.get("path")),
         "bytes": len(raw) if raw else 0,
@@ -320,12 +330,18 @@ def tier_a1_tasks() -> list[EvalTask]:
         ),
         EvalTask(
             id="A1-SURFACE-INLINE-IMAGE",
-            description="screenshot returns decodable image bytes, not only a path",
+            description="screenshot either returns image bytes or explains why it cannot",
             tier="a1",
             probe=probe_screenshot_inline,
-            oracle=ProbeFlag("inlineImage"),
-            seeded_from="Audit 2026-07-21: bridge.py:180-182 returns a path; zero "
-            "ImageContent/base64 in src/ (RED until DW-MCP-IMAGE)",
+            # On Null backends there IS no image — the backend writes a .txt
+            # placeholder — so demanding image bytes here would be a test that can
+            # never pass, which is worse than no test. What IS checkable on Null is
+            # the property that actually let the original defect hide: silently
+            # degrading to a path with no explanation. Real image bytes are graded
+            # by A2-SURFACE-INLINE-IMAGE on a live desktop.
+            oracle=ProbeFlag("inlineAccountedFor"),
+            seeded_from="Audit 2026-07-21: screenshot returned a path only and said "
+            "nothing about it; DW-MCP-IMAGE. Live bytes = A2-SURFACE-INLINE-IMAGE",
         ),
         EvalTask(
             id="A1-SURFACE-TRUNCATION",

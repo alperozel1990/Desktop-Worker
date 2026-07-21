@@ -16,7 +16,7 @@ EXPECTED_TOOLS = {
     "right_click",
     "move", "scroll", "drag", "type_text", "press_key", "hotkey", "clipboard_set",
     "clipboard_get", "wait", "run_tool", "run_cli", "act", "list_tools", "status",
-    "emergency_stop", "clear_stop",
+    "emergency_stop", "clear_stop", "act_many",
 }
 
 

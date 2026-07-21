@@ -68,13 +68,55 @@ class AgentBridge:
         self.default_cwd = default_cwd or str(session.config.artifacts_root.parent)
 
     # --- generic action path -------------------------------------------
-    def act(self, action: dict) -> dict:
-        """Execute any structured action (the escape hatch). Validates first."""
+    def act(self, action: dict, settle_ms: int = 0, report_change: bool = False) -> dict:
+        """Execute any structured action (the escape hatch). Validates first.
+
+        ``settle_ms`` waits after the action so the UI can repaint before the next
+        observation. The MCP surface previously had no settle at all — `click`
+        returned the instant SendInput returned — so an agent had to guess a
+        `wait()` duration, and guessed wrong in both directions.
+
+        ``report_change`` returns a compact before/after signature so the agent can
+        tell whether anything actually happened, without paying for a full
+        re-perceive (a capture + a UIA walk + an OCR pass) just to find out.
+        """
         try:
             parsed = parse_action(action)
         except ActionValidationError as exc:
             return {"ok": False, "error": f"invalid action: {exc}"}
-        return self._result(self.executor.execute(parsed))
+
+        before = self._state_signature() if report_change else None
+        result = self._result(self.executor.execute(parsed))
+
+        if settle_ms > 0:
+            self.wait(int(settle_ms))
+
+        if report_change:
+            after = self._state_signature()
+            result["changed"] = before != after
+            result["change"] = {
+                "before": before,
+                "after": after,
+                # A successful action that changed nothing is the classic silent
+                # no-op; surfacing it lets the agent react instead of proceeding
+                # on a false assumption.
+                "silentNoOp": bool(result.get("ok")) and before == after,
+            }
+        return result
+
+    def _state_signature(self) -> str:
+        """Cheap, coarse fingerprint of the screen: active window + element count.
+
+        Deliberately not a screenshot hash — it must be cheap enough to take twice
+        around every action, and stable against cursor jitter.
+        """
+        try:
+            obs = self.session.observer.observe("mcp", screenshot=False)
+            d = obs.to_dict()
+            window = d.get("activeWindow") or {}
+            return f"{window.get('process', '')}|{window.get('title', '')}"
+        except Exception as exc:
+            return f"<signature unavailable: {type(exc).__name__}>"
 
     @staticmethod
     def _result(res: Any) -> dict:
@@ -87,12 +129,14 @@ class AgentBridge:
         }
 
     # --- mouse ----------------------------------------------------------
-    def move(self, x: int, y: int) -> dict:
-        return self.act({"type": "mouse.move", "x": x, "y": y})
+    def move(self, x: int, y: int, settle_ms: int = 0) -> dict:
+        return self.act({"type": "mouse.move", "x": x, "y": y}, settle_ms=settle_ms)
 
     def click(self, x: Optional[int] = None, y: Optional[int] = None,
-              button: str = "left") -> dict:
-        return self.act(_xy({"type": "mouse.click", "button": button}, x, y))
+              button: str = "left", settle_ms: int = 0,
+              report_change: bool = False) -> dict:
+        return self.act(_xy({"type": "mouse.click", "button": button}, x, y),
+                        settle_ms=settle_ms, report_change=report_change)
 
     def double_click(self, x: Optional[int] = None, y: Optional[int] = None,
                      button: str = "left") -> dict:
@@ -228,6 +272,56 @@ class AgentBridge:
                 "cappedByRequest": capped_by_request,
                 "shown": len(elements),
             },
+        }
+
+    def act_many(
+        self, actions: list, stop_on_failure: bool = True, settle_ms: int = 0
+    ) -> dict:
+        """Run several actions in ONE round-trip, stopping at the first failure.
+
+        A four-step form fill cost four round-trips, realistically eight with a
+        confirming perceive between each. Model round-trips are the dominant term
+        in agent latency, so grouping is the lever that actually moves it.
+
+        Batching is NOT a safety bypass: every action still goes through
+        ``parse_action`` -> policy -> emergency stop -> executor -> audit
+        individually, exactly as if it had been sent alone. What is saved is the
+        transport, not the checks.
+
+        Stops at the first failure by default, because later actions in a sequence
+        almost always assume the earlier ones worked — typing into a field that was
+        never focused sends the text somewhere else.
+        """
+        if not isinstance(actions, list) or not actions:
+            return {"ok": False, "error": "act_many needs a non-empty list of actions"}
+
+        results: list[dict] = []
+        failed_at: Optional[int] = None
+        for index, action in enumerate(actions):
+            if not isinstance(action, dict):
+                results.append({"ok": False, "error": f"action {index} is not an object"})
+                failed_at = index
+                break
+            outcome = self.act(action)
+            results.append(outcome)
+            if not outcome.get("ok"):
+                failed_at = index
+                if stop_on_failure:
+                    break
+            if settle_ms > 0:
+                self.wait(settle_ms)
+
+        completed = sum(1 for r in results if r.get("ok"))
+        return {
+            "ok": failed_at is None,
+            "completed": completed,
+            "requested": len(actions),
+            "failedAt": failed_at,
+            "error": (
+                None if failed_at is None
+                else f"action {failed_at} failed: {results[failed_at].get('error')}"
+            ),
+            "results": results,
         }
 
     def click_element(self, element_id: str, button: str = "left") -> dict:

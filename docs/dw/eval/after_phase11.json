@@ -1,0 +1,592 @@
+{
+  "label": "a2-phase11-complete",
+  "tier": "a2",
+  "trialsPerTask": 3,
+  "startedAt": "2026-07-21T20:34:02.242750+00:00",
+  "finishedAt": "2026-07-21T20:35:11.091938+00:00",
+  "feasible": {
+    "tasks": 30,
+    "trials": 90,
+    "passes": 63,
+    "successRate": 0.7,
+    "ci95": [
+      0.5987,
+      0.7849
+    ]
+  },
+  "infeasible": {
+    "tasks": 0,
+    "trials": 0,
+    "passes": 0,
+    "successRate": 0.0,
+    "ci95": [
+      0.0,
+      0.0
+    ]
+  },
+  "flakyTasks": [],
+  "totalRoundTrips": 225,
+  "meanRoundTripsPerTrial": 2.5,
+  "meanWallClockMsPerTrial": 764.77,
+  "tasks": [
+    {
+      "taskId": "A2-NOTEPAD-FOCUS",
+      "tier": "a2",
+      "app": "notepad",
+      "feasible": true,
+      "trials": 3,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.5615
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1.06,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "trial raised RuntimeError: setup failed: ToolError: tool 'focus_window' failed: no open window matching 'Notepad'"
+      ]
+    },
+    {
+      "taskId": "A2-NOTEPAD-ID-STABLE",
+      "tier": "a2",
+      "app": "notepad",
+      "feasible": true,
+      "trials": 3,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.5615
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.62,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "trial raised RuntimeError: setup failed: ToolError: tool 'focus_window' failed: no open window matching 'Notepad'"
+      ]
+    },
+    {
+      "taskId": "A2-NOTEPAD-PAYLOAD",
+      "tier": "a2",
+      "app": "notepad",
+      "feasible": true,
+      "trials": 3,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.5615
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.59,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "trial raised RuntimeError: setup failed: ToolError: tool 'focus_window' failed: no open window matching 'Notepad'"
+      ]
+    },
+    {
+      "taskId": "A2-NOTEPAD-TRUNCATION",
+      "tier": "a2",
+      "app": "notepad",
+      "feasible": true,
+      "trials": 3,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.5615
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.67,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "trial raised RuntimeError: setup failed: ToolError: tool 'focus_window' failed: no open window matching 'Notepad'"
+      ]
+    },
+    {
+      "taskId": "A2-PAINT-FOCUS",
+      "tier": "a2",
+      "app": "paint",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 2.69,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-PAINT-ID-STABLE",
+      "tier": "a2",
+      "app": "paint",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1470.8,
+      "meanSteps": 2.0,
+      "meanRoundTrips": 4.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-PAINT-PAYLOAD",
+      "tier": "a2",
+      "app": "paint",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1475.3,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-PAINT-TRUNCATION",
+      "tier": "a2",
+      "app": "paint",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1432.34,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-CALCULATOR-FOCUS",
+      "tier": "a2",
+      "app": "calculator",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 13.26,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-CALCULATOR-ID-STABLE",
+      "tier": "a2",
+      "app": "calculator",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1204.47,
+      "meanSteps": 2.0,
+      "meanRoundTrips": 4.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-CALCULATOR-PAYLOAD",
+      "tier": "a2",
+      "app": "calculator",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1277.7,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-CALCULATOR-TRUNCATION",
+      "tier": "a2",
+      "app": "calculator",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1214.9,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-BLENDER-FOCUS",
+      "tier": "a2",
+      "app": "blender",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 68.25,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-BLENDER-ID-STABLE",
+      "tier": "a2",
+      "app": "blender",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1220.26,
+      "meanSteps": 2.0,
+      "meanRoundTrips": 4.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-BLENDER-PAYLOAD",
+      "tier": "a2",
+      "app": "blender",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1795.36,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-BLENDER-TRUNCATION",
+      "tier": "a2",
+      "app": "blender",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1830.03,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-UNITY-FOCUS",
+      "tier": "a2",
+      "app": "unity",
+      "feasible": true,
+      "trials": 3,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.5615
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1.4,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "trial raised RuntimeError: setup failed: ToolError: tool 'focus_window' failed: no open window matching 'Unity'"
+      ]
+    },
+    {
+      "taskId": "A2-UNITY-ID-STABLE",
+      "tier": "a2",
+      "app": "unity",
+      "feasible": true,
+      "trials": 3,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.5615
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1.02,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "trial raised RuntimeError: setup failed: ToolError: tool 'focus_window' failed: no open window matching 'Unity'"
+      ]
+    },
+    {
+      "taskId": "A2-UNITY-PAYLOAD",
+      "tier": "a2",
+      "app": "unity",
+      "feasible": true,
+      "trials": 3,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.5615
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.98,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "trial raised RuntimeError: setup failed: ToolError: tool 'focus_window' failed: no open window matching 'Unity'"
+      ]
+    },
+    {
+      "taskId": "A2-UNITY-TRUNCATION",
+      "tier": "a2",
+      "app": "unity",
+      "feasible": true,
+      "trials": 3,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.5615
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1.1,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "trial raised RuntimeError: setup failed: ToolError: tool 'focus_window' failed: no open window matching 'Unity'"
+      ]
+    },
+    {
+      "taskId": "A2-KICAD-FOCUS",
+      "tier": "a2",
+      "app": "kicad",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 34.52,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-KICAD-ID-STABLE",
+      "tier": "a2",
+      "app": "kicad",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 881.12,
+      "meanSteps": 2.0,
+      "meanRoundTrips": 4.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-KICAD-PAYLOAD",
+      "tier": "a2",
+      "app": "kicad",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1431.51,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-KICAD-TRUNCATION",
+      "tier": "a2",
+      "app": "kicad",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1417.61,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-CHROME-FOCUS",
+      "tier": "a2",
+      "app": "chrome",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 19.25,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-CHROME-ID-STABLE",
+      "tier": "a2",
+      "app": "chrome",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1963.42,
+      "meanSteps": 2.0,
+      "meanRoundTrips": 4.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-CHROME-PAYLOAD",
+      "tier": "a2",
+      "app": "chrome",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1883.19,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-CHROME-TRUNCATION",
+      "tier": "a2",
+      "app": "chrome",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 2051.89,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-SURFACE-INLINE-IMAGE",
+      "tier": "a2",
+      "app": "any",
+      "feasible": true,
+      "trials": 3,
+      "passes": 3,
+      "successRate": 1.0,
+      "ci95": [
+        0.4385,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 242.68,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A2-SURFACE-ELEMENT-FOUND",
+      "tier": "a2",
+      "app": "notepad",
+      "feasible": true,
+      "trials": 3,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.5615
+      ],
+      "flaky": false,
+      "meanWallClockMs": 5.01,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "trial raised RuntimeError: setup failed: ToolError: tool 'focus_window' failed: no open window matching 'Notepad'"
+      ]
+    }
+  ],
+  "notes": {}
+}
