@@ -522,7 +522,11 @@ def tier_a2_tasks() -> list[EvalTask]:
             setup=({"type": "tool.run", "tool": "focus_window",
                     "args": {"title_contains": "Notepad"}},),
             probe=gated(probe_perceive_payload_size, r"Notepad|Not Defteri", "measured"),
-            oracle=AllOf(ProbeFlag("measured"), ElementPresent(control_type="edit")),
+            # "edit" is a UIA ControlType name, NOT one of OUR types: control_to_type
+            # maps both Edit and Document to "input". Asking for "edit" made this task
+            # fail against a perfectly healthy Notepad — a bug in the measurement, not
+            # the product. Always assert against the vocabulary the schema actually uses.
+            oracle=AllOf(ProbeFlag("measured"), ElementPresent(control_type="input")),
             seeded_from="Audit: silent truncation can drop the target control entirely",
         )
     )

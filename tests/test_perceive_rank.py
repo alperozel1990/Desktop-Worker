@@ -195,3 +195,17 @@ def test_stronger_identity_beats_weaker_when_both_are_present():
 
 def test_unhashable_runtime_id_does_not_crash():
     assert _id(runtime_id=object()).startswith("r:")
+
+
+def test_our_type_vocabulary_has_no_edit_type():
+    """Regression: an eval task asserted control_type="edit", which cannot exist.
+
+    control_to_type maps UIA's Edit AND Document to "input". Asserting against a
+    UIA ControlType name instead of our own vocabulary made a healthy Notepad look
+    broken — a measurement bug that reads exactly like a product bug.
+    """
+    from desktop_worker.perception.uia_backend import _CONTROL_TYPE_MAP, control_to_type
+
+    assert "edit" not in set(_CONTROL_TYPE_MAP.values())
+    assert control_to_type("EditControl") == "input"
+    assert control_to_type("DocumentControl") == "input"

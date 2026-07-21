@@ -4,7 +4,7 @@
 > for "where are we".
 
 ## Session info
-- **Last updated:** 2026-07-21
+- **Last updated:** 2026-07-22
 - **Repo path:** `C:\Desktop-Worker`
 - **Workspace path:** `C:\Desktop-Worker\docs\dw`
 - **Current branch:** `main` (Phase 8 + clipboard/keys fixes + 3D Tier 1/Tier 3 merged & pushed
@@ -89,6 +89,20 @@ Gate and only implement when the selected card is explicitly approved.
 
 ## Current task
 None in progress. **PHASE 11 COMPLETE** (all 5 cards, each with a live measured delta).
+
+## LATEST (2026-07-22) — A2 at 100%, Tier B live, docs pushed
+- **A2 tool-surface suite: 90/90 = 100%** (CI [95.9%, 100%]), 30 tasks x 3 trials, 7 apps
+  open (Notepad, Paint, Calculator, Blender, KiCad, Chrome, Unity).
+- **Tier B (DW-EVAL-TIERB) shipped and run live: 4/4 on 12 Claude calls.**
+  `dw-eval-tierb.txt` verified ON DISK. Cost ceiling enforced via `--max-ai-steps`.
+- **Unity measured on a THROWAWAY project** — 22 UIA + 8 OCR = 30 elements. This
+  CONTRADICTED the prediction that Unity would stress the 200-element cap; it is the
+  low-UIA extreme like Blender. Strategy for Unity is vision, not element hunting.
+- Two more defects found, both in the MEASUREMENT not the product: the Tier B cost counter
+  read a non-existent field and silently reported 0 spent (a ceiling that can never halt),
+  and `A2-SURFACE-ELEMENT-FOUND` asserted `control_type="edit"` which is not in our type
+  vocabulary. Both fixed with regression tests.
+- **508 tests.** Pushed to origin/main.
 
 ## PHASE 11 RESULT (2026-07-21) — measured, not asserted
 | Suite | Before | After |

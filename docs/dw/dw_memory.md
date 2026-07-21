@@ -219,6 +219,16 @@ Source of truth: `docs/requirements.md`.
 - Pause ONLY for things the user must physically test (live mouse/keyboard, UAC
   prompt, real browser, Tesseract install). Batch those as a "test this" list.
 
+## Environment + measured facts (2026-07-22)
+- **Unity Editor is LOW-UIA (22 elements), not dense.** A prediction that it would stress
+  the 200-element cap was wrong by an order of magnitude. Use vision for Unity, like Blender.
+- Unity startup from an elevated session shows TWO dialogs ("running as administrator",
+  "Non-Matching Editor Installation"); both are UIA-clickable. **Never dismiss the
+  non-matching one on a real project** — use a throwaway project.
+- `edit` is NOT one of our control types; `control_to_type` maps Edit AND Document to
+  `input`. Assert against our vocabulary, not UIA ControlType names.
+- Tier B (`eval --tier b --allow-ai --max-ai-steps N`) costs ~3 Claude calls per simple task.
+
 ## Current next action
 **MANUAL-EVAL-1 is DONE** (Level 4, zero quota) — honest A2 baseline recorded at
 `docs/dw/eval/baseline_a2.json`: feasible 33.3% CI [24.4%, 43.6%]. Next is **Phase 11 in

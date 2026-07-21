@@ -1421,3 +1421,45 @@ possibly-wrong zero, with a regression test.
 
 Tier B remains opt-in behind `--allow-ai` (verified: exit 2 without it) and is excluded
 from the `all` tier so a routine run can never spend money.
+
+---
+
+## 2026-07-22 — Unity measured, A2 to 100%, skill docs refreshed
+
+**Validation level: 4 (live real desktop).** 508 tests, 1 skipped.
+
+**Unity measured on a THROWAWAY project** (`%TEMP%\dw-unity-eval`), so the user's real
+projects (`C:\BurnNotice`, `C:\DiceNDecks`) were never opened — the non-matching-version
+dialog can upgrade a project, which is not a risk worth taking for a measurement.
+
+Getting in required clicking through two dialogs, done with Desktop-Worker itself
+(dogfooding `click_element`): *"Unity is running as administrator."* → **I wish to continue
+at my own risk**, then *"Opening Project in Non-Matching Editor Installation"* →
+**Continue**. Editor usable after ~200 s.
+
+**The result contradicted my prediction, and the correction matters more than the number.**
+I had reasoned that Unity would be the densest UI and would stress the 200-element cap
+hardest. Measured: the entire Unity Editor exposes **22 UIA elements + 8 OCR = 30**
+(~1 430 tokens). It is the LOW-UIA extreme next to Blender (8), not a dense case — the
+editor's content is custom-drawn. Prediction was wrong by an order of magnitude; the
+strategy for Unity is vision, not element hunting.
+
+**A2 with all 7 apps open: 87/90 = 96.7%**, then **90/90 = 100%** (CI [95.9%, 100%]) after
+fixing the one remaining failure — which was, again, a defect in the MEASUREMENT rather
+than the product: `A2-SURFACE-ELEMENT-FOUND` asserted `control_type="edit"`, but `edit` is
+a UIA ControlType name and does not exist in OUR vocabulary — `control_to_type` maps both
+`Edit` and `Document` to `input`. A healthy Notepad was being marked broken. Fixed, with a
+regression test pinning that `edit` is not one of our types.
+
+**Skill docs refreshed** (`~/.claude/skills/desktop-worker/`), since other AI sessions read
+these and not this repo:
+- `REFERENCE.md` — 24-tool catalog with `click_element` and `act_many`; the loop now leads
+  with "focus first, because perception reads the FOREGROUND"; truncation/filters/settle/
+  report-change documented; a measured per-app perception table; a new §8b on the eval
+  harness and how to take a before/after measurement.
+- `playbooks/unity.md` — entry promoted from `provisional` to **confirmed** with the
+  measured 22-element figure, the two startup dialogs and their buttons, the ~200 s load,
+  and an explicit warning never to dismiss the non-matching-version dialog on a real project.
+- `SKILL.md` deliberately untouched — it is a thin pointer to REFERENCE by design.
+
+**Cleanup:** the throwaway Unity project and every app opened for measurement were closed.
