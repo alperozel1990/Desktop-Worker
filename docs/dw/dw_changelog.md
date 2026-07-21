@@ -1262,7 +1262,7 @@ MEASURED; Unity still needs an open project.
 
 ## 2026-07-21 — DW-MCP-IMAGE (Phase 11, card 2 of 5)
 
-**Validation level: 4 (live real desktop).** 470 tests, 1 skipped.
+**Validation level: 4 (live real desktop).** 469 tests, 1 skipped.
 
 **Defect:** `screenshot` returned only a file path. Grep for `ImageContent`/base64 across
 `src/` returned zero hits. An external MCP agent has no filesystem access to `artifacts/`,
@@ -1287,3 +1287,43 @@ whole-screen one.
 **Still red and honest about it:** `A2-SURFACE-ELEMENT-FOUND` and the Notepad rows fail
 because Notepad would not stay open on this machine during the runs (Win11 Notepad session
 restore, noted in memory). Not a product regression — an environment gap, reported as such.
+
+---
+
+## 2026-07-21 — DW-ELEM-STABLE (Phase 11, card 3 of 5)
+
+**Validation level: 4 (live real desktop).** 482 tests, 1 skipped.
+
+**Defect:** element ids were `uia-<index>` — a counter reset on every tree walk. The A2
+baseline reported 100% "stability" on every app, which was a false green: two back-to-back
+perceives of a frozen screen produce identical traversal order, so a positional counter
+passes trivially. The moment anything opened, closed or scrolled, `uia-7` became a
+different control. That is why every mouse tool took raw coordinates.
+
+**Shipped:**
+- `perception/uia_backend.py` — `stable_element_id()` with a documented preference order:
+  `AutomationId` (`a:`) > `RuntimeId` (`r:`) > native handle + type (`h:`) > content hash
+  of type+name (`n:`). The walk index is used ONLY for unnamed, identity-less controls that
+  genuinely cannot be told apart by anything else — and the `n:` prefix marks such ids weak.
+  Each UIA accessor is guarded separately so losing `AutomationId` does not cost `RuntimeId`.
+- `mcp_server/bridge.py` — `click_element(element_id, button)`: re-perceives, finds the id,
+  clicks its CURRENT centre. A stale id is **refused, never guessed at** — refusing is
+  recoverable, a wrong click may not be. When the list was truncated the error says the
+  control may exist but not be listed, so the agent narrows instead of concluding it is gone.
+- `mcp_server/server.py` — new `click_element` tool (23 total), described so an agent
+  prefers it over `click(x,y)`.
+
+**MEASURED before/after (A2, live):** ID-STABLE **0/5 -> 5/5** measured apps; A2 feasible
+holds at 70.0%.
+
+Live evidence, which matters more than the pass count:
+- **Zero positional ids remain.** Paint 200 elements (170 `r:`, 30 `a:`), KiCad 46 (34 `a:`,
+  12 `r:`), Chrome 52 (34/18), Blender 6 (1/5).
+- Paint's File button `a:ContentButton` **still resolved to the same control after focus
+  switched away to KiCad and back**. Surviving a tree change is the entire point; the old
+  id could not.
+- A stale id returns `ok:false` with a reason and a next step, not a click.
+
+**Note on the earlier false green:** the A2 probe that reported ids "stable" was
+strengthened during Phase 10 to detect `uia-<index>` structurally. Without that fix this
+card would have looked unnecessary.

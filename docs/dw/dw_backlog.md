@@ -600,7 +600,7 @@ SDK-free and fake-server-testable.
 **Why it mattered:** Blender perceives **6 elements**. For GHOST/OpenGL apps the picture is
 not a fallback, it is the only channel — and it was disconnected.
 
-## DW-ELEM-STABLE — Stable element IDs + `click_element(id)`  ☐ todo
+## DW-ELEM-STABLE — Stable element IDs + `click_element(id)`  ✅ done (2026-07-21)
 **Purpose:** `uia_backend.py:160` assigns `id=f"uia-{count}"` — a positional counter over
 tree-walk order, reset to zero every `detect()`. `uia-7` in call N and call N+1 are
 unrelated controls. `AutomationId`, `runtimeId` and `NativeWindowHandle` are never read.
@@ -613,9 +613,15 @@ the wrong thing.
 **Files allowed:** `perception/uia_backend.py`, `mcp_server/bridge.py`,
 `mcp_server/server.py`, tests. **Forbidden:** `schema/observations.py` field removals
 (additive only), `safety/`, `actions/executor.py`.
-**Done criteria:** [ ] same control keeps its id across two perceives on an unchanged screen ·
-[ ] stale id is REJECTED, never silently clicked · [ ] A2 stability measurement.
-**Diff budget:** 3 production files + tests.
+**Done criteria:** [x] ids identify the control, not its walk position ·
+[x] stale id is REJECTED, never silently clicked · [x] A2 measured.
+**Diff budget:** 3 production files + tests. Met.
+**Result — MEASURED:** A2 ID-STABLE **0/5 -> 5/5** measured apps.
+Live: **zero positional ids remain** — Paint 200 (170 RuntimeId, 30 AutomationId),
+KiCad 46 (34/12), Chrome 52 (34/18), Blender 6 (1/5). The decisive check: Paint's File
+button `a:ContentButton` **still resolved to the same control after switching away to
+KiCad and back** — an id that survives a tree change is the whole point. A stale id is
+refused with a reason, and the refusal names truncation when that is why it is missing.
 
 ## DW-PERCEIVE-RANK — Rank + signal truncation instead of silent cut  ✅ done (2026-07-21)
 **Purpose:** `uia_backend.py:137` breaks the tree walk at 200 elements in traversal order —

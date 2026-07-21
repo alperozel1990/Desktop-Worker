@@ -134,3 +134,64 @@ def test_malformed_region_is_ignored_rather_than_crashing():
 def test_region_filter_drops_elements_without_usable_bounds():
     els = [{"type": "button", "text": "A", "label": "A", "bounds": None}]
     assert _filter_elements(els, region=[0, 0, 100, 100]) == []
+
+
+# --- DW-ELEM-STABLE: ids must identify a control, not its position ----------
+# The A2 baseline showed 100% "stable" ids on every app while ALL of them were
+# `uia-<index>` — stable only because the screen was frozen. The moment the tree
+# changes, a positional id points at a different control.
+
+
+from desktop_worker.perception.uia_backend import stable_element_id
+
+
+def _id(**kw):
+    base = dict(automation_id=None, runtime_id=None, native_handle=None,
+                control_type="button", name="Save", index=0)
+    base.update(kw)
+    return stable_element_id(**base)
+
+
+def test_automation_id_wins_and_ignores_position():
+    first = _id(automation_id="SaveBtn", index=0)
+    later = _id(automation_id="SaveBtn", index=97)
+    assert first == later
+    assert first.startswith("a:")
+
+
+def test_runtime_id_is_used_when_there_is_no_automation_id():
+    assert _id(runtime_id=[42, 7], index=0) == _id(runtime_id=[42, 7], index=99)
+    assert _id(runtime_id=[42, 7]).startswith("r:")
+
+
+def test_native_handle_is_the_third_choice():
+    assert _id(native_handle=12345, index=0) == _id(native_handle=12345, index=50)
+    assert _id(native_handle=12345).startswith("h:")
+
+
+def test_named_control_without_identity_falls_back_to_a_content_hash():
+    """Still position-independent: same type+name, different walk position."""
+    assert _id(name="Save", index=0) == _id(name="Save", index=31)
+    assert _id(name="Save").startswith("n:")
+
+
+def test_different_controls_get_different_ids():
+    assert _id(name="Save") != _id(name="Cancel")
+    assert _id(name="Save", control_type="button") != _id(name="Save", control_type="text")
+
+
+def test_unnamed_identityless_controls_keep_the_index_as_a_last_resort():
+    """Nothing distinguishes them but position — but the id says so with `n:`."""
+    a = _id(name=None, index=0)
+    b = _id(name=None, index=1)
+    assert a != b
+    assert a.startswith("n:")
+
+
+def test_stronger_identity_beats_weaker_when_both_are_present():
+    assert _id(automation_id="X", runtime_id=[1, 2], native_handle=9).startswith("a:")
+    assert _id(runtime_id=[1, 2], native_handle=9).startswith("r:")
+
+
+def test_unhashable_runtime_id_does_not_crash():
+    assert _id(runtime_id=object()).startswith("r:")

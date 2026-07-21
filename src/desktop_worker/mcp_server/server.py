@@ -65,6 +65,11 @@ def register(server: Any, bridge: AgentBridge) -> Any:
             return result
 
     @tool()
+    def click_element(element_id: str, button: str = "left") -> dict:
+        """Click a control by its `id` from `perceive`, re-checking where it is first. PREFER THIS over click(x,y): coordinates go stale the moment anything moves, and a stale coordinate clicks the wrong thing while still reporting success. A stale id is refused instead, so you can re-perceive and retry."""
+        return bridge.click_element(element_id=element_id, button=button)
+
+    @tool()
     def click(x: Optional[int] = None, y: Optional[int] = None, button: str = "left") -> dict:
         """Click the mouse, optionally moving to absolute screen (x, y) first. button is left|right|middle. Omit x/y to click at the current cursor."""
         return bridge.click(x=x, y=y, button=button)

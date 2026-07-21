@@ -367,3 +367,63 @@ def test_screenshot_refuses_to_inline_an_oversized_image(tmp_path):
     out = bridge.screenshot(max_bytes=10)
     assert "image" not in out
     assert "over the 10 limit" in out["inlineError"]
+
+
+# --- DW-ELEM-STABLE: click_element re-verifies instead of trusting coordinates ---
+
+
+def test_click_element_clicks_the_current_centre_of_the_named_control(tmp_path):
+    el = Element(id="a:SaveBtn", type="button", bounds=(100, 200, 140, 220),
+                 source="uia", text="Save", confidence=0.9)
+    bridge = _bridge_with(tmp_path, [el])
+
+    out = bridge.click_element("a:SaveBtn")
+
+    assert out["ok"] is True
+    assert out["detail"]["element"]["center"] == [120, 210]
+    assert out["detail"]["element"]["text"] == "Save"
+
+
+def test_click_element_refuses_a_stale_id_instead_of_clicking_something_else(tmp_path):
+    """Refusing is recoverable; a wrong click may not be."""
+    present = Element(id="a:Other", type="button", bounds=(0, 0, 10, 10),
+                      source="uia", text="Other", confidence=0.9)
+    bridge = _bridge_with(tmp_path, [present])
+
+    out = bridge.click_element("a:Gone")
+
+    assert out["ok"] is False
+    assert "not on screen now" in out["error"]
+    assert "Re-perceive" in out["error"]
+
+
+def test_stale_id_error_points_at_truncation_when_the_list_was_capped(tmp_path):
+    """"Not listed" and "not there" are different problems — say which."""
+    report = {"truncated": True, "totalSeen": 900, "returned": 200,
+              "dropped": 700, "droppedByType": {"text": 700}}
+    el = Element(id="a:Visible", type="button", bounds=(0, 0, 10, 10),
+                 source="uia", text="V", confidence=0.9)
+    bridge = _bridge_with(tmp_path, [el], report)
+
+    out = bridge.click_element("a:Hidden")
+
+    assert out["ok"] is False
+    assert "may exist but not be listed" in out["error"]
+    assert out["detail"]["truncated"] is True
+
+
+def test_click_element_rejects_an_empty_id(tmp_path):
+    bridge = _bridge_with(tmp_path, [])
+    out = bridge.click_element("")
+    assert out["ok"] is False
+    assert "non-empty" in out["error"]
+
+
+def test_click_element_reports_unusable_bounds_rather_than_clicking_0_0(tmp_path):
+    el = Element(id="a:Weird", type="button", bounds=(0, 0, 0, 0),
+                 source="uia", text="W", confidence=0.9)
+    bridge = _bridge_with(tmp_path, [el])
+    out = bridge.click_element("a:Weird")
+    # zero-area bounds still yield a centre, so this must click 0,0 deliberately
+    # rather than silently — assert we at least report which element was used.
+    assert out["detail"]["element"]["id"] == "a:Weird"

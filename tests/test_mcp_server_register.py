@@ -12,7 +12,8 @@ import pytest
 from desktop_worker.mcp_server.server import register, serve
 
 EXPECTED_TOOLS = {
-    "observe", "perceive", "screenshot", "click", "double_click", "right_click",
+    "observe", "perceive", "screenshot", "click", "click_element", "double_click",
+    "right_click",
     "move", "scroll", "drag", "type_text", "press_key", "hotkey", "clipboard_set",
     "clipboard_get", "wait", "run_tool", "run_cli", "act", "list_tools", "status",
     "emergency_stop", "clear_stop",

@@ -98,6 +98,56 @@ def rank_and_cap(
     }
 
 
+def stable_element_id(
+    *,
+    automation_id: str | None,
+    runtime_id: object | None,
+    native_handle: object | None,
+    control_type: str,
+    name: str | None,
+    index: int,
+) -> str:
+    """Build an id that identifies a control, not its position in a tree walk.
+
+    The old id was ``uia-<index>`` — a counter reset on every walk. It looked
+    perfectly stable when measured on a frozen screen (the traversal order is
+    identical), but the moment anything opened, closed or scrolled, ``uia-7``
+    became a different control. That makes it useless as a cross-call reference,
+    which is why every mouse tool took raw coordinates instead.
+
+    Preference order, strongest identity first:
+
+    1. ``AutomationId`` — the app's own stable identifier for the control.
+    2. ``RuntimeId`` — UIA's per-element identity, stable while the element lives.
+    3. Native window handle plus control type.
+    4. Content hash of type+name — weakest, but still tied to WHAT the control is
+       rather than WHERE it appeared in the walk.
+
+    The index is appended only in the last case, and only to break ties between
+    genuinely identical unnamed controls.
+    """
+    import hashlib
+
+    if automation_id:
+        return f"a:{automation_id}"
+    if runtime_id:
+        try:
+            joined = "-".join(str(part) for part in runtime_id)
+        except TypeError:
+            joined = str(runtime_id)
+        if joined:
+            return f"r:{joined}"
+    if native_handle:
+        return f"h:{native_handle}:{control_type}"
+    digest = hashlib.sha1(
+        f"{control_type}|{name or ''}".encode("utf-8", "replace")
+    ).hexdigest()[:10]
+    # Unnamed, handle-less, identity-less controls genuinely cannot be told apart
+    # by anything but position, so the index is a last resort — and the "n:" prefix
+    # marks the id as weak so callers can tell.
+    return f"n:{digest}:{index}" if not name else f"n:{digest}"
+
+
 def _center(bounds: tuple[int, int, int, int]) -> tuple[float, float]:
     left, top, right, bottom = bounds
     return (left + right) / 2.0, (top + bottom) / 2.0
@@ -225,8 +275,33 @@ class WindowsUiaBackend:
                     # Skip unnamed, valueless generic panes/text (noise).
                     if text is None and etype in ("pane", "unknown", "window", "text"):
                         continue
+                    # Read identity from the control itself. Each accessor can
+                    # throw for a control that died mid-walk, so each is guarded
+                    # individually — losing AutomationId must not cost us RuntimeId.
+                    automation_id = runtime_id = native_handle = None
+                    try:
+                        automation_id = control.AutomationId or None
+                    except Exception:
+                        pass
+                    try:
+                        runtime_id = control.GetRuntimeId()
+                    except Exception:
+                        pass
+                    try:
+                        native_handle = control.NativeWindowHandle or None
+                    except Exception:
+                        pass
+
                     elements.append(Element(
-                        id=f"uia-{count}", type=etype, bounds=bounds,
+                        id=stable_element_id(
+                            automation_id=automation_id,
+                            runtime_id=runtime_id,
+                            native_handle=native_handle,
+                            control_type=etype,
+                            name=name,
+                            index=count,
+                        ),
+                        type=etype, bounds=bounds,
                         source="uia", text=text, label=name, confidence=0.99,
                     ))
                     count += 1

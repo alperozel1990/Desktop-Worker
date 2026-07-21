@@ -230,6 +230,57 @@ class AgentBridge:
             },
         }
 
+    def click_element(self, element_id: str, button: str = "left") -> dict:
+        """Click a control BY ID, re-verifying it is still there first.
+
+        Clicking a remembered coordinate is a silent-failure machine: anything
+        that moves between the perceive and the click sends the click somewhere
+        else, and the agent gets `ok: true` for hitting the wrong thing. So this
+        re-perceives, finds the id, and clicks its CURRENT centre.
+
+        A stale id is REFUSED, never guessed at. Refusing is recoverable — the
+        agent re-perceives and tries again; a wrong click may not be.
+        """
+        if not element_id:
+            return {"ok": False, "error": "click_element needs a non-empty element_id"}
+
+        current = self.perceive(screenshot=False)
+        elements = current.get("elements") or []
+        match = next((e for e in elements if e.get("id") == element_id), None)
+
+        if match is None:
+            truncated = current.get("truncated")
+            hint = (
+                " The element list was truncated, so it may exist but not be listed — "
+                "narrow with control_type/text_contains/region and retry."
+                if truncated
+                else " Re-perceive to get current ids."
+            )
+            return {
+                "ok": False,
+                "error": f"element {element_id!r} is not on screen now.{hint}",
+                "detail": {"truncated": bool(truncated), "perceived": len(elements)},
+            }
+
+        centre = match.get("center")
+        if not (isinstance(centre, (list, tuple)) and len(centre) == 2):
+            return {
+                "ok": False,
+                "error": f"element {element_id!r} has no usable bounds to click",
+                "detail": {"element": match},
+            }
+
+        result = self.click(int(centre[0]), int(centre[1]), button=button)
+        result.setdefault("detail", {})
+        if isinstance(result["detail"], dict):
+            result["detail"]["element"] = {
+                "id": element_id,
+                "type": match.get("type"),
+                "text": match.get("text"),
+                "center": list(centre),
+            }
+        return result
+
     def screenshot(
         self, inline: bool = True, max_bytes: int = 4_000_000, region: list | None = None
     ) -> dict:
