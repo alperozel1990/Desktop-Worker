@@ -350,9 +350,22 @@ class FocusWindowTool:
         if match is None:
             return {"success": False, "error": f"no open window matching {tc!r}"}
         hwnd, title = match
-        ok = self._focus(hwnd)
-        return {"success": bool(ok), "title": title,
-                "error": None if ok else "could not focus the window"}
+        outcome = self._focus(hwnd)
+        # Backends may return a plain bool (injected test seams) or a structured
+        # dict with a reason (the Windows path). Normalise both.
+        if isinstance(outcome, dict):
+            ok = bool(outcome.get("ok"))
+            reason = outcome.get("reason") or ""
+        else:
+            ok = bool(outcome)
+            reason = "" if ok else "focus call returned false"
+        return {
+            "success": ok,
+            "title": title,
+            # A tool that fails must say WHY: an empty detail leaves the agent with
+            # nothing to reason about, and it silently mis-attributes the failure.
+            "error": None if ok else f"could not focus {title!r}: {reason}",
+        }
 
     # --- Windows implementations (lazy ctypes) -------------------------
     def _win_enum_windows(self) -> list[tuple[int, str]]:
@@ -376,14 +389,77 @@ class FocusWindowTool:
         u.EnumWindows(EnumProc(cb), 0)
         return out
 
-    def _win_focus(self, hwnd: int) -> bool:
+    def _win_focus(self, hwnd: int) -> dict[str, Any]:
+        """Bring ``hwnd`` to the foreground, robustly, and VERIFY it worked.
+
+        A bare ``SetForegroundWindow`` is not enough: Windows refuses foreground
+        activation (returning 0) unless the calling process already owns the
+        foreground or received the last input event. A background process — which
+        is exactly what the MCP server is — therefore fails every window switch,
+        and perception then walks the shell instead of the target app.
+
+        The standard workaround is to attach our input queue to the current
+        foreground thread for the duration of the call, so Windows treats the
+        activation as coming from the foreground context.
+
+        The API's return value is not trusted: success is confirmed against
+        ``GetForegroundWindow`` with a short bounded retry, because the call can
+        report success while the switch is still pending or gets overridden.
+        """
         try:
             import ctypes
-        except Exception:
-            return False
+            import time
+        except Exception as exc:  # pragma: no cover - ctypes always present on Windows
+            return {"ok": False, "reason": f"ctypes unavailable: {exc}"}
+
         u = ctypes.windll.user32
+        k = ctypes.windll.kernel32
+
+        SW_RESTORE = 9
         try:
-            u.ShowWindow(hwnd, 9)            # SW_RESTORE (un-minimize)
-            return bool(u.SetForegroundWindow(hwnd))
-        except Exception:
-            return False
+            if u.IsIconic(hwnd):
+                u.ShowWindow(hwnd, SW_RESTORE)
+
+            target_thread = u.GetWindowThreadProcessId(hwnd, None)
+            foreground = u.GetForegroundWindow()
+            fg_thread = u.GetWindowThreadProcessId(foreground, None) if foreground else 0
+            our_thread = k.GetCurrentThreadId()
+
+            # Never attach a thread to itself — that is the documented deadlock.
+            attached_fg = bool(fg_thread) and fg_thread != our_thread
+            attached_target = bool(target_thread) and target_thread != our_thread
+
+            if attached_fg:
+                u.AttachThreadInput(our_thread, fg_thread, True)
+            if attached_target:
+                u.AttachThreadInput(our_thread, target_thread, True)
+            try:
+                u.BringWindowToTop(hwnd)
+                u.SetForegroundWindow(hwnd)
+                u.SetActiveWindow(hwnd)
+            finally:
+                # Always detach, even if activation raised, or the input queues
+                # stay wired together and later input goes to the wrong window.
+                if attached_target:
+                    u.AttachThreadInput(our_thread, target_thread, False)
+                if attached_fg:
+                    u.AttachThreadInput(our_thread, fg_thread, False)
+
+            # Verify against reality rather than believing the return value.
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                if u.GetForegroundWindow() == hwnd:
+                    return {"ok": True, "reason": "verified foreground"}
+                time.sleep(0.05)
+
+            actual = u.GetForegroundWindow()
+            return {
+                "ok": False,
+                "reason": (
+                    f"SetForegroundWindow did not take effect (foreground is hwnd "
+                    f"{actual}, wanted {hwnd}); Windows may be blocking foreground "
+                    f"stealing for this process"
+                ),
+            }
+        except Exception as exc:
+            return {"ok": False, "reason": f"{type(exc).__name__}: {exc}"}

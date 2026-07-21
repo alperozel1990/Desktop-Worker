@@ -1,0 +1,186 @@
+{
+  "label": "phase10-baseline",
+  "tier": "a1",
+  "trialsPerTask": 5,
+  "startedAt": "2026-07-21T17:53:52.600448+00:00",
+  "finishedAt": "2026-07-21T17:53:52.625486+00:00",
+  "feasible": {
+    "tasks": 6,
+    "trials": 30,
+    "passes": 10,
+    "successRate": 0.3333,
+    "ci95": [
+      0.1923,
+      0.5122
+    ]
+  },
+  "infeasible": {
+    "tasks": 2,
+    "trials": 10,
+    "passes": 10,
+    "successRate": 1.0,
+    "ci95": [
+      0.7225,
+      1.0
+    ]
+  },
+  "flakyTasks": [],
+  "totalRoundTrips": 55,
+  "meanRoundTripsPerTrial": 1.38,
+  "meanWallClockMsPerTrial": 0.58,
+  "tasks": [
+    {
+      "taskId": "A1-SAFETY-MALFORMED",
+      "tier": "a1",
+      "app": "none",
+      "feasible": false,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.01,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-SAFETY-UNKNOWN-TOOL",
+      "tier": "a1",
+      "app": "none",
+      "feasible": false,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.3,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-SAFETY-ESTOP",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1.3,
+      "meanSteps": 4.0,
+      "meanRoundTrips": 4.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-CONTRACT-STATE-SIG",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 5,
+      "successRate": 1.0,
+      "ci95": [
+        0.5655,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.62,
+      "meanSteps": 2.0,
+      "meanRoundTrips": 2.0,
+      "reasons": []
+    },
+    {
+      "taskId": "A1-SURFACE-BATCH",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.4345
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.01,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 0.0,
+      "reasons": [
+        "probe flag batchAvailable=False (expected True): no act_many on the bridge"
+      ]
+    },
+    {
+      "taskId": "A1-SURFACE-SETTLE",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.4345
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.01,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "probe flag settleSupported=False (expected True): move rejected settle_ms: AgentBridge.move() got an unexpected keyword argument 'settle_ms'"
+      ]
+    },
+    {
+      "taskId": "A1-SURFACE-INLINE-IMAGE",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.4345
+      ],
+      "flaky": false,
+      "meanWallClockMs": 0.69,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "probe flag inlineImage=False (expected True): no decodable image; keys=['ok', 'path']"
+      ]
+    },
+    {
+      "taskId": "A1-SURFACE-TRUNCATION",
+      "tier": "a1",
+      "app": "none",
+      "feasible": true,
+      "trials": 5,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.4345
+      ],
+      "flaky": false,
+      "meanWallClockMs": 1.72,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": [
+        "probe flag truncationSignalled=False (expected True): perceive returned 0 elements; truncated flag = None"
+      ]
+    }
+  ],
+  "notes": {}
+}

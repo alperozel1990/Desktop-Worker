@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from desktop_worker import __version__
 from desktop_worker.app import Session
@@ -674,6 +675,92 @@ def _cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_eval(args: argparse.Namespace) -> int:
+    """Run an evaluation suite and report success rate + step/latency metrics.
+
+    Measurement, not control: the harness drives the same AgentBridge an external
+    MCP agent would use and never modifies the system under test.
+
+    Tier B spends Claude quota (each task is a full AI `do` run), so it is gated
+    behind an explicit --allow-ai.
+    """
+    from desktop_worker.eval import EvalRunner, all_tasks
+    from desktop_worker.mcp_server.bridge import build_agent_bridge
+    from desktop_worker.safety.policy import ApprovalRequest, RiskLevel
+
+    def _eval_approver(req: ApprovalRequest) -> bool:
+        """Non-interactive approver for measurement runs.
+
+        A measurement must never block on a human or vary with what someone typed,
+        so this never prompts. It approves LOW and MEDIUM (the suite legitimately
+        opens and focuses apps) and denies HIGH — matching the standard profile.
+
+        Denying everything instead, as an earlier version did, silently starved the
+        suite: `open_app` is MEDIUM, so no app ever launched and every task measured
+        whatever window happened to be in front. The safety probes still work because
+        the cases they exercise (unknown tool, malformed action) are HIGH or are
+        rejected before approval is ever consulted.
+        """
+        return not req.risk.at_least(RiskLevel.HIGH)
+
+    if args.tier == "b" and not args.allow_ai:
+        print("Tier B runs full AI task loops and SPENDS CLAUDE QUOTA.")
+        print("Re-run with --allow-ai if that is intended.")
+        return 2
+
+    tasks = all_tasks(args.tier)
+    if not tasks:
+        print(f"No tasks defined for tier {args.tier!r}.")
+        return 1
+
+    # Tier A1 IS the Null-backend tier by definition, so it never touches the real
+    # desktop even without --null. Without this, an A1 run on a live session would
+    # move the user's actual mouse during what is meant to be a headless contract test.
+    real = not args.null and args.tier != "a1"
+    bridge = build_agent_bridge(real=real, profile=args.profile, approver=_eval_approver)
+    runner = EvalRunner(bridge)
+
+    print(f"Running {len(tasks)} task(s), tier={args.tier}, trials={args.trials}, "
+          f"backends={bridge.session.backend_names()}")
+    suite = runner.run_suite(tasks, trials=args.trials, label=args.label, tier=args.tier)
+    data = suite.to_dict()
+
+    feasible = data["feasible"]
+    infeasible = data["infeasible"]
+    print()
+    print(f"  feasible   : {feasible['passes']}/{feasible['trials']} "
+          f"= {feasible['successRate']:.1%}  95% CI [{feasible['ci95'][0]:.1%}, "
+          f"{feasible['ci95'][1]:.1%}]  ({feasible['tasks']} tasks)")
+    if infeasible["trials"]:
+        print(f"  infeasible : {infeasible['passes']}/{infeasible['trials']} "
+              f"= {infeasible['successRate']:.1%}  (separate axis — correctly refused)")
+    print(f"  round-trips: {data['totalRoundTrips']} total, "
+          f"{data['meanRoundTripsPerTrial']:.1f} mean/trial")
+    print(f"  wall clock : {data['meanWallClockMsPerTrial']:.0f} ms mean/trial")
+    if data["flakyTasks"]:
+        print(f"  FLAKY      : {', '.join(data['flakyTasks'])}")
+    if data["notes"]:
+        print(f"  notes      : {data['notes']}")
+
+    print()
+    for task in data["tasks"]:
+        mark = "PASS" if task["successRate"] == 1.0 else (
+            "FAIL" if task["successRate"] == 0.0 else "FLAKY")
+        print(f"  [{mark:5}] {task['taskId']:<28} {task['passes']}/{task['trials']}")
+        for reason in task["reasons"][:2]:
+            print(f"          {reason[:150]}")
+
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"\nResults written: {out}")
+
+    # A red bar is information, not a crash: tasks encoding not-yet-built Phase 11
+    # criteria are EXPECTED to fail. Exit 0 unless the run could not be performed.
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="desktop-worker", description=__doc__)
     p.add_argument("--null", action="store_true",
@@ -786,6 +873,23 @@ def build_parser() -> argparse.ArgumentParser:
                          "(standard: low/med auto, high denied over stdio; headless: "
                          "deny anything above low)")
     mc.set_defaults(func=_cmd_mcp)
+
+    ev = sub.add_parser("eval", help="run an evaluation suite and report success rate, "
+                                     "step count, latency and round-trip metrics")
+    ev.add_argument("--tier", choices=("a1", "a2", "b", "all"), default="a1",
+                    help="a1: Null backends, CI, no quota; a2: live apps, no quota "
+                         "(grades the tool surface); b: full AI runs, SPENDS QUOTA; "
+                         "all: a1+a2")
+    ev.add_argument("--trials", type=int, default=3,
+                    help="trials per task (>=3 recommended; single trials cannot "
+                         "distinguish a real change from noise)")
+    ev.add_argument("--label", default="run", help="label recorded in the result file")
+    ev.add_argument("--out", default=None, help="write results as JSON to this path")
+    ev.add_argument("--profile", choices=("standard", "strict", "headless"),
+                    default="standard", help="permission profile for the harness bridge")
+    ev.add_argument("--allow-ai", action="store_true",
+                    help="required for tier b: acknowledges that it spends Claude quota")
+    ev.set_defaults(func=_cmd_eval)
 
     rep = sub.add_parser("report", help="build an HTML replay of a session's audit log")
     rep.add_argument("--session", default="ai-do", help="session id")

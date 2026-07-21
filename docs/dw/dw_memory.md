@@ -35,7 +35,38 @@ Source of truth: `docs/requirements.md`.
 - `artifacts/` (generated output; git-ignored).
 
 ## Current roadmap position
-- **PROJECT COMPLETE (2026-06-30), all merged to main + pushed (origin/main @ cb7f835), 400 tests.**
+- **PHASE 10 — MEASUREMENT (eval harness) DONE (2026-07-21). 437 tests.** New `eval/`
+  package: the instrument that grades Phase 11. Built FIRST, deliberately — the repo had
+  zero success-rate/step/latency measurement, so any improvement claim was unfalsifiable.
+  - `spec.py` (EvalTask/Result/Summary + Wilson CI), `oracles.py` (deterministic only —
+    NO LLM critic; structured `Verdict` with a reason, never a bare bool), `runner.py`
+    (N trials, reset before AND after each trial, per-trial crash isolation, estop honored,
+    `CountingBridge` counts round-trips), `suite.py` (38 seed tasks, each with a
+    `seeded_from` field naming the real defect it encodes).
+  - **Three tiers, driven by the user's quota-sensitivity:** A1 Null/CI/zero quota ·
+    A2 live apps/**zero quota** (grades the TOOL SURFACE = the Phase 11 subject) ·
+    B full AI runs, SPENDS QUOTA, `--allow-ai` gated.
+  - **Baseline `docs/dw/eval/baseline_a1.json`: feasible 33.3%, CI [19.2%, 51.2%].**
+    4 safety invariants PASS; 4 Phase 11 criteria FAIL by design = the red bar to turn green.
+  - KEY RULE: the harness OBSERVES the system under test and must never modify it —
+    `perception/`, `mcp_server/`, `executor`, `safety/`, `audit/`, `broker/` are forbidden
+    to it. Otherwise before/after comparisons compare two different systems.
+  - Lesson from validating it: a measurement run must never block on an interactive
+    approval prompt, and the "Null tier" must actually force Null backends — both were
+    real bugs caught only by running it for real.
+- **PHASE 11 — agent-facing surface gaps: PLANNED, NOT STARTED.** Five audit-driven cards,
+  all measured RED in the baseline: DW-MCP-IMAGE (screenshots are file paths only — the
+  vision half is disconnected over MCP), DW-ELEM-STABLE (`uia_backend.py:160` positional
+  counter ids, unusable across calls), DW-PERCEIVE-RANK (silent 200-element truncation),
+  DW-ACT-BATCH (no `act_many`; a form fill costs 8+ round-trips), DW-ACT-SETTLE (no settle
+  on the MCP path; agent must guess `wait()`).
+- **Research-backed DEPRIORITISATIONS (2026-07-21 deep research — do not resurrect without
+  new evidence):** local GPU grounding model (UI-TARS/OmniParser class) — 8 verified-refuted
+  claims all shared the premise that dedicated grounders beat frontier VLMs; 2026 data
+  contradicts it (~0.88 ScreenSpot-Pro). DXcam capture-rate work — capture+input is 1-3% of
+  latency vs 87-97% for model round-trips. Unconditional crop-and-zoom — costs 2-4x model
+  calls, gate it on low confidence only.
+- **PROJECT COMPLETE (2026-06-30) through Phase 9, all merged to main + pushed (origin/main @ cb7f835), 400 tests.**
   On top of Phase 8: a **3D capability tier** + **input-reliability closeout**, all LIVE-validated:
   - 9 AI-callable tools now (added `inspect_3d` = multi-view montage 3D perception, `orbit` = eased
     middle-drag, `capture_burst` = timestamped snapshots-while-rotating; DXcam opt-in via `[capture]`).
@@ -173,10 +204,35 @@ Source of truth: `docs/requirements.md`.
   prompt, real browser, Tesseract install). Batch those as a "test this" list.
 
 ## Current next action
-**None mandatory — project complete + live-validated + merged to main.** Optional: install
-`[capture]` and live-test `capture_burst fast:true` (DXcam high-FPS); delete merged feature
-branches. Otherwise growth comes from real runs feeding the per-app **playbooks** in the
-user-scope `desktop-worker` skill — update REFERENCE.md/playbooks, not core code.
+**MANUAL-EVAL-1 is DONE** (Level 4, zero quota) — honest A2 baseline recorded at
+`docs/dw/eval/baseline_a2.json`: feasible 33.3% CI [24.4%, 43.6%]. Next is **Phase 11 in
+measured order, starting with DW-PERCEIVE-RANK** (promoted: Paint returns exactly 200
+elements, at cap, silently, ~8 258 tokens). Every card must land with a measured
+before/after delta from the harness.
+
+**ENVIRONMENT FACTS (verified 2026-07-21):** KiCad 10.0.4 is installed **per-user** at
+`%LOCALAPPDATA%\Programs\KiCad.0in\kicad.exe` — NOT in Program Files; never conclude
+"not installed" from a Program Files glob alone. Tesseract 5.4.0 installed via winget and
+added to the User PATH (its installer does not do this). Unity 2022.3.62f2 + real projects
+at `C:\BurnNotice`, `C:\DiceNDecks`. Blender 4.5, Chrome present.
+
+**OCR IS NOT OPTIONAL FOR EDA/wx APPS.** With Tesseract on, KiCad perceives 193 elements of
+which **147 (76%) come from OCR**; without it, 46 — a 4x undercount. Blender is the opposite
+extreme: 8 elements even WITH OCR, so for GHOST/OpenGL apps inline vision is the only
+channel (strengthens DW-MCP-IMAGE).
+
+**LESSON THAT KEEPS REPEATING — running it beats reading it.** The harness's first live
+run scored 44.4% and PASSED tasks for KiCad, which is not installed; every app returned
+the same 40 elements because it was measuring the taskbar. That exposed a real product
+bug: `focus_window` used bare `SetForegroundWindow`, which Windows refuses for a
+background process — so the MCP server (a background process) failed EVERY window switch
+and perception walked the shell. Fixed via AttachThreadInput + verify against
+`GetForegroundWindow()`. Also fixed four harness self-defects (silent pass on wrong
+window, swallowed setup failures, an approver that starved `open_app`, 12 Paint windows
+from per-trial launching) and one too-weak probe (ID-STABLE passed on a frozen screen;
+now detects positional `uia-<index>` ids and correctly reports 0/5).
+(Superseded: the optional DXcam `capture_burst fast:true` test — research shows capture rate
+is 1-3% of latency, so it is low ROI.)
 
 ## Important assumptions
 - Python 3.11+ (dev machine has 3.14.0). Windows 11. `claude.exe` at

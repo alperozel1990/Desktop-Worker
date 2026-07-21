@@ -35,6 +35,12 @@ class Perceiver:
     ) -> None:
         self.ocr = ocr or get_ocr_backend()
         self.uia = uia or get_uia_backend()
+        # Truncation report from the most recent perceive(), so callers can tell
+        # "no such control" apart from "you were not told about it".
+        self.last_report: dict[str, object] = {
+            "truncated": False, "totalSeen": 0, "returned": 0,
+            "dropped": 0, "droppedByType": {},
+        }
 
     def detect(self, image_path: Path) -> list[Element]:
         """OCR-detect elements in a specific image (used standalone)."""
@@ -46,7 +52,22 @@ class Perceiver:
         UIA elements (preferred) are gathered first; OCR runs only on a real
         screenshot image and is merged in to fill gaps UIA did not cover.
         """
-        uia_elements = list(self.uia.detect())
+        # Backends that can report what truncation dropped do so through the
+        # additive detect_detailed(); everything else keeps the plain protocol.
+        detailed = getattr(self.uia, "detect_detailed", None)
+        if callable(detailed):
+            uia_elements, report = detailed()
+            uia_elements = list(uia_elements)
+            self.last_report = dict(report)
+        else:
+            uia_elements = list(self.uia.detect())
+            self.last_report = {
+                "truncated": False,
+                "totalSeen": len(uia_elements),
+                "returned": len(uia_elements),
+                "dropped": 0,
+                "droppedByType": {},
+            }
 
         ocr_elements: list[Element] = []
         ref = observation.screenshotRef

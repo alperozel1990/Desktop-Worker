@@ -312,3 +312,34 @@ Type a task (e.g. "open notepad and type hi"), click Run, watch the timeline; tr
 high-risk action to see the Approve/Deny prompt block the loop until you click; test STOP.
 **What Claude needs back:** Whether the window renders, the timeline updates live, the
 screenshot shows, approve/deny gates the loop, and STOP halts it.
+
+---
+
+## MANUAL-EVAL-1 — Run the Tier A2 live capability suite (ZERO Claude quota)  ✅ DONE 2026-07-21
+**Outcome:** run by the assistant on the live desktop; results in `docs/dw/eval/baseline_a2.json`.
+It exposed a real product bug (`focus_window` could not foreground from a background
+process — fixed as DW-FOCUS-RELIABLE) and four harness defects. Unity and KiCad remain
+NOT MEASURED (no open project / not installed). See `dw_changelog.md`.
+
+**Why:** Tier A2 is the tier Phase 11 is graded against. It has never been run — the
+harness is validated at level 3+, not 4. Until it runs, the A2 numbers do not exist.
+**Cost:** no Claude quota. It drives the desktop deterministically, no AI in the loop.
+**Prerequisites:** a live Windows desktop session (not headless); `pip install -e ".[windows]"`
+for real screenshots + UIA. Blender / Unity / KiCad / Chrome tasks only produce meaningful
+results if that app is OPEN — the harness deliberately does not auto-launch them.
+**Steps:**
+1. Open the apps you want measured (Notepad/Paint/Calculator launch automatically;
+   open Blender, Unity, KiCad, Chrome by hand if you want those rows).
+2. Run: `python -m desktop_worker eval --tier a2 --trials 3 --label a2-baseline --out docs/dw/eval/baseline_a2.json`
+3. Do not touch the mouse/keyboard while it runs — it drives real input.
+4. Emergency stop if needed: `python -m desktop_worker estop` in another window.
+**Expected:** many rows FAIL. That is correct — A2 encodes the Phase 11 defects.
+The useful output is WHICH app each defect is worst in, and the payload-size numbers.
+**Report back:** the JSON file, plus anything that errored rather than cleanly failing.
+
+## MANUAL-EVAL-2 — Run Tier B once (SPENDS CLAUDE QUOTA)
+**Why:** measures end-to-end AI task success, not just the tool surface.
+**Cost:** REAL — each task is a full `do` run making many Claude CLI calls against the
+subscription. Do not run casually.
+**Blocked on:** DW-EVAL-TIERB (tier B task list is intentionally empty right now, so
+Phase 10 could be validated without spending quota). Not runnable yet.

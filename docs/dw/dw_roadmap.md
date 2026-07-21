@@ -201,12 +201,98 @@ self-improving usage layer (a user-scope skill + per-app playbooks) so any AI se
 
 ---
 
+## Phase 10 — Measurement (eval harness)  ☐ todo — BLOCKS Phase 11
+**Goal:** Be able to *prove* whether a change to the agent-facing surface helps or hurts.
+Today there is no success-rate, step-count, or latency measurement anywhere in the repo —
+so every Phase 11 claim would be unfalsifiable. Measurement comes first, by design.
+
+**Research basis (deep research, 2026-07-21 — see `dw_web_research.md`):**
+- Anthropic (Jan 2026): "20-50 simple tasks drawn from real failures is a great start...
+  20-50 hand-reviewed examples you're confident in will outperform hundreds of synthetic
+  examples you haven't verified."
+- Statistical caveat (Miller 2024, arXiv 2411.00640): a 20-50 task suite has wide
+  confidence intervals — run multiple trials per task and report variance, or changes
+  below ~10-15pp are indistinguishable from noise.
+- WindowsAgentArena-V2 found two hygiene defects in V1 to avoid: no VM state reset
+  between tasks (mutations leak across episodes) and "infeasible hacking" (weaker models
+  score spuriously on impossible tasks). Implement per-task reset from day one and score
+  infeasible tasks on a separate axis.
+- Deterministic verifiers align with human judgment far better than LLM-as-judge
+  (94.1% vs 79.2% task-level in one 2026 study) — oracles, not critics.
+
+**Scope — a three-tier harness (the tiering is a project decision, not a paper finding;
+it exists because the user is quota-sensitive and Phase 11 is a tool-surface question):**
+- **Tier A1 — harness unit tests.** Null backends, runs in CI on every change. Zero
+  Claude quota. Validation level 3.
+- **Tier A2 — live capability evals.** Deterministic scripted scenarios against real
+  Win11 apps (Notepad, Paint, File Explorer, Settings, Calculator). Measures the *tool
+  surface*, not the AI: does `perceive` contain the target element, is an element id
+  stable across two calls, does `screenshot` return decodable bytes, does `act_many`
+  reach the same end state as N separate acts. **Zero Claude quota**, real signal,
+  validation level 4. This is the tier Phase 11 is graded against.
+- **Tier B — live task evals.** Full `do "<task>"` runs scored by oracles. Costs Claude
+  quota, so it is opt-in behind an explicit flag and run rarely with small N. The
+  10-15pp noise caveat applies here, not to A2 (A2 is deterministic pass/fail).
+
+**Metrics:** success rate (+ variance across trials), step count, wall-clock per step and
+per task, model round-trip count, observation payload size. Step count and round-trips
+matter because OSWorld-Human shows model calls are 87-97% of end-to-end latency and even
+the best agents take 2.7-4.3x more steps than a human-optimal trajectory.
+
+**Non-goals:** reproducing OSWorld/WindowsAgentArena; a VM/snapshot layer; scoring against
+published SOTA numbers (they are stale and measured on different harnesses).
+**Dependencies:** none — deliberately first.
+**Likely files touched:** new `eval/` package; `__main__.py`; new tests.
+**Manual steps required:** YES — Tier A2 and Tier B need a live Windows desktop session
+(MANUAL-EVAL-1, MANUAL-EVAL-2).
+**Target validation level:** 3 for the harness itself; 4 once A2 runs against real apps.
+**Risks:** the suite bakes in today's assumptions and ossifies (mitigate: seed from real
+audit-log failures, not imagination); A2 scenarios depend on app UI that Windows updates
+may change (mitigate: oracles assert intent, and a broken scenario must fail loudly rather
+than silently pass).
+**Done criteria:**
+- [ ] `eval/` package: task spec, deterministic oracles, runner with per-task reset,
+      N-trial variance reporting, metrics collection.
+- [ ] A seed suite of >=20 tasks, each traceable to a real observed failure or a Phase 11
+      acceptance criterion.
+- [ ] Tier A1 green in CI on Null backends; Tier B gated behind an explicit opt-in flag.
+- [ ] `python -m desktop_worker eval` runs a suite and prints success rate + variance +
+      step/latency/round-trip metrics; results persisted as JSON for before/after diffing.
+- [ ] A recorded BASELINE run committed, so Phase 11 has something to be compared against.
+**Complexity:** Medium-High.
+
+## Phase 11 — Agent-facing surface gaps (audit-driven)  ☐ todo — graded by Phase 10
+**Goal:** Close the concrete defects a code audit found in the MCP surface (2026-07-21).
+These are the highest success-rate leverage available, and four of the five also cut step
+count — the dominant latency term.
+
+**Research basis:** model round-trips are 87-97% of end-to-end latency vs 1-3% for
+screenshot+input (OSWorld-Human, MLSys 2026), so batching and fewer blind re-observations
+beat any capture-rate work; hybrid UIA+SoM+OCR perception beats pixel-only or a11y-only
+(WindowsAgentArena/Navi, OSCAR ICLR 2025); compressing a11y payloads cut tokens to 22%
+while *adding* +5.1pp success (A11y-Compressor).
+
+**Scope (cards DW-MCP-IMAGE, DW-ELEM-STABLE, DW-PERCEIVE-RANK, DW-ACT-BATCH,
+DW-ACT-SETTLE — see backlog for each).**
+**Non-goals:** a local GPU grounding model (see Excluded); DXcam capture-rate work;
+new schema action families beyond what batching needs.
+**Dependencies:** Phase 10 (each card must show a measured delta).
+**Manual steps required:** YES — live re-validation per card via Tier A2.
+**Target validation level:** 3 per card, 4 via the A2 suite.
+**Done criteria:**
+- [ ] Every card lands with a before/after Tier A2 measurement, not an assertion.
+- [ ] No card regresses the existing 400-test suite or the safety invariants.
+**Complexity:** Medium per card.
+
+---
+
 ## Dependency graph
 ```
 P1 ──> P2 ──> P5 ──> P7
   └──> P3 ──┐         ^
   └──> P4 ──┴> P5     │
 P1..P3 ─────> P6 ─────┘
+P8 ──> P9 ──> P10 ──> P11      (P10 measurement gates P11)
 ```
 
 ## Excluded / explicitly out of scope (for now)
@@ -217,3 +303,6 @@ P1..P3 ─────> P6 ─────┘
 | Cloud/remote control | Local Windows app only. |
 | Non-Windows support | Out of scope; Null backends keep code importable elsewhere. |
 | Training custom vision models | Use OCR/UIA + vision-capable model prompts instead. |
+| **Local GPU grounding model** (UI-TARS / OmniParser / UGround class) | **Dropped on evidence (2026-07-21 deep research).** Eight verified-refuted claims all shared the premise that dedicated grounding models beat frontier VLMs; 2026 data contradicts it (Claude Opus 4.8 ~0.879 on ScreenSpot-Pro). The 2025-era 18.9%/19.5%/48.1% figures are stale — never build on them. Revisit ONLY if a Phase 10 A/B on our own apps (Blender/Unity/CAD) shows UIA+frontier-VLM losing; no source has measured that combination. |
+| DXcam / capture-rate optimisation | Low ROI: screenshot+input is 1-3% of end-to-end latency vs 87-97% for model round-trips (OSWorld-Human, MLSys 2026). The pending `capture_burst fast:true` live test stays optional. |
+| Unconditional crop-and-zoom grounding | Worth ~+7pp on ScreenSpot-Pro but costs 2-4x model calls per grounding action — directly opposed to the round-trip-reduction finding. If adopted, gate on low first-pass confidence or on UIA returning no candidate box. Deferred to Phase 13. |

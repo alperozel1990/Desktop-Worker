@@ -31,9 +31,16 @@ def register(server: Any, bridge: AgentBridge) -> Any:
         return bridge.observe(screenshot=screenshot)
 
     @tool()
-    def perceive(screenshot: bool = True) -> dict:
-        """Detect on-screen UI elements (Windows UI Automation preferred, OCR fallback). Returns elements with id, type, text, bounds, and a click `center` [x,y]. Use this to find controls to click before acting."""
-        return bridge.perceive(screenshot=screenshot)
+    def perceive(screenshot: bool = True, control_type: str = "", text_contains: str = "",
+                 region: list | None = None, max_elements: int = 0) -> dict:
+        """Detect on-screen UI elements (Windows UI Automation preferred, OCR fallback). Returns elements with id, type, text, bounds, and a click `center` [x,y], plus `truncated` and a `perception` report. Interactable controls are ranked first, so if the list is capped you still get the things you can act on. ALWAYS check `truncated`: when true, the control you want may exist but not be listed - narrow with control_type (e.g. "button"), text_contains, or region [l,t,r,b] instead of assuming it is absent."""
+        return bridge.perceive(
+            screenshot=screenshot,
+            control_type=control_type,
+            text_contains=text_contains,
+            region=region,
+            max_elements=max_elements,
+        )
 
     @tool()
     def screenshot() -> dict:

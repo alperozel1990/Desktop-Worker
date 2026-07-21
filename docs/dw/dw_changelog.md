@@ -1026,3 +1026,234 @@ too); € / @ (AltGr) → None → Unicode fallback. +3 pure planner tests. `pyt
 **Needs live re-test:** confirm `type_text` now actually lands in a Blender field (playbook blender-02);
 clipboard-paste remains the route for exotic Unicode not on the active layout.
 **Files:** `src/desktop_worker/actions/windows_input.py`, `tests/test_input_hardening.py`.
+
+---
+
+## 2026-07-21 — DW-EVAL-HARNESS (Phase 10): measurement harness
+
+**Card:** DW-EVAL-HARNESS. **Validation level reached: 3+** (unit tests + a real
+end-to-end Tier A1 run producing a committed baseline). Level 4 = MANUAL-EVAL-1.
+
+**Why:** A deep-research pass (26 sources, 130 claims, 25 adversarially verified —
+17 confirmed / 8 refuted) plus a local code audit established that the repo had **zero**
+success-rate, step-count or latency measurement. Every Phase 11 improvement claim would
+have been unfalsifiable. Measurement was therefore built first, deliberately.
+
+**Shipped:** new `src/desktop_worker/eval/` package —
+- `spec.py` — `EvalTask` / `EvalResult` / `TaskSummary` / `SuiteResult`, pure and
+  serializable; `wilson_interval()` so small-N success rates are reported with a
+  confidence interval instead of a misleading point estimate.
+- `oracles.py` — deterministic oracles only (file exists/contains, window title,
+  clipboard, element present, state changed, probe flag, reported-infeasible, AllOf/AnyOf).
+  Every oracle returns a structured `Verdict` with a reason, never a bare bool.
+  No LLM critic: deterministic verifiers align with human judgment far better
+  (94.1% vs 79.2% in a 2026 study) and cost nothing.
+- `runner.py` — N-trial runner. Reset runs BEFORE and AFTER every trial; per-trial
+  crash isolation; emergency stop honored; `CountingBridge` counts round-trips
+  (the unit an agent actually pays for — model calls are 87-97% of agent latency).
+- `suite.py` — 38 seed tasks (8 Tier A1 + 30 Tier A2), each with a `seeded_from`
+  field naming the real audit finding or Phase 11 criterion it encodes.
+- `__init__.py` — exports.
+**Changed:** `__main__.py` — `eval` subcommand (`--tier/--trials/--label/--out/
+--profile/--allow-ai`) + `pathlib.Path` import.
+**Tests:** `tests/test_eval_oracles.py`, `tests/test_eval_runner.py` (+38).
+**Test count: 400 -> 437 passed, 1 skipped.**
+
+**Three tiers** (a project decision driven by user quota-sensitivity, not a paper finding):
+A1 = Null backends/CI/zero quota; A2 = live apps/zero quota, grades the tool surface
+(the Phase 11 subject); B = full AI runs, SPENDS QUOTA, gated behind `--allow-ai` (verified
+to exit 2 without it).
+
+**BASELINE recorded** (`docs/dw/eval/baseline_a1.json`, 5 trials/task):
+- feasible 10/30 = **33.3%**, 95% CI [19.2%, 51.2%]
+- infeasible 10/10 = 100% (separate axis — anti-"infeasible hacking")
+- 4 safety invariants PASS (malformed rejected, unknown tool denied, estop halts,
+  state signature stable)
+- 4 Phase 11 surface criteria FAIL **by design** — this is the red bar Phase 11 turns
+  green: no `act_many`; `move()` rejects `settle_ms`; `screenshot` returns
+  `keys=['ok','path']` with no decodable image; `perceive` gives no `truncated` flag.
+
+**Two real defects found and fixed during validation:**
+1. The harness used the interactive console approver, so the unknown-tool probe printed
+   `[APPROVAL NEEDED] ... [y/N]` and would have **blocked on a TTY**. A measurement run
+   must never wait on a human or vary with what someone typed → switched to `deny_all`
+   (the probes expect denial; that is the behaviour under test).
+2. Tier A1 with real backends would have moved the user's actual mouse during what is
+   defined as a headless contract tier → A1 now forces Null backends regardless of `--null`.
+
+**Not done / explicitly out of scope:** Tier B task wiring (deferred to DW-EVAL-TIERB so
+Phase 10 does not spend quota to prove itself); Tier A2 has never been run (needs a live
+desktop — MANUAL-EVAL-1).
+
+**Forbidden-file discipline held:** nothing under `schema/`, `safety/`, `audit/`,
+`broker/`, `perception/`, `mcp_server/` or `actions/executor.py` was touched. The harness
+observes the system under test; Phase 11 does the modifying. Diff budget raised to 5 new
+production files with explicit user approval at the gate.
+
+---
+
+## 2026-07-21 — DW-FOCUS-RELIABLE + honest A2 baseline (MANUAL-EVAL-1 DONE)
+
+**Validation level reached: 4 (live real desktop).** 445 tests, 1 skipped.
+
+**How this card was found:** not by reading code — by RUNNING the Phase 10 harness.
+Its first live A2 run reported 44.4% success with `A2-KICAD-ID-STABLE` and
+`A2-KICAD-PAYLOAD` at 3/3 PASS. **KiCad is not installed on this machine.** Every app
+also returned exactly 40 elements. The harness was measuring the Windows shell/taskbar
+90 times and calling it a pass.
+
+**Root cause (real product bug):** `tools/builtin.py:_win_focus` called bare
+`SetForegroundWindow`. Windows refuses foreground activation (returns 0) unless the
+calling process holds foreground rights — which a background process started from an
+unfocused terminal does not. The MCP server is exactly such a process, so an external AI
+agent failed EVERY window switch, and perception then walked the shell instead of the app.
+`focus_window` reported `ok:False` with an empty detail, so nothing downstream noticed.
+
+**Fixed (DW-FOCUS-RELIABLE):** `ShowWindow(SW_RESTORE)` when minimized; `AttachThreadInput`
+to the current foreground thread (never to self; always detached in a `finally`);
+`BringWindowToTop` + `SetForegroundWindow` + `SetActiveWindow`; then **verify against
+`GetForegroundWindow()`** with a bounded 1s retry rather than trusting the API's return
+value. Failure now returns a specific reason instead of `{}`.
+**Result: 0/5 → 5/5 open apps focusable.** Live-verified Explorer→Blender→Chrome.
+
+**Four defects fixed in the harness itself, all found by running it:**
+1. **Silent pass on the wrong window.** Per-app probes measured whatever was focused.
+   Added `gated()`: a probe now REFUSES to measure unless the foreground matches the
+   app's pattern, reporting `NOT MEASURED: expected /X/, foreground was 'Y'`.
+2. **Setup failures were swallowed.** `{"type":"tool.run","name":...}` is invalid — the
+   schema field is `tool`, not `name` — so every setup action was rejected and ignored,
+   and each task measured the previously focused window. Setup failure now aborts the
+   trial loudly.
+3. **The approver starved the suite.** An earlier `deny_all` (added to stop the harness
+   blocking on an interactive `[y/N]` prompt) also denied `open_app`, which is MEDIUM
+   risk. Replaced with a non-interactive approver that allows LOW/MEDIUM and denies HIGH.
+4. **State leaked across trials.** `open_app` launches unconditionally, so a single run
+   spawned **12 Paint windows** — precisely the WindowsAgentArena V1 defect this suite
+   exists to avoid. Setup now FOCUSES only; launching is one-time environment prep.
+
+**One measurement was too weak and was strengthened.** `ID-STABLE` initially passed on
+every app, which would have wrongly cleared DW-ELEM-STABLE. Two back-to-back perceives of
+an unchanged screen is a test a positional counter passes trivially. The probe now also
+checks structurally whether ids are just `uia-<index>`. Result flipped to 0/5 with the
+honest reason: *"54/54 shared controls kept their id; but ALL 54 ids are positional, so
+they are only stable while the tree does not change."*
+
+**HONEST A2 BASELINE** (`docs/dw/eval/baseline_a2.json`, 3 trials/task, zero Claude quota):
+- feasible **33.3%**, 95% CI [24.4%, 43.6%]; 2.5 round-trips and 589 ms mean per trial.
+- FOCUS **5/5** apps (Notepad, Paint, Calculator, Blender, Chrome) — was 0/5.
+- ID-STABLE **0/5** — all ids positional. DW-ELEM-STABLE confirmed necessary.
+- TRUNCATION **0/5** — no `truncated` flag anywhere. **Paint returns exactly 200 elements
+  (AT CAP AND SILENT)** — the silent-truncation defect is real, not theoretical.
+- INLINE-IMAGE **0/3** — `keys=['ok','path']`, no image bytes. DW-MCP-IMAGE confirmed.
+- Perception payload per app: Blender 6 elements (~252 tok) · Chrome 50 (~2 223) ·
+  Notepad 54 (~2 243) · Calculator 82 (~3 430) · **Paint 200 (~8 258, capped)**.
+- **NOT MEASURED:** Unity (needs an open project; launching it bare only shows a
+  "running as administrator" modal) and KiCad (not installed). Reported as NOT MEASURED
+  rather than counted — the whole point of the gate.
+
+**Also noted, not fixed:** `pytesseract` is absent, so perception was UIA-only and the OCR
+fallback path is unmeasured. `A2-SURFACE-ELEMENT-FOUND` is mis-scoped (it opens Notepad but
+grades whatever is focused) — a suite bug to fix before it is trusted.
+
+---
+
+## 2026-07-21 (correction) — KiCad WAS installed; Tesseract installed; OCR changes the picture
+
+**Correction to the entry above.** I reported KiCad as "not installed". That was wrong,
+and the way it was wrong matters: I probed only `%ProgramFiles%\KiCad\*\bin\kicad.exe`.
+KiCad 10.0.4 is a **per-user** install at
+`C:\Users\Alper\AppData\Local\Programs\KiCad\10.0\bin\kicad.exe`. A registry
+uninstall-key search plus a full-drive scan found it immediately. Lesson: never conclude
+"not installed" from a single `Program Files` glob — per-user installs live in LocalAppData.
+
+**Tesseract installed** (`winget install UB-Mannheim.TesseractOCR`, v5.4.0.20240606) plus
+`pip install -e ".[ocr]"` (pytesseract 0.3.13). The installer does NOT add itself to PATH,
+so `C:\Program Files\Tesseract-OCR` was appended to the **User** Path; verified resolvable
+from a fresh process.
+
+**This materially changed the measurement.** Perception with OCR enabled, per app
+(elements = UIA + OCR):
+
+| App | UIA | OCR | Total | ~tokens |
+|---|---|---|---|---|
+| Blender | 6 | 2 | **8** | 333 |
+| Chrome | 52 | 9 | 61 | 2 702 |
+| Notepad | 54 | 24 | 78 | 3 202 |
+| Calculator | 82 | 48 | 130 | 5 287 |
+| **KiCad** | 46 | **147** | **193** | 7 902 |
+| Paint | 200 | 0 | **200 (AT CAP)** | 8 258 |
+
+- **KiCad draws 76% of its elements from OCR.** Measured without Tesseract it would have
+  read 46 elements — a 4x undercount. The earlier "pytesseract absent" caveat understated
+  this: it was not a gap in coverage, it was a wrong number.
+- **Blender stays nearly blind at 8 elements** even with OCR — GHOST/OpenGL exposes almost
+  nothing to either channel. This is the strongest argument for DW-MCP-IMAGE: for GHOST
+  apps, inline vision is not a fallback, it is the only channel.
+- **Paint sits exactly at the 200 cap with 0 OCR contribution**, still unsignalled.
+
+**Measurement-fidelity caveat, stated plainly:** the A2 suite's payload probe calls
+`perceive(screenshot=False)`, so the numbers in `baseline_a2.json` are **UIA-only** and
+understate what an agent actually receives. The table above is the true agent-facing
+payload. Fixing the probe to measure the real path is queued as a suite defect, along with
+the mis-scoped `A2-SURFACE-ELEMENT-FOUND`.
+
+**A2 with KiCad open:** feasible 40.0%, 95% CI [30.5%, 50.3%]; KiCad FOCUS 3/3 PASS,
+46 UIA elements, ids positional, truncation unsignalled — same defects, one more app.
+**Unity remains NOT MEASURED by choice:** real projects exist on this machine
+(`C:\BurnNotice`, `C:\DiceNDecks`), but opening one in Unity 2022.3.62f2 can trigger a
+version-upgrade prompt that modifies the user's project. Not done without explicit consent.
+
+---
+
+## 2026-07-21 — DW-PERCEIVE-RANK (Phase 11, card 1 of 5)
+
+**Validation level: 4 (live real desktop).** 464 tests (+19), 1 skipped.
+
+**Defect:** the UIA walk broke at 200 elements in tree-traversal order with no signal.
+The Phase 10 baseline caught it in the wild: Paint sat at exactly 200, at cap, silently.
+An agent could not tell "that control does not exist" from "you were not told about it".
+
+**Shipped:**
+- `perception/uia_backend.py` — `rank_key()` / `rank_and_cap()`: interactable controls
+  (button/input/checkbox/radio/dropdown/menu/tab/link) rank above structural ones, which
+  rank above static text; the sort is stable so traversal order survives within a tier.
+  The walk now collects up to a `hard_cap` (1200) so ranking has candidates to choose
+  from, then caps to `max_elements` and reports exactly what it dropped.
+- **The `UiaBackend.detect()` protocol was NOT changed.** Ranking and reporting ride on an
+  additive `detect_detailed() -> (elements, report)`; `detect()` delegates to it. Null
+  backends and every existing implementer keep working untouched.
+- `perception/perceiver.py` — picks up `detect_detailed()` when present (via `getattr`),
+  falls back cleanly, and exposes `last_report`.
+- `mcp_server/bridge.py` — `perceive()` ALWAYS returns `truncated` (even when False, so an
+  agent can rely on the field rather than inferring from a count) plus a `perception`
+  report; new filters `control_type`, `text_contains`, `region`, `max_elements` via a pure,
+  unit-testable `_filter_elements()`.
+- `mcp_server/server.py` — tool description now tells the agent to CHECK `truncated` and
+  narrow with filters instead of concluding a control is absent.
+
+**MEASURED before/after (A2, live, zero Claude quota):**
+| Metric | Before | After |
+|---|---|---|
+| A2 TRUNCATION signalled | 0/5 apps | **5/5** |
+| A2 feasible overall | 40.0% | **66.7%** (CI [56.4%, 75.5%]) |
+| Paint truncation | 200, at cap, **silent** | `truncated=true, totalSeen=224, dropped=24, droppedByType={'text': 24}` |
+| Paint payload when hunting a button | 200 elements / ~8 315 tok | **67 / ~2 898 tok (-65%)** |
+
+The Paint number is the one that matters: **only static labels were dropped — all 67
+buttons survived.** Under the old traversal-order cut, the target control was exactly the
+kind of thing that could vanish.
+
+**Also fixed (measurement fidelity, Phase 10 follow-ups):**
+- The payload/truncation probes called `perceive(screenshot=False)`, measuring the UIA-only
+  path and understating reality (KiCad: 46 vs 193 real). Both now measure the path an agent
+  actually takes; the id-stability probe deliberately stays UIA-only because OCR jitter
+  would inject noise into a question about ids.
+- `A2-SURFACE-ELEMENT-FOUND` was mis-scoped — it launched Notepad then graded whatever was
+  focused. Now focuses and is app-gated.
+
+**Reporting caveat made explicit in the payload:** `totalSeen/returned/dropped` describe the
+UIA walk *before* the OCR merge, so `returned` can be lower than `shown`. A `stage` field
+now says so, because two disagreeing numbers otherwise read as a bug.
+
+**Not done:** Notepad would not stay open during the after-run, so its rows read NOT
+MEASURED; Unity still needs an open project.

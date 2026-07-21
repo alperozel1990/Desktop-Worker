@@ -152,11 +152,27 @@ class AgentBridge:
         obs = self.session.observer.observe("mcp", screenshot=screenshot)
         return {"ok": True, "observation": obs.to_dict()}
 
-    def perceive(self, screenshot: bool = True) -> dict:
+    def perceive(
+        self,
+        screenshot: bool = True,
+        control_type: str = "",
+        text_contains: str = "",
+        region: list | None = None,
+        max_elements: int = 0,
+    ) -> dict:
         """Observe + detect UI elements (UIA preferred, OCR fallback).
 
         Each element carries its id, type, text, bounds, and a ``center`` [x, y] the
         external AI can click directly.
+
+        The response ALWAYS reports whether the list was truncated. Without that,
+        an agent cannot distinguish "that control does not exist" from "you were
+        not told about it" — and on a dense UI the second is common.
+
+        Optional filters narrow the payload before it is returned, so an agent
+        hunting one control does not have to pay for the whole tree:
+        ``control_type`` (e.g. "button"), ``text_contains`` (case-insensitive),
+        ``region`` [left, top, right, bottom], ``max_elements`` (0 = no extra cap).
         """
         obs = self.session.observer.observe("mcp", screenshot=screenshot)
         if self.perceiver is not None:
@@ -168,6 +184,28 @@ class AgentBridge:
             if isinstance(b, (list, tuple)) and len(b) == 4:
                 el = {**el, "center": [int((b[0] + b[2]) / 2), int((b[1] + b[3]) / 2)]}
             elements.append(el)
+
+        report = dict(getattr(self.perceiver, "last_report", None) or {})
+        report.setdefault("truncated", False)
+        report.setdefault("totalSeen", len(elements))
+        report.setdefault("returned", len(elements))
+        report.setdefault("dropped", 0)
+        report.setdefault("droppedByType", {})
+
+        before_filter = len(elements)
+        elements = _filter_elements(
+            elements,
+            control_type=control_type,
+            text_contains=text_contains,
+            region=region,
+        )
+        filtered_out = before_filter - len(elements)
+
+        capped_by_request = 0
+        if max_elements and len(elements) > max_elements:
+            capped_by_request = len(elements) - max_elements
+            elements = elements[:max_elements]
+
         return {
             "ok": True,
             "summary": obs.summary(),
@@ -175,6 +213,21 @@ class AgentBridge:
             "screen": d.get("screen"),
             "screenshotRef": d.get("screenshotRef"),
             "elements": elements,
+            # Truncation is reported unconditionally, even when False, so an agent
+            # can rely on the field being there rather than inferring from a count.
+            "truncated": bool(report.get("truncated")) or capped_by_request > 0,
+            "perception": {
+                # totalSeen/returned/dropped/droppedByType describe the UIA WALK,
+                # before OCR elements are merged in — so `returned` can be lower
+                # than `shown`. Spelled out because the two numbers disagreeing
+                # otherwise looks like a bug.
+                "stage": "totalSeen/returned/dropped cover the UIA walk; "
+                         "`shown` is the final list after OCR merge and filters",
+                **report,
+                "filteredOut": filtered_out,
+                "cappedByRequest": capped_by_request,
+                "shown": len(elements),
+            },
         }
 
     def screenshot(self) -> dict:
@@ -198,6 +251,45 @@ class AgentBridge:
     def clear_stop(self) -> dict:
         self.session.estop.clear()
         return {"ok": True, "stopped": False}
+
+
+def _filter_elements(
+    elements: list[dict],
+    *,
+    control_type: str = "",
+    text_contains: str = "",
+    region: Any = None,
+) -> list[dict]:
+    """Narrow a perceived element list. Empty/absent criteria are no-ops.
+
+    Pure and dependency-free so it is unit-testable without a desktop.
+    """
+    want_type = (control_type or "").strip().lower()
+    want_text = (text_contains or "").strip().lower()
+    box = None
+    if isinstance(region, (list, tuple)) and len(region) == 4:
+        try:
+            box = tuple(int(v) for v in region)
+        except (TypeError, ValueError):
+            box = None
+
+    out = []
+    for el in elements:
+        if want_type and str(el.get("type") or "").lower() != want_type:
+            continue
+        if want_text:
+            haystack = f"{el.get('text') or ''} {el.get('label') or ''}".lower()
+            if want_text not in haystack:
+                continue
+        if box is not None:
+            b = el.get("bounds")
+            if not (isinstance(b, (list, tuple)) and len(b) == 4):
+                continue
+            cx, cy = (b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0
+            if not (box[0] <= cx <= box[2] and box[1] <= cy <= box[3]):
+                continue
+        out.append(el)
+    return out
 
 
 def _xy(action: dict, x: Optional[int], y: Optional[int]) -> dict:

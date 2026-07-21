@@ -5,7 +5,7 @@ REM ============================================================
 REM  Desktop-Worker - Elevated Claude Launcher (START / planning)
 REM  Repo: C:\Desktop-Worker
 REM  Self-elevates via UAC so the CLI broker runs admin-capable.
-REM  SAFE FLAGS ONLY - no --dangerously-skip-permissions.
+REM  BYPASS MODE - launches with --permission-mode bypassPermissions.
 REM ============================================================
 
 REM --- Step 1: ensure admin (self-elevate via UAC) ---
@@ -38,8 +38,8 @@ REM --- Step 4: system prompt ---
 set SYSTEM_PROMPT=%REPO_PATH%\docs\dw\dw_claude_system_prompt.md
 if not exist "%SYSTEM_PROMPT%" goto :NOPROMPT
 
-echo [dw] Launching (planning mode) with system prompt...
-"%CLAUDE_EXE%" --permission-mode plan --append-system-prompt-file "%SYSTEM_PROMPT%"
+echo [dw] Launching (BYPASS permissions mode) with system prompt...
+"%CLAUDE_EXE%" --permission-mode bypassPermissions --append-system-prompt-file "%SYSTEM_PROMPT%"
 if %errorlevel% equ 0 goto :EOF
 echo [dw] Flag combo not supported; retrying without system-prompt-file...
 
@@ -48,7 +48,7 @@ echo ================================================================
 echo  When Claude starts, run:  /ease-me continue
 echo  It will read docs\dw\dw_memory.md and dw_state.md
 echo ================================================================
-"%CLAUDE_EXE%" --permission-mode plan
+"%CLAUDE_EXE%" --permission-mode bypassPermissions
 
 :EOF
 echo [dw] Session ended.

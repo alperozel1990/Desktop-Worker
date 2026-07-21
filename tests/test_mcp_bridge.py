@@ -193,3 +193,78 @@ def test_build_agent_bridge_null_wires_default_tools(tmp_path):
     names = {t["name"] for t in bridge.list_tools()["tools"]}
     assert {"create_text_file", "open_app", "open_url", "focus_window",
             "drag_drop", "sketch"} <= names
+
+
+# --- DW-PERCEIVE-RANK: truncation signalling + filters over the bridge -------
+
+
+class _ReportingPerceiver:
+    """Perceiver stand-in that also exposes a truncation report."""
+
+    def __init__(self, elements, report=None):
+        self._elements = tuple(elements)
+        self.last_report = report or {
+            "truncated": False, "totalSeen": len(elements),
+            "returned": len(elements), "dropped": 0, "droppedByType": {},
+        }
+
+    def perceive(self, observation):
+        return dataclasses.replace(observation, elements=self._elements)
+
+
+def _bridge_with(tmp_path, elements, report=None):
+    bridge, _session = _bridge(tmp_path, perceiver=_ReportingPerceiver(elements, report))
+    return bridge
+
+
+def _element(etype="button", text="Save", bounds=(0, 0, 10, 10)):
+    return Element(id=f"uia-{text}", type=etype, bounds=bounds, source="uia",
+                   text=text, label=text, confidence=0.9)
+
+
+def test_perceive_always_reports_truncated_even_when_false(tmp_path):
+    """The agent must be able to rely on the field existing, not infer from counts."""
+    res = _bridge_with(tmp_path, [_element()]).perceive(screenshot=False)
+
+    assert "truncated" in res
+    assert res["truncated"] is False
+    assert res["perception"]["dropped"] == 0
+
+
+def test_perceive_propagates_a_real_truncation_report(tmp_path):
+    report = {"truncated": True, "totalSeen": 900, "returned": 200,
+              "dropped": 700, "droppedByType": {"text": 700}}
+    res = _bridge_with(tmp_path, [_element()], report).perceive(screenshot=False)
+
+    assert res["truncated"] is True
+    assert res["perception"]["totalSeen"] == 900
+    assert res["perception"]["droppedByType"] == {"text": 700}
+
+
+def test_perceive_filters_by_control_type_and_reports_how_many_were_filtered(tmp_path):
+    elements = [_element("button", "Save"), _element("text", "Hello")]
+    res = _bridge_with(tmp_path, elements).perceive(screenshot=False, control_type="button")
+
+    assert [e["text"] for e in res["elements"]] == ["Save"]
+    assert res["perception"]["filteredOut"] == 1
+    assert res["perception"]["shown"] == 1
+
+
+def test_perceive_filters_by_text(tmp_path):
+    elements = [_element("button", "Save"), _element("button", "Cancel")]
+    res = _bridge_with(tmp_path, elements).perceive(screenshot=False, text_contains="canc")
+    assert [e["text"] for e in res["elements"]] == ["Cancel"]
+
+
+def test_perceive_max_elements_caps_and_marks_truncated(tmp_path):
+    elements = [_element("button", f"b{i}") for i in range(5)]
+    res = _bridge_with(tmp_path, elements).perceive(screenshot=False, max_elements=2)
+
+    assert len(res["elements"]) == 2
+    assert res["truncated"] is True, "a caller-requested cap is still truncation"
+    assert res["perception"]["cappedByRequest"] == 3
+
+
+def test_perceive_elements_still_carry_click_centres(tmp_path):
+    res = _bridge_with(tmp_path, [_element(bounds=(10, 20, 30, 40))]).perceive(screenshot=False)
+    assert res["elements"][0]["center"] == [20, 30]

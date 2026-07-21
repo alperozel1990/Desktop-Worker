@@ -4,7 +4,7 @@
 > for "where are we".
 
 ## Session info
-- **Last updated:** 2026-06-30
+- **Last updated:** 2026-07-21
 - **Repo path:** `C:\Desktop-Worker`
 - **Workspace path:** `C:\Desktop-Worker\docs\dw`
 - **Current branch:** `main` (Phase 8 + clipboard/keys fixes + 3D Tier 1/Tier 3 merged & pushed
@@ -68,6 +68,13 @@ Gate and only implement when the selected card is explicitly approved.
 | 3D capability: `orbit` + `capture_burst` (+DXcam opt-in) | complete (Tier 2, DW-3D-CAPTURE); capture_burst LIVE-validated on Blender (turntable + ms timestamps) |
 | Clipboard 64-bit fix + numpad/nav keys | complete (DW-CLIP-FIX, DW-KEYS-NUMPAD); clipboard LIVE round-trip verified |
 | `type_text` reaches GHOST apps (Blender/games) | complete (DW-INPUT-GHOST); VK keystrokes via VkKeyScanW; LIVE-validated in Blender (console/rename/Turkish); Unicode fallback for AltGr/off-layout |
+| **Eval harness — success rate / steps / latency / round-trips** | complete (Phase 10, DW-EVAL-HARNESS); `eval/` package + `eval` CLI; **A1 + A2 baselines recorded, MANUAL-EVAL-1 DONE (Level 4)** |
+| **`focus_window` actually foregrounds windows** | complete (DW-FOCUS-RELIABLE); AttachThreadInput + verify vs GetForegroundWindow; **0/5 -> 5/5 apps live** |
+| Phase 11 — inline screenshot image over MCP | **NOT STARTED** (DW-MCP-IMAGE) — measured RED in baseline |
+| Phase 11 — stable element ids + click_element | **NOT STARTED** (DW-ELEM-STABLE) — measured RED |
+| Phase 11 — perceive ranking + truncation signal | **NOT STARTED** (DW-PERCEIVE-RANK) — measured RED |
+| Phase 11 — act_many batching | **NOT STARTED** (DW-ACT-BATCH) — measured RED |
+| Phase 11 — settle_ms + post-action diff | **NOT STARTED** (DW-ACT-SETTLE) — measured RED |
 
 ## Last completed task
 - **Task:** DW-PLANNER-AI — Claude Code CLI planner (no API key), via the broker.
@@ -81,7 +88,73 @@ Gate and only implement when the selected card is explicitly approved.
 - **Files:** `loop/claude_cli_planner.py` (new), `tests/test_claude_cli_planner.py`.
 
 ## Current task
-None in progress. (Just completed DW-MCP-SERVER — Phase 8.)
+None in progress. (Just completed DW-EVAL-HARNESS + DW-FOCUS-RELIABLE; MANUAL-EVAL-1 done.)
+
+## Last completed task (2026-07-21) — DW-FOCUS-RELIABLE + honest A2 baseline
+- **Found by running the harness, not by reading code.** The first live A2 run scored
+  44.4% with KiCad tasks PASSING — KiCad is not installed. Every app returned the same
+  40 elements: the suite was measuring the Windows taskbar 90 times.
+- **Product bug fixed:** `_win_focus` used bare `SetForegroundWindow`, which Windows
+  refuses for a background process (the MCP server is one). Now AttachThreadInput +
+  BringWindowToTop + verify against `GetForegroundWindow()` with a bounded retry, and a
+  specific failure reason instead of `{}`. **0/5 -> 5/5 apps focusable, live-verified.**
+- **Four harness defects fixed:** silent pass on the wrong window (added `gated()`);
+  swallowed setup failures (schema field is `tool`, not `name` — every setup action was
+  being rejected and ignored); an over-broad `deny_all` approver that starved `open_app`
+  (MEDIUM risk); and state leaking across trials (one run spawned 12 Paint windows).
+- **One probe was too weak:** ID-STABLE passed everywhere, which would have wrongly
+  cleared DW-ELEM-STABLE. Strengthened to detect purely positional `uia-<index>` ids;
+  it now correctly reports 0/5.
+- **Tests: 437 -> 445.** Validation level **4 (live real desktop)**.
+
+## HONEST A2 BASELINE (2026-07-21, zero Claude quota)
+`docs/dw/eval/baseline_a2.json` — feasible **33.3%**, 95% CI [24.4%, 43.6%];
+2.5 round-trips, 589 ms mean per trial.
+| Probe | Result | Meaning |
+|---|---|---|
+| FOCUS | **5/5** | fixed this session (was 0/5) |
+| ID-STABLE | **0/5** | all ids positional -> DW-ELEM-STABLE confirmed necessary |
+| TRUNCATION | **0/5** | no `truncated` flag; **Paint hits exactly 200 = AT CAP AND SILENT** |
+| INLINE-IMAGE | **0/3** | `keys=['ok','path']` -> DW-MCP-IMAGE confirmed |
+| PAYLOAD | measured | Blender 6 (~252 tok) · Chrome 50 (~2223) · Notepad 54 (~2243) · Calculator 82 (~3430) · **Paint 200 (~8258, capped)** |
+**CORRECTED 2026-07-21:** KiCad WAS installed (per-user, `%LOCALAPPDATA%\Programs\KiCad.0`)
+— my "not installed" call came from probing only `%ProgramFiles%`. Tesseract 5.4.0 has since
+been installed (+ added to User PATH), so OCR now contributes. True agent-facing payload
+(UIA + OCR): Blender 8 (~333 tok) · Chrome 61 (~2 702) · Notepad 78 (~3 202) ·
+Calculator 130 (~5 287) · **KiCad 193 (~7 902, 76% from OCR)** · **Paint 200 (~8 258, AT CAP)**.
+KiCad measured without Tesseract would have read 46 — a 4x undercount.
+**Blender stays nearly blind at 8 elements even with OCR** — for GHOST apps inline vision
+is the only channel, which strengthens DW-MCP-IMAGE.
+**NOT MEASURED:** Unity only — real projects exist (`C:\BurnNotice`, `C:\DiceNDecks`) but
+opening one can trigger a version-upgrade prompt that modifies the user's project; not done
+without explicit consent.
+**Fidelity caveat:** the payload probe uses `perceive(screenshot=False)`, so
+`baseline_a2.json` numbers are UIA-only and understate reality. Queued as a suite defect.
+
+## Last completed task (2026-07-21) — Phase 10: eval harness (DW-EVAL-HARNESS)
+- **What:** Built the measurement instrument BEFORE the Phase 11 improvements it will
+  grade. New `eval/` package (spec / oracles / runner / suite) + `eval` CLI subcommand.
+  Driven by a deep-research pass (26 sources, 25 adversarially verified claims: 17
+  confirmed, 8 refuted) plus a local code audit.
+- **Three tiers:** A1 (Null, CI, zero quota) · A2 (live apps, zero quota — grades the tool
+  surface, which is what Phase 11 changes) · B (full AI runs, SPENDS QUOTA, `--allow-ai`
+  gated, verified exit 2 without it).
+- **Tests:** 400 -> **437 passed, 1 skipped** (+38).
+- **Validation level: 3+** — unit tests AND a real end-to-end A1 run writing
+  `docs/dw/eval/baseline_a1.json`. Level 4 = MANUAL-EVAL-1 (never run yet).
+- **BASELINE (5 trials/task):** feasible **33.3%**, 95% CI [19.2%, 51.2%]; infeasible
+  10/10 on its own axis. 4 safety invariants PASS; 4 Phase 11 criteria FAIL by design.
+- **Two defects found while validating and fixed:** the harness would have BLOCKED on an
+  interactive `[y/N]` approval prompt (now `deny_all` — measurement must never wait on a
+  human); and A1 with real backends would have moved the user's real mouse (A1 now forces
+  Null regardless of `--null`).
+- **Files:** new `src/desktop_worker/eval/{__init__,spec,oracles,runner,suite}.py`;
+  changed `__main__.py`; new `tests/test_eval_{oracles,runner}.py`; new
+  `docs/dw/eval/baseline_a1.json`. Diff budget raised to 5 new production files with
+  explicit user approval at the gate.
+- **Deliberately NOT touched:** `schema/`, `safety/`, `audit/`, `broker/`, `perception/`,
+  `mcp_server/`, `actions/executor.py`. The harness observes the system under test; if it
+  modified that system, every before/after comparison would be invalid.
 
 ## Last completed task (2026-06-30) — Phase 8: MCP server (DW-MCP-SERVER)
 - **What:** Made Desktop-Worker usable BY OTHER AI AGENTS via an MCP (stdio) server —
@@ -170,7 +243,25 @@ Also: deterministic `create-file` workflow (separate, reliable).
   live** (DW-WF-PICKER-OPENBTN, DW-WF-BROWSE-FOREGROUND). 356 tests green.
 - **Test count:** 350 → **356** (+6 for the two WF fixes).
 
-## Next recommended task
+## Next recommended task (2026-07-21, after MANUAL-EVAL-1)
+**Phase 11, in measured order. Every card now has a live before-number to beat.**
+1. **DW-PERCEIVE-RANK** — promoted to first. Paint proves the defect is real: exactly
+   200 elements, at cap, with no signal, ~8 258 tokens of payload. An agent cannot tell
+   "not there" from "not told".
+2. **DW-MCP-IMAGE** (the vision half is entirely
+   disconnected over MCP — a defect, not an optimisation), then DW-ELEM-STABLE,
+   DW-PERCEIVE-RANK, DW-ACT-BATCH, DW-ACT-SETTLE.
+3. Each Phase 11 card must land with a **measured before/after delta** from the harness,
+   not an assertion. That is the whole point of Phase 10.
+4. Optional follow-up: **DW-EVAL-TIERB** — wire `do` runs into tier B. Deferred so that
+   Phase 10 did not have to spend Claude quota to prove itself.
+
+**Research-backed deprioritisations (do not resurrect without new evidence):** a local GPU
+grounding model (2026 data refutes the premise — frontier VLMs score ~0.88 on
+ScreenSpot-Pro); DXcam capture-rate work (capture is 1-3% of latency vs 87-97% for model
+round-trips). See `dw_roadmap.md` Excluded table.
+
+## Earlier recommended task (superseded)
 **All three 3D tiers done + LIVE-validated** (Tier 1 docs, Tier 3 `inspect_3d`, Tier 2
 `orbit`/`capture_burst`+DXcam). Branch `dw/tier2-capture` merges to main. Remaining is optional:
 - DXcam `fast:true` path only verified by fallback (dxcam not installed here) → install

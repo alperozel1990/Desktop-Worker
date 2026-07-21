@@ -476,6 +476,191 @@ Manual watch test = MANUAL-9.
 - **DW-UI-CONTROLLER** ✅ — `ui/controller.py` pure UiController + ApprovalQueue.
 - **DW-UI-TK** ✅ — `ui/app_tk.py` Tkinter window. CLI `ui`. MANUAL-UI-1.
 
+---
+
+## Phase 10 card — measurement (2026-07-21)
+
+## DW-EVAL-HARNESS — Success-rate / step / latency measurement harness  ☐ todo
+**Purpose:** There is currently **no** success-rate, step-count or latency measurement in
+the repo (44 test files, all conventional unit tests; `audit/report.py` formats but never
+scores). Every Phase 11 improvement claim would therefore be unfalsifiable. Build the
+instrument before building the thing it measures.
+**Research basis:** Anthropic (Jan 2026) "20-50 simple tasks drawn from real failures is a
+great start"; Miller 2024 (arXiv 2411.00640) — small suites need multi-trial + variance or
+sub-10-15pp changes are noise; WindowsAgentArena-V2 — per-task state reset from day one and
+score infeasible tasks separately; 2026 study — deterministic verifiers align with human
+judgment 94.1% vs 79.2% for LLM-as-judge.
+
+**Scope — three tiers (tiering is OUR decision, driven by quota-sensitivity):**
+- **Tier A1** — Null-backend unit tests of the harness itself. CI, zero quota, level 3.
+- **Tier A2** — live capability evals vs real Win11 apps. Deterministic, **zero Claude
+  quota**, level 4. Grades the *tool surface* (the Phase 11 subject), not the AI.
+- **Tier B** — full `do "<task>"` AI runs scored by oracles. **Costs quota → opt-in flag
+  only**, small N, never the default.
+
+**Files allowed:** new `src/desktop_worker/eval/{__init__,spec,oracles,runner,suite}.py`;
+`src/desktop_worker/__main__.py` (add `eval` subcommand); new
+`tests/test_eval_oracles.py`, `tests/test_eval_runner.py`.
+**Files forbidden:** `schema/`, `actions/executor.py`, `safety/`, `audit/log.py`,
+`broker/cli_broker.py`, `perception/`, `mcp_server/`, `docs/requirements.md`, `artifacts/`.
+(The harness OBSERVES the system; it must not modify the system it measures — that would
+invalidate every subsequent measurement.)
+
+**Done criteria:**
+- [ ] `spec.py` — `EvalTask` (id, description, tier, setup, steps, oracle, reset,
+      `feasible: bool`) and `EvalResult`; pure, dependency-free, serializable.
+- [ ] `oracles.py` — deterministic oracles only: file exists / file content equals,
+      window title matches, clipboard equals, element present in perception, observation
+      state-diff non-empty. Each returns a structured pass/fail + reason, never a bare bool.
+- [ ] `runner.py` — runs a suite: per-task reset BEFORE and AFTER each trial, N trials per
+      task, collects success rate + variance + step count + wall-clock + round-trip count;
+      isolates each trial so a crash in one does not poison the next; honors emergency stop.
+- [ ] `suite.py` — >=20 seed tasks, each traceable to a real audit-log failure or a Phase 11
+      acceptance criterion; infeasible tasks scored on a SEPARATE axis (anti-"infeasible
+      hacking").
+- [ ] `eval` CLI subcommand: `--tier {a1,a2,b}` (b requires explicit `--allow-ai` since it
+      spends Claude quota), `--trials N`, `--out <json>`.
+- [ ] Results persisted as JSON so before/after runs can be diffed.
+- [ ] `python -m pytest` green; Tier A1 runs headless on Null backends.
+- [ ] A committed BASELINE result file so Phase 11 has a comparison point.
+
+**Diff budget:** **EXCEEDS default** — 5 new production files (one new `eval/` package) +
+1 changed (`__main__.py`) + 2 test files. Justification: this is a new subsystem, and
+splitting a spec/oracle/runner/suite across cards would leave non-functional intermediate
+states. Requires explicit user approval at the gate.
+**Rollback plan:** `git checkout -- src/desktop_worker/__main__.py` and
+`rm -r src/desktop_worker/eval tests/test_eval_*`.
+**Risks:** the suite ossifies today's assumptions (mitigate: seed from real failures);
+A2 scenarios break when Windows updates app UI (mitigate: a broken scenario must fail
+loudly, never silently pass).
+**Manual steps:** MANUAL-EVAL-1 (run Tier A2 on a live desktop), MANUAL-EVAL-2 (run Tier B
+once, with quota spend acknowledged).
+
+---
+
+## Phase 11 cards — agent-facing surface gaps (2026-07-21, audit-driven)
+
+> All five are graded by the Phase 10 Tier A2 suite: each must land with a **measured
+> before/after delta**, not an assertion. Ordered by leverage.
+
+## DW-FOCUS-RELIABLE — Make `focus_window` actually foreground a window  ☐ todo — BLOCKS Phase 11
+**Found by:** the Phase 10 harness, on its first live A2 run (2026-07-21). Not a
+theory — a measurement.
+**Symptom:** `focus_window` returns `ok:False` with an empty detail, and the foreground
+window stays `Explorer.EXE :: ''` (the shell). Perception then walks the SHELL for every
+app, so the first A2 run returned the same 40 elements for Notepad, Paint, Calculator and
+Blender, and "passed" ID-STABLE/PAYLOAD for **KiCad, which is not installed**.
+**Root cause:** `builtin.py:_win_focus` calls bare `SetForegroundWindow`. Windows refuses
+that call (returns 0) unless the calling process holds foreground-activation rights — which
+a background process started from an unfocused terminal does not. The MCP server is exactly
+such a process, so an external AI agent hits this on every window switch.
+**Why it outranks the other Phase 11 cards:** every app-scoped capability depends on the
+right window being in front. Inline screenshots, stable ids, ranked perception and batching
+are all worth less if the agent is looking at the taskbar.
+**Scope:** robust foreground: `ShowWindow(SW_RESTORE)` when minimized, `AttachThreadInput`
+to the current foreground thread, `BringWindowToTop` + `SetForegroundWindow`, detach, then
+**verify** `GetForegroundWindow()` really is the target with a short bounded retry. Return a
+structured reason on failure instead of an empty detail — a tool that fails must tell the
+agent why. Keep the pure `_match_window` matcher and the injectable seams intact.
+**Files allowed:** `src/desktop_worker/tools/builtin.py`, `tests/test_tools.py`.
+**Files forbidden:** `schema/`, `safety/`, `audit/`, `broker/`, `perception/`,
+`mcp_server/`, `actions/executor.py`, `eval/`.
+**Done criteria:**
+- [ ] `focus_window` brings a real window to the front from a background process.
+- [ ] Failure returns a specific reason (not `{}`), and never claims success it did not get.
+- [ ] Verified against `GetForegroundWindow()`, not assumed from the API return value.
+- [ ] Null/injected-seam unit tests still pass; new tests cover the verify + failure paths.
+- [ ] Re-running Tier A2 produces real per-app numbers instead of NOT MEASURED.
+**Diff budget:** 1 production file + 1 test file.
+**Rollback:** `git checkout -- src/desktop_worker/tools/builtin.py tests/test_tools.py`.
+**Risk:** `AttachThreadInput` can deadlock if misused (never attach to yourself; always
+detach in a finally). Foreground stealing is deliberately restricted by Windows — if the
+robust path still fails, the tool must report honestly rather than silently no-op.
+
+## DW-MCP-IMAGE — Return screenshots as inline MCP image content  ☐ todo
+**Purpose:** `screenshot`/`observe`/`perceive` return only a **file path**
+(`bridge.py:180-182`); grep for `ImageContent`/base64/`image/png` across `src/` returns
+**zero hits**. An external MCP agent cannot see the screen at all unless it separately has
+filesystem read + image decoding. The vision half of "vision + accessibility" is
+disconnected. This is a defect, not an optimisation.
+**Scope:** return image content inline (with the path retained for audit/replay); cap/
+downscale to a sane payload; keep the bridge dependency-free (encoding stays pure stdlib).
+**Files allowed:** `mcp_server/bridge.py`, `mcp_server/server.py`, tests.
+**Files forbidden:** `schema/`, `safety/`, `audit/`, `observation/` capture backends.
+**Done criteria:** [ ] agent receives decodable image bytes · [ ] path still returned ·
+[ ] payload bounded and documented · [ ] A2 measurement before/after. **Diff budget:** 2
+production files + tests.
+
+## DW-ELEM-STABLE — Stable element IDs + `click_element(id)`  ☐ todo
+**Purpose:** `uia_backend.py:160` assigns `id=f"uia-{count}"` — a positional counter over
+tree-walk order, reset to zero every `detect()`. `uia-7` in call N and call N+1 are
+unrelated controls. `AutomationId`, `runtimeId` and `NativeWindowHandle` are never read.
+IDs are therefore useless as cross-call references, which forces coordinate clicking; any
+movement between `perceive` and `click` silently mis-clicks.
+**Scope:** derive a stable id (AutomationId / runtimeId / native handle + content hash,
+with a documented fallback when none is available); add `click_element(id)` that
+**re-validates bounds before clicking** and fails loudly on a stale id rather than clicking
+the wrong thing.
+**Files allowed:** `perception/uia_backend.py`, `mcp_server/bridge.py`,
+`mcp_server/server.py`, tests. **Forbidden:** `schema/observations.py` field removals
+(additive only), `safety/`, `actions/executor.py`.
+**Done criteria:** [ ] same control keeps its id across two perceives on an unchanged screen ·
+[ ] stale id is REJECTED, never silently clicked · [ ] A2 stability measurement.
+**Diff budget:** 3 production files + tests.
+
+## DW-PERCEIVE-RANK — Rank + signal truncation instead of silent cut  ✅ done (2026-07-21)
+**Purpose:** `uia_backend.py:137` breaks the tree walk at 200 elements in traversal order —
+a **silent truncation, not a ranking**. On dense UIs (Unity, Excel, browsers) the target
+control may simply be absent from the payload with no signal. Named static-text nodes
+consume a large share of the budget. Payload is ~6-15k tokens at cap.
+**Scope:** interactable-first ranking; explicit `truncated: true` + counts in the payload;
+filter params (control type, text match, screen region) exposed over MCP; keep the caps
+overridable rather than hardcoded for MCP callers.
+**Research basis:** a11y compression cut tokens to 22% while adding +5.1pp success.
+**Files allowed:** `perception/uia_backend.py`, `perception/perceiver.py`,
+`mcp_server/bridge.py`, `mcp_server/server.py`, tests. **Forbidden:** `safety/`, `audit/`.
+**Done criteria:** [x] truncation is always signalled · [x] interactables outrank static text ·
+[x] filters reduce payload measurably · [x] A2 before/after measured.
+**Diff budget:** 4 production files + tests. Met.
+**Result — MEASURED, not asserted:**
+- A2 TRUNCATION **0/5 -> 5/5**; overall A2 feasible **40.0% -> 66.7%** (CI [56.4%, 75.5%]).
+- Paint (the app that was silently at cap): `truncated=true, totalSeen=224, returned=200,
+  dropped=24, droppedByType={'text': 24}` — **only static labels were cut; all 67 buttons
+  survived.** Previously the cut was in traversal order and could drop the target control.
+- Filter payoff: Paint 200 elements / ~8 315 tokens -> `control_type="button"` 67 elements /
+  ~2 898 tokens = **65% less context** when the agent knows what it wants.
+- `detect()` protocol untouched: ranking/reporting rides on an additive
+  `detect_detailed()`, so Null backends and every existing implementer keep working.
+
+## DW-ACT-BATCH — `act_many([...])` with stop-on-failure  ☐ todo
+**Purpose:** `act()` takes exactly one action; a four-step form fill costs 4 MCP
+round-trips, realistically 8+ with confirmation perceives. Model round-trips are 87-97% of
+end-to-end latency and agents take 2.7-4.3x more steps than human-optimal; OSWorld-Human's
+own remedy is grouping actions so one planning step suffices.
+**Scope:** `act_many` executing a validated action list, **stop-on-first-failure**, settle
+between actions, returning per-action results + a final state diff. Every action still goes
+through `parse_action` + executor + estop + policy + audit individually — batching must NOT
+become a safety bypass.
+**Files allowed:** `mcp_server/bridge.py`, `mcp_server/server.py`, tests.
+**Forbidden:** `actions/executor.py`, `safety/`, `schema/`.
+**Done criteria:** [ ] batch reaches same end state as N separate acts · [ ] estop halts
+mid-batch · [ ] a high-risk action inside a batch is still gated · [ ] round-trip reduction
+measured. **Diff budget:** 2 production files + tests.
+
+## DW-ACT-SETTLE — `settle_ms` + post-action state diff  ☐ todo
+**Purpose:** The MCP action path has **no settle-wait** — `click` returns the instant
+SendInput returns, so the agent must guess `wait()` durations. The internal loop has
+`settle_s`; the MCP surface omits it. And nothing returns "what changed", forcing a blind
+full re-perceive (1 capture + 1 UIA walk + 1 OCR) after every action.
+**Scope:** optional `settle_ms` on action tools; return a compact post-action state diff so
+the agent can skip a full re-perceive when nothing relevant changed.
+**Files allowed:** `mcp_server/bridge.py`, `mcp_server/server.py`, tests.
+**Forbidden:** `actions/executor.py`, `safety/`, `loop/`.
+**Done criteria:** [ ] settle honored · [ ] diff correctly reports no-change · [ ] measured
+reduction in redundant perceives. **Diff budget:** 2 production files + tests.
+
+---
+
 ## Excluded from this backlog
 | Item | Reason |
 |---|---|
@@ -483,3 +668,5 @@ Manual watch test = MANUAL-9.
 | Editing `docs/requirements.md` | Read-only source of truth. |
 | Multi-monitor capture | Deferred (single-monitor MVP allowed). |
 | Full UI (Phase 7) | Tracked at roadmap Phase 7; cards added when reached. |
+| Local GPU grounding model | Dropped on 2026 evidence — see roadmap Excluded table. |
+| DXcam capture-rate work | Low ROI — capture is 1-3% of latency. |

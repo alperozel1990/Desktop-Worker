@@ -193,6 +193,46 @@ def test_focus_window_requires_title():
         tool.run({"title_contains": ""})
 
 
+# --- DW-FOCUS-RELIABLE: honest failure reporting --------------------------
+# Found live by the Phase 10 eval harness: focus_window returned ok=False with an
+# EMPTY detail, so perception silently walked the Windows shell for every app and
+# the suite "passed" tasks for an application that was not even installed.
+
+
+def test_focus_window_reports_a_reason_when_focus_fails():
+    """A tool that fails must say why — an empty detail is unactionable."""
+    tool = FocusWindowTool(
+        enum_windows=lambda: [(20, "Calculator")],
+        focus=lambda hwnd: {"ok": False, "reason": "Windows blocked foreground stealing"},
+    )
+    res = tool.run({"title_contains": "calc"})
+
+    assert res["success"] is False
+    assert "Calculator" in res["error"]
+    assert "Windows blocked foreground stealing" in res["error"]
+
+
+def test_focus_window_accepts_structured_backend_result():
+    tool = FocusWindowTool(
+        enum_windows=lambda: [(20, "Calculator")],
+        focus=lambda hwnd: {"ok": True, "reason": "verified foreground"},
+    )
+    res = tool.run({"title_contains": "calc"})
+
+    assert res["success"] is True
+    assert res["error"] is None
+
+
+def test_focus_window_bool_seam_failure_still_explains_itself():
+    """The plain-bool seam (used by older tests) must not regress to an empty reason."""
+    tool = FocusWindowTool(enum_windows=lambda: [(1, "Notepad")], focus=lambda h: False)
+    res = tool.run({"title_contains": "notepad"})
+
+    assert res["success"] is False
+    assert res["error"] and res["error"] != ""
+    assert "Notepad" in res["error"]
+
+
 def test_open_url_accepts_query_metachars_without_whitespace():
     # These chars are safe INSIDE the quoted `start "" "<url>"` — the quoting,
     # not a whitespace rule, is what protects (no env expansion '%' / no quote).

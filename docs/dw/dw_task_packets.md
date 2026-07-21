@@ -125,3 +125,56 @@ scenarios incl. Unity Editor manual work.
 **Done criteria:** see backlog card DW-MCP-SERVER.
 **Stop conditions:** Stop before adding a network transport or any new schema action —
 those are separate cards.
+
+---
+
+## PACKET: DW-EVAL-HARNESS (Phase 10) — 2026-07-21
+**Card:** DW-EVAL-HARNESS (see `dw_backlog.md`).
+**Why now:** The repo has zero success-rate / step / latency measurement. Phase 11 changes
+would be unfalsifiable without it. Measurement is deliberately built first.
+
+**Approved deviations:** diff budget raised to **5 new production files** (one new `eval/`
+package) + 1 changed (`__main__.py`) + 2 test files — user-approved at the gate, because
+splitting spec/oracles/runner/suite across cards leaves non-functional intermediate states.
+
+**Three tiers (project decision, driven by user quota-sensitivity):**
+- A1 — Null-backend harness unit tests. CI, zero quota, level 3.
+- A2 — live capability evals vs real apps. Deterministic, ZERO Claude quota, level 4.
+  Grades the tool surface, which is exactly what Phase 11 changes. Target apps
+  (user-selected): Win11 built-ins (Notepad/Paint/Explorer/Settings/Calculator),
+  Blender, Unity Editor, Chrome web form, KiCad.
+- B — full `do "<task>"` AI runs. COSTS QUOTA → opt-in `--allow-ai` only, small N.
+
+**Files to create:**
+1. `eval/spec.py` — `EvalTask`, `EvalResult`, `SuiteResult`; pure, serializable.
+2. `eval/oracles.py` — deterministic oracles returning structured verdicts (never bare bool):
+   file exists/contains, window title, clipboard, element present, state changed,
+   element-id stable; `AllOf`/`AnyOf` composites.
+3. `eval/runner.py` — N-trial runner; per-task reset BEFORE and AFTER each trial; per-trial
+   crash isolation; estop honored; counts bridge round-trips; Wilson interval for small-N
+   success rates.
+4. `eval/suite.py` — >=20 seed tasks; infeasible tasks scored on a SEPARATE axis.
+5. `eval/__init__.py` — exports.
+**Files to change:** `__main__.py` — `eval` subcommand (`--tier`, `--trials`, `--out`,
+`--allow-ai`).
+**Tests:** `tests/test_eval_oracles.py`, `tests/test_eval_runner.py`.
+
+**FORBIDDEN (hard):** `schema/`, `actions/executor.py`, `safety/`, `audit/log.py`,
+`broker/cli_broker.py`, `perception/`, `mcp_server/`, `docs/requirements.md`, `artifacts/`.
+Rationale: the harness OBSERVES the system under test. If it modifies that system, every
+subsequent measurement is invalid. Phase 11 cards do the modifying.
+
+**Validation plan (ladder):**
+- L2: `python -c "import desktop_worker.eval"` + `python -m desktop_worker eval --help`.
+- L3: `python -m pytest` green; new oracle + runner tests pass on Null backends;
+  Tier A1 suite runs headless.
+- L3+: `python -m desktop_worker eval --tier a1 --trials 3` produces a JSON result with
+  success rate + variance + step/latency/round-trip metrics.
+- L4: MANUAL-EVAL-1 — Tier A2 against real apps on a live desktop (zero quota).
+- L4: MANUAL-EVAL-2 — Tier B once, with quota spend acknowledged. NOT run by default.
+
+**Rollback:** `git checkout -- src/desktop_worker/__main__.py` and
+`rm -r src/desktop_worker/eval tests/test_eval_*`.
+
+**Stop conditions:** Stop before modifying anything under test (perception/, mcp_server/,
+executor). Stop before running Tier B without explicit user opt-in (spends Claude quota).
