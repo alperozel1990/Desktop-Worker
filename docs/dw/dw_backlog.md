@@ -689,6 +689,35 @@ letting the agent react instead of proceeding on a false assumption.
 
 ---
 
+## DW-EVAL-TIERB — Wire full AI task runs into the harness  ✅ done (2026-07-22)
+**Purpose:** Tier A grades the tool SURFACE with no model in the loop. Tier B grades the
+thing the surface exists for: can an AI actually finish a task on this desktop?
+**Cost control is part of the design, not an afterthought** — every planner step is one
+`claude` call against the user's subscription:
+- per-task action cap so a runaway task cannot drain the account,
+- a run-wide `AiStepBudget` shared by all tasks, so the SUITE has a ceiling,
+- the ACTUAL step count reported back, making the cost visible rather than guessed.
+**Scoring is by deterministic ORACLE, never the AI's own claim** ("the agent said it
+worked" is precisely what oracles exist to catch). The claim is recorded so a
+disagreement between claim and reality is visible.
+**Files:** new `eval/tierb.py`; `eval/suite.py`; `__main__.py` (`--max-ai-steps`);
+new `tests/test_eval_tierb.py`.
+**Done criteria:** [x] real `do`-style loop driven per task · [x] oracle-scored ·
+[x] infeasible task on a separate axis · [x] run-wide budget enforced · [x] whole tier
+testable with an injected runner (zero tokens) · [x] gated behind `--allow-ai`.
+**Result — LIVE (2026-07-22, 12 Claude calls total):** 4/4 tasks PASS. Feasible 3/3;
+infeasible 1/1 correctly refused. `B-FILE-CREATE` verified ON DISK, not by assertion:
+`dw-eval-tierb.txt` contains exactly `DW-EVAL-OK`.
+**Defect found and fixed by running it:** the first live run reported **"0/30 AI steps
+spent"** while every task had driven the real loop for ~74 s. The adapter read a field
+named `steps` that does not exist (it is `steps_run`) and a defaulting `getattr` handed
+back 0 — a cost counter that fails to ZERO silently disables the very ceiling it exists
+to enforce. It now reads the field explicitly and RAISES rather than reporting a
+possibly-wrong zero. Regression test added.
+**Diff budget:** 1 new production file + 2 changed + 1 test file. Met.
+
+---
+
 ## Excluded from this backlog
 | Item | Reason |
 |---|---|

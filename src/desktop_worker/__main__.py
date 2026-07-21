@@ -708,7 +708,18 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         print("Re-run with --allow-ai if that is intended.")
         return 2
 
-    tasks = all_tasks(args.tier)
+    if args.tier == "b":
+        from desktop_worker.eval.tierb import AiStepBudget
+        from desktop_worker.eval.suite import tier_b_tasks
+
+        ai_budget = AiStepBudget(args.max_ai_steps)
+        tasks = tier_b_tasks(budget=ai_budget)
+        print(f"TIER B SPENDS CLAUDE QUOTA. Every planner step is one `claude` call.")
+        print(f"Run-wide ceiling: {ai_budget.total} AI steps across {len(tasks)} task(s) "
+              f"x {args.trials} trial(s). Tasks are refused once it is exhausted.")
+    else:
+        ai_budget = None
+        tasks = all_tasks(args.tier)
     if not tasks:
         print(f"No tasks defined for tier {args.tier!r}.")
         return 1
@@ -741,6 +752,9 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         print(f"  FLAKY      : {', '.join(data['flakyTasks'])}")
     if data["notes"]:
         print(f"  notes      : {data['notes']}")
+    if ai_budget is not None:
+        print(f"  AI steps   : {ai_budget.spent}/{ai_budget.total} spent "
+              f"({ai_budget.remaining} left) — this is the actual Claude cost")
 
     print()
     for task in data["tasks"]:
@@ -889,6 +903,9 @@ def build_parser() -> argparse.ArgumentParser:
                     default="standard", help="permission profile for the harness bridge")
     ev.add_argument("--allow-ai", action="store_true",
                     help="required for tier b: acknowledges that it spends Claude quota")
+    ev.add_argument("--max-ai-steps", type=int, default=60,
+                    help="tier b only: run-wide ceiling on AI planner steps (each step is "
+                         "one claude call). The suite refuses further tasks once spent.")
     ev.set_defaults(func=_cmd_eval)
 
     rep = sub.add_parser("report", help="build an HTML replay of a session's audit log")

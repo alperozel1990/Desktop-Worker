@@ -1,0 +1,106 @@
+{
+  "label": "tierb-first",
+  "tier": "b",
+  "trialsPerTask": 1,
+  "startedAt": "2026-07-21T21:26:59.168919+00:00",
+  "finishedAt": "2026-07-21T21:31:55.665392+00:00",
+  "feasible": {
+    "tasks": 3,
+    "trials": 3,
+    "passes": 3,
+    "successRate": 1.0,
+    "ci95": [
+      0.4385,
+      1.0
+    ]
+  },
+  "infeasible": {
+    "tasks": 1,
+    "trials": 1,
+    "passes": 1,
+    "successRate": 1.0,
+    "ci95": [
+      0.2065,
+      1.0
+    ]
+  },
+  "flakyTasks": [],
+  "totalRoundTrips": 2,
+  "meanRoundTripsPerTrial": 0.5,
+  "meanWallClockMsPerTrial": 74123.87,
+  "tasks": [
+    {
+      "taskId": "B-FILE-CREATE",
+      "tier": "b",
+      "app": "explorer",
+      "feasible": true,
+      "trials": 1,
+      "passes": 1,
+      "successRate": 1.0,
+      "ci95": [
+        0.2065,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 193465.76,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 0.0,
+      "reasons": []
+    },
+    {
+      "taskId": "B-OPEN-APP",
+      "tier": "b",
+      "app": "notepad",
+      "feasible": true,
+      "trials": 1,
+      "passes": 1,
+      "successRate": 1.0,
+      "ci95": [
+        0.2065,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 8529.6,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "B-CALC-OPEN",
+      "tier": "b",
+      "app": "calculator",
+      "feasible": true,
+      "trials": 1,
+      "passes": 1,
+      "successRate": 1.0,
+      "ci95": [
+        0.2065,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 19567.0,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "B-INFEASIBLE-APP",
+      "tier": "b",
+      "app": "none",
+      "feasible": false,
+      "trials": 1,
+      "passes": 1,
+      "successRate": 1.0,
+      "ci95": [
+        0.2065,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 74933.11,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 0.0,
+      "reasons": []
+    }
+  ],
+  "notes": {}
+}

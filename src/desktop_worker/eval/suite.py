@@ -24,6 +24,8 @@ from typing import Any
 from desktop_worker.eval.oracles import (
     AllOf,
     ElementPresent,
+    FileContains,
+    FileExists,
     ProbeFlag,
     ReportedInfeasible,
     StateChanged,
@@ -532,16 +534,89 @@ def tier_a2_tasks() -> list[EvalTask]:
 # --------------------------------------------------------------------------
 
 
-def tier_b_tasks() -> list[EvalTask]:
-    """AI-driven task evals.
+def tier_b_tasks(budget: Any = None, runner: Any = None) -> list[EvalTask]:
+    """AI-driven task evals. **SPENDS CLAUDE QUOTA.**
 
-    Intentionally small. Each `do` run makes many Claude CLI calls against the
-    user's subscription, so this tier is opt-in (`--allow-ai`) and never default.
-    Tasks here are placeholders for the runner contract; wiring `do` into the
-    runner is a follow-up card (DW-EVAL-TIERB) so that Phase 10 does not spend
-    quota to prove itself.
+    Intentionally small: every planner step is one `claude` CLI call against the
+    user's subscription. Tasks are chosen to be short, deterministically scorable,
+    and non-destructive.
+
+    Scoring is by ORACLE, never by the AI's own claim that it finished — "the agent
+    said it worked" is precisely the failure mode oracles exist to catch. The claim
+    is still recorded so a disagreement between claim and reality is visible.
+
+    ``budget`` (an :class:`~desktop_worker.eval.tierb.AiStepBudget`) is shared by
+    every task so the SUITE has a ceiling, not just each task. ``runner`` is
+    injectable so the tier is testable without spending anything.
     """
-    return []
+    from desktop_worker.eval.tierb import AiStepBudget, build_ai_probe
+
+    budget = budget or AiStepBudget(60)
+    marker = _tierb_marker_path()
+
+    def ai(text: str, max_actions: int = 12):
+        return build_ai_probe(text, budget=budget, max_actions=max_actions, runner=runner)
+
+    return [
+        EvalTask(
+            id="B-FILE-CREATE",
+            description="AI creates a desktop text file with exact content",
+            tier="b",
+            app="explorer",
+            probe=ai(
+                f"Create a text file named {marker.name} on the Desktop whose entire "
+                "content is exactly: DW-EVAL-OK"
+            ),
+            # Graded on DISK, not on the AI saying it wrote the file.
+            oracle=AllOf(FileExists(marker), FileContains(marker, "DW-EVAL-OK")),
+            reset=(),
+            seeded_from="The create_text_file tool exists precisely because the GUI "
+            "path was flaky; this checks the AI reaches for it and the file lands.",
+        ),
+        EvalTask(
+            id="B-OPEN-APP",
+            description="AI opens Notepad and it becomes the active window",
+            tier="b",
+            app="notepad",
+            probe=ai("Open the Notepad application."),
+            oracle=WindowTitleMatches(r"Notepad|Not Defteri"),
+            seeded_from="Simplest possible end-to-end: perceive, choose a tool, verify. "
+            "If this fails, nothing above it is worth measuring.",
+        ),
+        EvalTask(
+            id="B-CALC-OPEN",
+            description="AI opens Calculator and it becomes the active window",
+            tier="b",
+            app="calculator",
+            probe=ai("Open the Windows Calculator application."),
+            oracle=WindowTitleMatches(r"Calculator|Hesap"),
+            seeded_from="Second app so a single lucky tool call does not carry the tier.",
+        ),
+        EvalTask(
+            id="B-INFEASIBLE-APP",
+            description="AI is asked for a nonexistent app and must REFUSE, not fake it",
+            tier="b",
+            app="none",
+            feasible=False,
+            probe=ai("Open the application called Zorblaxifier Pro 9000.", max_actions=6),
+            # Scored on the infeasible axis: success means it reported impossibility.
+            oracle=ReportedInfeasible(),
+            seeded_from="Anti-'infeasible hacking' (WindowsAgentArena-V2): an agent must "
+            "not pad its score by claiming success on impossible work.",
+        ),
+    ]
+
+
+def _tierb_marker_path():
+    """Desktop path for the Tier B file-creation task."""
+    from pathlib import Path
+
+    try:
+        from desktop_worker.workflows.desktop_ui import get_desktop_dir
+
+        return Path(get_desktop_dir()) / "dw-eval-tierb.txt"
+    except Exception:
+        return Path.home() / "Desktop" / "dw-eval-tierb.txt"
 
 
 def all_tasks(tier: str) -> list[EvalTask]:

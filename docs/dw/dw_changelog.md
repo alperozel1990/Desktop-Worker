@@ -1387,3 +1387,37 @@ the original defect hide. Real bytes are still graded live by `A2-SURFACE-INLINE
 Tests 400 -> **492**. Every card landed with a live measured delta, not an assertion.
 Remaining A2 red is environmental, not product: Notepad would not stay open on this machine
 and Unity needs an open project.
+
+---
+
+## 2026-07-22 — DW-EVAL-TIERB: full AI task evaluation
+
+**Validation level: 4 (live real desktop, real Claude calls).** 507 tests, 1 skipped.
+
+**What it is:** Tier A grades the tool surface with no model in the loop. Tier B grades
+what the surface exists for — can an AI actually finish a task here?
+
+**Cost control is the design, not a wrapper around it.** Every planner step is one
+`claude` call against the user's subscription, so: a per-task action cap, a run-wide
+`AiStepBudget` shared across tasks (the SUITE has a ceiling, not just each task), and the
+ACTUAL step count reported back so the cost is visible instead of guessed. The whole tier
+is testable through an injected runner — a cost-control mechanism you can only test by
+paying for it is one nobody tests.
+
+**Scoring is by deterministic oracle, never the AI's claim.** `B-FILE-CREATE` is graded by
+reading the file off disk; the AI's "I created it" is recorded separately so a disagreement
+between claim and reality is visible rather than averaged away.
+
+**LIVE RESULT (12 Claude calls total, ~3 per task):** 4/4 PASS — feasible 3/3, infeasible
+1/1 correctly refused. `dw-eval-tierb.txt` verified on disk containing exactly `DW-EVAL-OK`.
+
+**Defect found by running it — and it was the important kind.** The first live run printed
+**"AI steps: 0/30 spent"** while every task had driven the real loop for ~74 seconds. The
+adapter asked the report for a field named `steps`; the real field is `steps_run`, and a
+defaulting `getattr` silently returned 0. A cost counter that fails to ZERO does not merely
+misreport — it silently disables the ceiling it exists to enforce, so the budget could
+never have halted anything. Now read explicitly, raising rather than reporting a
+possibly-wrong zero, with a regression test.
+
+Tier B remains opt-in behind `--allow-ai` (verified: exit 2 without it) and is excluded
+from the `all` tier so a routine run can never spend money.
