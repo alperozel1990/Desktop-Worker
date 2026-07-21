@@ -577,7 +577,7 @@ agent why. Keep the pure `_match_window` matcher and the injectable seams intact
 detach in a finally). Foreground stealing is deliberately restricted by Windows — if the
 robust path still fails, the tool must report honestly rather than silently no-op.
 
-## DW-MCP-IMAGE — Return screenshots as inline MCP image content  ☐ todo
+## DW-MCP-IMAGE — Return screenshots as inline MCP image content  ✅ done (2026-07-21)
 **Purpose:** `screenshot`/`observe`/`perceive` return only a **file path**
 (`bridge.py:180-182`); grep for `ImageContent`/base64/`image/png` across `src/` returns
 **zero hits**. An external MCP agent cannot see the screen at all unless it separately has
@@ -587,9 +587,18 @@ disconnected. This is a defect, not an optimisation.
 downscale to a sane payload; keep the bridge dependency-free (encoding stays pure stdlib).
 **Files allowed:** `mcp_server/bridge.py`, `mcp_server/server.py`, tests.
 **Files forbidden:** `schema/`, `safety/`, `audit/`, `observation/` capture backends.
-**Done criteria:** [ ] agent receives decodable image bytes · [ ] path still returned ·
-[ ] payload bounded and documented · [ ] A2 measurement before/after. **Diff budget:** 2
-production files + tests.
+**Done criteria:** [x] agent receives decodable image bytes · [x] path still returned ·
+[x] payload bounded and documented · [x] A2 measured before/after. **Diff budget:** 2
+production files + tests. Met.
+**Result — MEASURED:** A2 INLINE-IMAGE **0/3 -> 3/3**; A2 feasible **66.7% -> 70.0%**
+(CI [59.9%, 78.5%]). Live: full screen 892 KB PNG that decodes, path still returned;
+`region=[600,300,1300,800]` crops to 302 KB = **33% of the full payload**, size [700,500].
+Bounded by `max_bytes` (default 4 MB) with an explicit `inlineError` rather than a silent
+path-only result. `inline=False` preserves the old shape. The server hands back a real MCP
+`Image` when the SDK provides one, falling back to the base64 dict — `register()` stays
+SDK-free and fake-server-testable.
+**Why it mattered:** Blender perceives **6 elements**. For GHOST/OpenGL apps the picture is
+not a fallback, it is the only channel — and it was disconnected.
 
 ## DW-ELEM-STABLE — Stable element IDs + `click_element(id)`  ☐ todo
 **Purpose:** `uia_backend.py:160` assigns `id=f"uia-{count}"` — a positional counter over

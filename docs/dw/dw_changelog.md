@@ -1257,3 +1257,33 @@ now says so, because two disagreeing numbers otherwise read as a bug.
 
 **Not done:** Notepad would not stay open during the after-run, so its rows read NOT
 MEASURED; Unity still needs an open project.
+
+---
+
+## 2026-07-21 — DW-MCP-IMAGE (Phase 11, card 2 of 5)
+
+**Validation level: 4 (live real desktop).** 470 tests, 1 skipped.
+
+**Defect:** `screenshot` returned only a file path. Grep for `ImageContent`/base64 across
+`src/` returned zero hits. An external MCP agent has no filesystem access to `artifacts/`,
+so the vision half of "vision + accessibility" was entirely disconnected. Not academic:
+**Blender perceives 6 UIA elements** — for GHOST/OpenGL apps the picture is the only channel.
+
+**Shipped:**
+- `mcp_server/bridge.py` — `screenshot(inline=True, max_bytes=4_000_000, region=None)`
+  returns base64 image bytes + `mediaType` + `bytes`, and still returns `path` for
+  audit/replay. `region` crops via Pillow. Every failure path sets an explicit
+  `inlineError` (missing file, non-image placeholder, over the size limit) instead of
+  silently degrading to path-only — that silent degradation is how the defect survived.
+- `mcp_server/server.py` — returns a real MCP `Image` when the SDK offers one, falling back
+  to the base64 dict. Imported lazily so `register()` stays SDK-free and fake-server-tested.
+
+**MEASURED before/after (A2, live):** INLINE-IMAGE **0/3 -> 3/3**; A2 feasible
+**66.7% -> 70.0%** (CI [59.9%, 78.5%]). Live check: full screen 892 KB PNG that decodes to
+a valid header, path retained; `region=[600,300,1300,800]` -> 302 KB, size [700,500],
+**33% of the full-screen payload** — so a targeted look is three times cheaper than a
+whole-screen one.
+
+**Still red and honest about it:** `A2-SURFACE-ELEMENT-FOUND` and the Notepad rows fail
+because Notepad would not stay open on this machine during the runs (Win11 Notepad session
+restore, noted in memory). Not a product regression — an environment gap, reported as such.

@@ -43,9 +43,26 @@ def register(server: Any, bridge: AgentBridge) -> Any:
         )
 
     @tool()
-    def screenshot() -> dict:
-        """Capture a screenshot and return its file path (for vision-capable inspection)."""
-        return bridge.screenshot()
+    def screenshot(inline: bool = True, region: list | None = None):
+        """Capture the screen and return the IMAGE so you can actually look at it (plus its file path). Use this whenever `perceive` returns few elements - GHOST/OpenGL apps like Blender expose almost nothing to UI Automation, so the picture is the only channel. `region` [left,top,right,bottom] crops, which is cheaper and sharper for small targets."""
+        result = bridge.screenshot(inline=inline, region=region)
+        image_b64 = result.get("image")
+        if not image_b64:
+            return result
+        # Hand the client a real image block when the SDK offers one; fall back to
+        # the base64 dict otherwise. Imported lazily so register() stays SDK-free
+        # and testable against a fake server.
+        try:
+            import base64
+
+            from mcp.server.fastmcp import Image
+
+            return Image(
+                data=base64.b64decode(image_b64),
+                format=result.get("mediaType", "image/png").split("/")[-1],
+            )
+        except Exception:
+            return result
 
     @tool()
     def click(x: Optional[int] = None, y: Optional[int] = None, button: str = "left") -> dict:

@@ -230,9 +230,54 @@ class AgentBridge:
             },
         }
 
-    def screenshot(self) -> dict:
+    def screenshot(
+        self, inline: bool = True, max_bytes: int = 4_000_000, region: list | None = None
+    ) -> dict:
+        """Capture the screen and return the image ITSELF, not just a path.
+
+        Returning only a path left an external agent blind: it has no filesystem
+        access to `artifacts/`, so the vision half of "vision + accessibility" was
+        disconnected. That is not academic — Blender exposes 6 UIA elements and 2
+        OCR elements, so for GHOST/OpenGL apps the picture is not a fallback, it is
+        the only channel.
+
+        The path is still returned for audit/replay. `inline=False` restores the
+        old path-only behaviour for callers that do have disk access and do not
+        want the payload.
+        """
         obs = self.session.observer.observe("mcp", screenshot=True)
-        return {"ok": True, "path": obs.screenshotRef}
+        out: dict[str, Any] = {"ok": True, "path": obs.screenshotRef}
+        if not inline:
+            return out
+
+        ref = obs.screenshotRef
+        if not ref:
+            out["inlineError"] = "no screenshot reference was produced"
+            return out
+
+        try:
+            data, media_type, meta = _read_image_bytes(ref, region=region)
+        except Exception as exc:
+            # A capture that cannot be encoded must SAY so; silently returning a
+            # path-only result is how this defect went unnoticed the first time.
+            out["inlineError"] = f"{type(exc).__name__}: {exc}"
+            return out
+
+        if len(data) > max_bytes:
+            out["inlineError"] = (
+                f"image is {len(data)} bytes, over the {max_bytes} limit; "
+                "re-request with a region or a larger max_bytes"
+            )
+            out.update(meta)
+            return out
+
+        import base64
+
+        out["image"] = base64.b64encode(data).decode("ascii")
+        out["mediaType"] = media_type
+        out["bytes"] = len(data)
+        out.update(meta)
+        return out
 
     # --- control / safety ----------------------------------------------
     def status(self) -> dict:
@@ -251,6 +296,60 @@ class AgentBridge:
     def clear_stop(self) -> dict:
         self.session.estop.clear()
         return {"ok": True, "stopped": False}
+
+
+_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".bmp": "image/bmp",
+}
+
+
+def _read_image_bytes(ref: str, *, region: Any = None) -> tuple[bytes, str, dict]:
+    """Read a captured image as bytes, optionally cropping to ``region``.
+
+    Cropping needs Pillow; without it a region request is reported as unsupported
+    rather than silently returning the whole screen, which would make an agent
+    reason about the wrong pixels.
+    """
+    from pathlib import Path
+
+    path = Path(ref)
+    if not path.exists():
+        raise FileNotFoundError(f"screenshot not found at {ref}")
+    suffix = path.suffix.lower()
+    if suffix not in _MEDIA_TYPES:
+        # The Null desktop backend writes a .txt placeholder; say so plainly.
+        raise ValueError(f"{path.name} is not an image (suffix {suffix!r})")
+
+    meta: dict[str, Any] = {}
+    box = None
+    if isinstance(region, (list, tuple)) and len(region) == 4:
+        try:
+            box = tuple(int(v) for v in region)
+        except (TypeError, ValueError):
+            box = None
+
+    if box is None:
+        return path.read_bytes(), _MEDIA_TYPES[suffix], meta
+
+    try:
+        import io
+
+        from PIL import Image
+    except Exception as exc:
+        raise RuntimeError(
+            f"region crop needs Pillow (install the [vision] extra): {exc}"
+        ) from exc
+
+    with Image.open(path) as img:
+        cropped = img.crop(box)
+        buf = io.BytesIO()
+        cropped.save(buf, format="PNG")
+        meta["region"] = list(box)
+        meta["size"] = [cropped.width, cropped.height]
+        return buf.getvalue(), "image/png", meta
 
 
 def _filter_elements(

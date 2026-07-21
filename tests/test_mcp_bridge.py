@@ -268,3 +268,102 @@ def test_perceive_max_elements_caps_and_marks_truncated(tmp_path):
 def test_perceive_elements_still_carry_click_centres(tmp_path):
     res = _bridge_with(tmp_path, [_element(bounds=(10, 20, 30, 40))]).perceive(screenshot=False)
     assert res["elements"][0]["center"] == [20, 30]
+
+
+# --- DW-MCP-IMAGE: the agent must receive the picture, not a path it cannot open ---
+
+
+def _png_bytes(width=8, height=6):
+    """A minimal real PNG, written without Pillow so the test has no extra deps."""
+    import struct
+    import zlib
+
+    raw = b"".join(b"\x00" + b"\xff\x00\x00" * width for _ in range(height))
+
+    def chunk(tag, data):
+        body = tag + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw))
+            + chunk(b"IEND", b""))
+
+
+class _ShotObserver:
+    """Observer stand-in that reports a screenshot at a path we control."""
+
+    def __init__(self, ref):
+        self._ref = ref
+
+    def observe(self, agent, screenshot=True):
+        class _Obs:
+            screenshotRef = self._ref
+
+            def to_dict(_self):
+                return {"screenshotRef": self._ref}
+
+        return _Obs()
+
+
+def test_screenshot_returns_decodable_image_bytes(tmp_path):
+    """The defect: only a path was returned, so an external agent was blind."""
+    import base64
+
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(_png_bytes())
+    bridge, session = _bridge(tmp_path)
+    session.observer = _ShotObserver(str(shot))
+
+    out = bridge.screenshot()
+
+    assert out["ok"] is True
+    assert out["path"] == str(shot), "the path must still be returned for audit/replay"
+    decoded = base64.b64decode(out["image"], validate=True)
+    assert decoded.startswith(b"\x89PNG\r\n\x1a\n")
+    assert out["mediaType"] == "image/png"
+    assert out["bytes"] == len(decoded)
+
+
+def test_screenshot_inline_false_keeps_the_old_path_only_shape(tmp_path):
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(_png_bytes())
+    bridge, session = _bridge(tmp_path)
+    session.observer = _ShotObserver(str(shot))
+
+    out = bridge.screenshot(inline=False)
+    assert out["path"] == str(shot)
+    assert "image" not in out
+
+
+def test_screenshot_reports_why_it_could_not_inline_a_placeholder(tmp_path):
+    """The Null backend writes a .txt placeholder — say so, do not pretend."""
+    placeholder = tmp_path / "shot.txt"
+    placeholder.write_text("not an image", encoding="utf-8")
+    bridge, session = _bridge(tmp_path)
+    session.observer = _ShotObserver(str(placeholder))
+
+    out = bridge.screenshot()
+    assert out["ok"] is True
+    assert "image" not in out
+    assert "not an image" in out["inlineError"]
+
+
+def test_screenshot_reports_a_missing_file_rather_than_crashing(tmp_path):
+    bridge, session = _bridge(tmp_path)
+    session.observer = _ShotObserver(str(tmp_path / "gone.png"))
+
+    out = bridge.screenshot()
+    assert "inlineError" in out
+    assert "FileNotFoundError" in out["inlineError"]
+
+
+def test_screenshot_refuses_to_inline_an_oversized_image(tmp_path):
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(_png_bytes())
+    bridge, session = _bridge(tmp_path)
+    session.observer = _ShotObserver(str(shot))
+
+    out = bridge.screenshot(max_bytes=10)
+    assert "image" not in out
+    assert "over the 10 limit" in out["inlineError"]
