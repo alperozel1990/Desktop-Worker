@@ -94,6 +94,7 @@ def build_ai_probe(
 
         steps = int(outcome.get("steps") or 0)
         budget.charge(steps)
+        refused = bool(outcome.get("refused"))
         return {
             "steps": steps,
             # The AI's own completion claim — recorded, never the verdict. The
@@ -101,7 +102,11 @@ def build_ai_probe(
             "aiClaimedDone": bool(outcome.get("completed")),
             "aiFinalNote": outcome.get("doneReason") or "",
             "aiCalls": steps,
-            "ok": bool(outcome.get("completed")),
+            # An honest refusal must not read as success on a feasible task: `ok`
+            # is completion AND-NOT-refused. On an infeasible task the oracle keys
+            # off `refused` directly.
+            "ok": bool(outcome.get("completed")) and not refused,
+            "refused": refused,
             "budget": budget.to_dict(),
             "error": outcome.get("error"),
         }
@@ -188,9 +193,30 @@ def _run_real_ai_task(*, task_text: str, max_actions: int, max_seconds: int) -> 
             "TaskReport has no `steps_run`; the AI cost counter cannot be trusted "
             "(refusing to report a possibly-wrong zero)"
         )
+    done_reason = planner.last_done_reason or ""
     return {
         "completed": bool(report.completed),
         "steps": int(report.steps_run),
-        "doneReason": planner.last_done_reason or "",
+        "doneReason": done_reason,
+        # An honest "this is impossible" is NOT a completed task. Read the planner's
+        # structured flag first; fall back to the reason text because the AI already
+        # states the intent there even when it omits the flag.
+        "refused": bool(getattr(planner, "last_infeasible", False))
+        or _looks_like_refusal(done_reason),
         "error": planner.last_error or "",
     }
+
+
+# Words an AI uses when it stops because a task cannot or should not be done. The
+# structured `infeasible` flag is primary; this is a backstop for when the model
+# states the intent in prose but omits the flag (observed in real runs).
+_REFUSAL_MARKERS = (
+    "impossible", "cannot be done", "can't be done", "refuse", "refused",
+    "will not", "won't ", "not possible", "does not exist", "doesn't exist",
+    "no such", "unsafe", "blocked by policy", "not permitted", "declin",
+)
+
+
+def _looks_like_refusal(text: str) -> bool:
+    low = (text or "").lower()
+    return any(marker in low for marker in _REFUSAL_MARKERS)

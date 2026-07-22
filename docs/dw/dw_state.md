@@ -90,7 +90,21 @@ Gate and only implement when the selected card is explicitly approved.
 ## Current task
 None in progress. **PHASE 11 COMPLETE** (all 5 cards, each with a live measured delta).
 
-## LATEST (2026-07-22) — A2 at 100%, Tier B live, docs pushed
+## LATEST (2026-07-22, later) — open threads closed
+- **OCR preflight (DW-OCR-PREFLIGHT):** `ocr_status()` checks pytesseract + Pillow + the
+  tesseract BINARY on PATH; surfaced in CLI/bridge `status` and as `perception.ocrWarning`.
+  Found + fixed a HARD CRASH: binary-off-PATH made `perceive(screenshot=True)` throw
+  `TesseractNotFoundError`; the factory now probes the binary and falls back to Null. Live-
+  verified both directions.
+- **Tier B grown 4 -> 7** from real audit failures (clipboard OverflowError regression,
+  focus/typing race, denied-destructive refusal). Live run scored feasible 5/5 but exposed a
+  HARNESS scoring bug on the infeasible axis: the AI refused both tasks honestly, yet the
+  harness read `completed=True` as "claimed success". Fixed (DW-PLANNER-INFEASIBLE): "done"
+  now distinguishes achieved vs refused via a structured `infeasible` flag. **Corrected Tier
+  B: 7/7.** Re-verified live.
+- **524 tests.** Pushed.
+
+## Earlier 2026-07-22 — A2 at 100%, Tier B live, docs pushed
 - **A2 tool-surface suite: 90/90 = 100%** (CI [95.9%, 100%]), 30 tasks x 3 trials, 7 apps
   open (Notepad, Paint, Calculator, Blender, KiCad, Chrome, Unity).
 - **Tier B (DW-EVAL-TIERB) shipped and run live: 4/4 on 12 Claude calls.**

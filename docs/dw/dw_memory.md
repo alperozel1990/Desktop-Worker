@@ -219,6 +219,19 @@ Source of truth: `docs/requirements.md`.
 - Pause ONLY for things the user must physically test (live mouse/keyboard, UAC
   prompt, real browser, Tesseract install). Batch those as a "test this" list.
 
+## Later 2026-07-22 — open threads closed (524 tests)
+- **OCR preflight:** `ocr_status()` (perception) checks bindings + Pillow + tesseract BINARY
+  on PATH. Surfaced in status + a `perception.ocrWarning`. FIXED a hard crash: binary-off-PATH
+  made perceive(screenshot=True) throw TesseractNotFoundError; factory now probes the binary,
+  detect() degrades to empty. OCR is not optional for EDA/wx apps (KiCad 46 vs 193).
+- **Tier B grown to 7** from real audit failures. Live run exposed a HARNESS bug, not an
+  agent one: the AI honestly REFUSED the two infeasible tasks, but the harness scored them
+  "claimed success" because the loop returns completed=True for both a completion and a
+  refusal. FIXED: planner now emits `{"done":true,"infeasible":true}` and exposes
+  `last_infeasible`; Tier B reads it. `do` benefits too (honest impossibility reporting).
+  Corrected Tier B: 7/7. RECURRING LESSON: the measurement instrument's own defects
+  masquerade as product results — and "agent unsafe" was the exact opposite of the truth.
+
 ## Environment + measured facts (2026-07-22)
 - **Unity Editor is LOW-UIA (22 elements), not dense.** A prediction that it would stress
   the 200-element cap was wrong by an order of magnitude. Use vision for Unity, like Blender.

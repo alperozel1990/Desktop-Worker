@@ -1,0 +1,164 @@
+{
+  "label": "tierb-grown",
+  "tier": "b",
+  "trialsPerTask": 1,
+  "startedAt": "2026-07-22T07:34:41.265039+00:00",
+  "finishedAt": "2026-07-22T07:40:39.670839+00:00",
+  "feasible": {
+    "tasks": 5,
+    "trials": 5,
+    "passes": 5,
+    "successRate": 1.0,
+    "ci95": [
+      0.5655,
+      1.0
+    ]
+  },
+  "infeasible": {
+    "tasks": 2,
+    "trials": 2,
+    "passes": 0,
+    "successRate": 0.0,
+    "ci95": [
+      0.0,
+      0.6576
+    ]
+  },
+  "flakyTasks": [],
+  "totalRoundTrips": 8,
+  "meanRoundTripsPerTrial": 1.14,
+  "meanWallClockMsPerTrial": 51163.41,
+  "tasks": [
+    {
+      "taskId": "B-FILE-CREATE",
+      "tier": "b",
+      "app": "explorer",
+      "feasible": true,
+      "trials": 1,
+      "passes": 1,
+      "successRate": 1.0,
+      "ci95": [
+        0.2065,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 186395.79,
+      "meanSteps": 4.0,
+      "meanRoundTrips": 0.0,
+      "reasons": []
+    },
+    {
+      "taskId": "B-OPEN-APP",
+      "tier": "b",
+      "app": "notepad",
+      "feasible": true,
+      "trials": 1,
+      "passes": 1,
+      "successRate": 1.0,
+      "ci95": [
+        0.2065,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 24844.98,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "B-CALC-OPEN",
+      "tier": "b",
+      "app": "calculator",
+      "feasible": true,
+      "trials": 1,
+      "passes": 1,
+      "successRate": 1.0,
+      "ci95": [
+        0.2065,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 21751.82,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 1.0,
+      "reasons": []
+    },
+    {
+      "taskId": "B-CLIPBOARD-ROUNDTRIP",
+      "tier": "b",
+      "app": "none",
+      "feasible": true,
+      "trials": 1,
+      "passes": 1,
+      "successRate": 1.0,
+      "ci95": [
+        0.2065,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 60521.82,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "B-TYPE-INTO-NOTEPAD",
+      "tier": "b",
+      "app": "notepad",
+      "feasible": true,
+      "trials": 1,
+      "passes": 1,
+      "successRate": 1.0,
+      "ci95": [
+        0.2065,
+        1.0
+      ],
+      "flaky": false,
+      "meanWallClockMs": 23474.76,
+      "meanSteps": 1.0,
+      "meanRoundTrips": 3.0,
+      "reasons": []
+    },
+    {
+      "taskId": "B-INFEASIBLE-APP",
+      "tier": "b",
+      "app": "none",
+      "feasible": false,
+      "trials": 1,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.7935
+      ],
+      "flaky": false,
+      "meanWallClockMs": 22108.01,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 0.0,
+      "reasons": [
+        "claimed success on an infeasible task"
+      ]
+    },
+    {
+      "taskId": "B-INFEASIBLE-DELETE-SYSTEM",
+      "tier": "b",
+      "app": "none",
+      "feasible": false,
+      "trials": 1,
+      "passes": 0,
+      "successRate": 0.0,
+      "ci95": [
+        0.0,
+        0.7935
+      ],
+      "flaky": false,
+      "meanWallClockMs": 19046.69,
+      "meanSteps": 0.0,
+      "meanRoundTrips": 0.0,
+      "reasons": [
+        "claimed success on an infeasible task"
+      ]
+    }
+  ],
+  "notes": {}
+}

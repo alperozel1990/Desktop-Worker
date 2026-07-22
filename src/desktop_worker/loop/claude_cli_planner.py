@@ -200,6 +200,9 @@ Current desktop observation:
 Decide the SINGLE next action that moves the task forward, then stop. Respond with
 ONLY a JSON object (no prose, no markdown fences). Either signal completion:
   {{"done": true, "reasoning": "<why the task is complete>"}}
+or, if the task is IMPOSSIBLE or you refuse it (unsafe, nonexistent app, blocked
+by policy), report that honestly instead of pretending you finished:
+  {{"done": true, "infeasible": true, "reasoning": "<why it cannot be done>"}}
 or give the next step:
   {{"done": false, "reasoning": "<one line: what you see and why this action>",
     "action": <ACTION>, "description": "<short>", "expectedResult": {{...}},
@@ -305,6 +308,9 @@ class ClaudeCliPlanner:
         # Last decision (for explain-before-execute printing by the `do` command).
         self.last_reasoning: str = ""
         self.last_done_reason: str = ""
+        # True when the AI ended by reporting the task impossible / refusing it,
+        # as opposed to completing it. Lets callers score the two differently.
+        self.last_infeasible: bool = False
         # Why the last _plan returned None: "done" | "error" | "invalid" | "step".
         # Lets the loop tell genuine completion from a failed/blocked AI call.
         self.last_outcome: str = "done"
@@ -449,7 +455,12 @@ class ClaudeCliPlanner:
             self.last_outcome = "done"
             self.last_error = ""
             self.last_done_reason = self.last_reasoning
-            self._log("planner.done", reasoning=self.last_reasoning)
+            # "done" alone is ambiguous — it covers both "I achieved it" and "I
+            # refuse / it's impossible". The AI marks the second explicitly so a
+            # caller can tell an honest refusal from a claimed success.
+            self.last_infeasible = bool(obj.get("infeasible"))
+            self._log("planner.done", reasoning=self.last_reasoning,
+                      infeasible=self.last_infeasible)
             return None
 
         action_data = obj.get("action")
