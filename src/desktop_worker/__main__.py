@@ -36,6 +36,14 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"  estop file   : {cfg.estop_file} (present={cfg.estop_file.exists()})")
     print(f"  process admin: {is_process_elevated()}")
     print(f"  backends     : {session.backend_names()}")
+    from desktop_worker.perception import ocr_status
+    ocr = ocr_status()
+    mark = "OK" if ocr["available"] else "MISSING"
+    print(f"  OCR          : [{mark}] {ocr['reason']}")
+    if not ocr["available"] and not args.null:
+        print("                 WARNING: with real backends but no OCR, perception "
+              "silently undercounts on OCR-heavy apps (e.g. KiCad ~4x). Elements "
+              "you cannot see are indistinguishable from ones that are not there.")
     print(f"  dry_run      : {cfg.dry_run}")
     return 0
 

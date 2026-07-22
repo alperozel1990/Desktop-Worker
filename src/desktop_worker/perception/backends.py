@@ -72,12 +72,22 @@ def data_to_elements(data: dict[str, Any], *, min_confidence: float = 0.0) -> li
 
 
 class TesseractOcrBackend:
-    """Real OCR via pytesseract + Pillow. Construct only when both are present."""
+    """Real OCR via pytesseract + Pillow. Construct only when both are present.
+
+    The constructor probes not just the Python bindings but the tesseract BINARY,
+    because a bindings-present / binary-absent install is common (the installer
+    often skips PATH). Without that probe, the factory would happily return this
+    backend and the first ``detect`` would raise ``TesseractNotFoundError`` and
+    crash the whole perceive — turning a degraded read into a hard failure.
+    """
 
     def __init__(self, *, min_confidence: float = 0.3) -> None:
-        import pytesseract  # noqa: F401  (probe so the factory can fall back)
+        import pytesseract
         from PIL import Image  # noqa: F401
 
+        # Fail construction (not detect) when the binary is missing, so the factory
+        # can fall back to Null and perception keeps working, just thinner.
+        pytesseract.get_tesseract_version()
         self.min_confidence = min_confidence
 
     def detect(self, image_path: Path) -> list[Element]:
@@ -87,8 +97,13 @@ class TesseractOcrBackend:
         image_path = Path(image_path)
         if not image_path.exists():
             return []
-        with Image.open(image_path) as img:
-            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+        try:
+            with Image.open(image_path) as img:
+                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+        except pytesseract.TesseractNotFoundError:
+            # The binary disappeared after construction (PATH changed mid-session).
+            # A missing OCR binary must never crash perceive — degrade to no OCR.
+            return []
         return data_to_elements(data, min_confidence=self.min_confidence)
 
 
@@ -100,3 +115,60 @@ def get_ocr_backend(prefer_real: bool = True) -> OcrBackend:
         except Exception:
             pass
     return NullOcrBackend()
+
+
+def ocr_status() -> dict[str, Any]:
+    """Report whether OCR is actually usable, and WHY not if it is not.
+
+    This exists because a missing OCR stack does not fail loudly — it just makes
+    perception quietly thinner. On EDA / wxWidgets apps that is dangerous: KiCad
+    draws ~76% of its elements via OCR, so without Tesseract it perceives 46
+    elements instead of 193 — a 4x undercount that looks like a perfectly healthy
+    result. An agent cannot tell "this control does not exist" from "OCR is off and
+    I never saw it". Surfacing the health lets a caller refuse to trust a thin read.
+
+    Checks all three pieces the real backend needs: pytesseract (Python binding),
+    Pillow (image loading), and the tesseract BINARY on PATH (the piece the
+    installer commonly forgets to add).
+    """
+    missing: list[str] = []
+    version = None
+    try:
+        import pytesseract  # noqa: F401
+    except Exception:
+        missing.append("pytesseract")
+    try:
+        from PIL import Image  # noqa: F401
+    except Exception:
+        missing.append("Pillow")
+
+    if "pytesseract" not in missing:
+        try:
+            import pytesseract
+
+            version = str(pytesseract.get_tesseract_version())
+        except Exception:
+            # The binding is installed but the tesseract EXE is not on PATH — the
+            # single most common broken state (winget does not add it to PATH).
+            missing.append("tesseract-binary")
+
+    available = not missing
+    if available:
+        reason = f"OCR ready (tesseract {version})"
+    elif missing == ["tesseract-binary"]:
+        reason = (
+            "pytesseract is installed but the tesseract executable is not on PATH; "
+            "add its install dir (e.g. C:\\Program Files\\Tesseract-OCR) to PATH"
+        )
+    else:
+        reason = (
+            "OCR unavailable — install the [ocr] extra and Tesseract "
+            f"(missing: {', '.join(missing)})"
+        )
+    return {
+        "available": available,
+        "backend": "tesseract" if available else "null",
+        "version": version,
+        "missing": missing,
+        "reason": reason,
+    }

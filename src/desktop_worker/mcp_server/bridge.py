@@ -250,6 +250,42 @@ class AgentBridge:
             capped_by_request = len(elements) - max_elements
             elements = elements[:max_elements]
 
+        by_source: dict[str, int] = {}
+        for el in elements:
+            by_source[str(el.get("source") or "unknown")] = (
+                by_source.get(str(el.get("source") or "unknown"), 0) + 1
+            )
+
+        perception = {
+            # totalSeen/returned/dropped/droppedByType describe the UIA WALK,
+            # before OCR elements are merged in — so `returned` can be lower
+            # than `shown`. Spelled out because the two numbers disagreeing
+            # otherwise looks like a bug.
+            "stage": "totalSeen/returned/dropped cover the UIA walk; "
+                     "`shown` is the final list after OCR merge and filters",
+            **report,
+            "filteredOut": filtered_out,
+            "cappedByRequest": capped_by_request,
+            "shown": len(elements),
+            "bySource": by_source,
+        }
+
+        # If a real screenshot was requested but OCR contributed nothing AND OCR is
+        # unavailable, this read may be silently undercounting on an OCR-heavy app
+        # (KiCad reads 46 elements without OCR vs 193 with). Warn rather than let
+        # the agent mistake a thin read for an empty screen.
+        if screenshot and by_source.get("ocr", 0) == 0:
+            from desktop_worker.perception import ocr_status
+
+            ocr = ocr_status()
+            if not ocr["available"]:
+                perception["ocrWarning"] = (
+                    "OCR is unavailable, so only UI-Automation elements are listed. "
+                    "On custom-drawn / EDA / wxWidgets apps this can undercount by "
+                    f"several-fold. {ocr['reason']}"
+                )
+                perception["ocrAvailable"] = False
+
         return {
             "ok": True,
             "summary": obs.summary(),
@@ -260,18 +296,7 @@ class AgentBridge:
             # Truncation is reported unconditionally, even when False, so an agent
             # can rely on the field being there rather than inferring from a count.
             "truncated": bool(report.get("truncated")) or capped_by_request > 0,
-            "perception": {
-                # totalSeen/returned/dropped/droppedByType describe the UIA WALK,
-                # before OCR elements are merged in — so `returned` can be lower
-                # than `shown`. Spelled out because the two numbers disagreeing
-                # otherwise looks like a bug.
-                "stage": "totalSeen/returned/dropped cover the UIA walk; "
-                         "`shown` is the final list after OCR merge and filters",
-                **report,
-                "filteredOut": filtered_out,
-                "cappedByRequest": capped_by_request,
-                "shown": len(elements),
-            },
+            "perception": perception,
         }
 
     def act_many(
@@ -426,12 +451,17 @@ class AgentBridge:
 
     # --- control / safety ----------------------------------------------
     def status(self) -> dict:
+        from desktop_worker.perception import ocr_status
+
         return {
             "ok": True,
             "backends": self.session.backend_names(),
             "stopped": self.session.estop.is_stopped(),
             "auditLog": str(self.session.config.audit_file),
             "tools": [t["name"] for t in (self.tools.catalog() if self.tools else [])],
+            # Surfaced so an agent can see, before it trusts a thin perceive, that
+            # OCR is off — on OCR-heavy apps that means a silent undercount.
+            "ocr": ocr_status(),
         }
 
     def emergency_stop(self, reason: str = "stop via MCP") -> dict:

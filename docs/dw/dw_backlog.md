@@ -689,6 +689,28 @@ letting the agent react instead of proceeding on a false assumption.
 
 ---
 
+## DW-OCR-PREFLIGHT — Surface OCR health so a thin read is never mistaken for an empty screen  ✅ done (2026-07-22)
+**Purpose:** A missing OCR stack does not fail loudly — it just makes perception quietly
+thinner. On EDA/wxWidgets apps that is dangerous: KiCad draws ~76% of its elements via OCR,
+so without Tesseract it perceives 46 elements instead of 193 — a 4x undercount that looks
+like a perfectly healthy result. An agent cannot tell "control absent" from "OCR off, never
+saw it".
+**Scope:** `ocr_status()` health check (pytesseract + Pillow + the tesseract BINARY on
+PATH, checked separately since the installer commonly skips PATH); surfaced in CLI `status`,
+bridge `status`, and — the point — a `perception.ocrWarning` on any `perceive(screenshot=True)`
+that yielded no OCR elements while OCR is unavailable. Also adds `perception.bySource`.
+**Files:** `perception/backends.py`, `perception/__init__.py`, `mcp_server/bridge.py`,
+`__main__.py`; new `tests/test_ocr_preflight.py`, `tests/test_mcp_bridge.py`.
+**Done criteria:** [x] health reported in status (CLI + bridge) · [x] perceive warns on an
+OCR-starved read · [x] no false warning when OCR contributed or is available · [x] live-verified.
+**Result — and a real crash found by running it:** with pytesseract installed but the
+tesseract binary NOT on PATH, `perceive(screenshot=True)` did not merely undercount — it
+**crashed** with `TesseractNotFoundError`, because the factory probed only the Python
+bindings, not the binary. Now the constructor probes the binary (factory falls back to Null)
+and `detect` degrades to no-OCR if the binary vanishes mid-session. Live-verified: with OCR
+off, `perceive` returns 53 UIA elements + `ocrAvailable:false` + a warning, instead of
+crashing. **Diff budget:** 4 production files + 2 test files. Met.
+
 ## DW-EVAL-TIERB — Wire full AI task runs into the harness  ✅ done (2026-07-22)
 **Purpose:** Tier A grades the tool SURFACE with no model in the loop. Tier B grades the
 thing the surface exists for: can an AI actually finish a task on this desktop?

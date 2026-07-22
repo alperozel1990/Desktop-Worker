@@ -1463,3 +1463,32 @@ these and not this repo:
 - `SKILL.md` deliberately untouched — it is a thin pointer to REFERENCE by design.
 
 **Cleanup:** the throwaway Unity project and every app opened for measurement were closed.
+
+---
+
+## 2026-07-22 — DW-OCR-PREFLIGHT: make silent OCR undercounts (and crashes) visible
+
+**Validation level: 4 (live real desktop).** 520 tests, 1 skipped.
+
+**Why:** a missing OCR stack does not fail loudly — perception just goes quietly thinner.
+On OCR-heavy apps that is a wrong number, not merely a thinner one: KiCad reads 46 elements
+without Tesseract vs 193 with (76% of its elements are OCR). An agent cannot tell "that
+control is absent" from "OCR is off and I never saw it".
+
+**Shipped:** `ocr_status()` — checks pytesseract, Pillow, AND the tesseract binary on PATH
+(a separate check, because the installer commonly leaves the binary off PATH — the exact
+state on this machine's default shell). Surfaced in CLI `status`, bridge `status`, and as a
+`perception.ocrWarning` on any `perceive(screenshot=True)` that produced no OCR elements
+while OCR is unavailable. Added `perception.bySource` so the split is always visible.
+
+**A hard crash found by actually running it — worse than the undercount it was meant to
+catch.** With pytesseract installed but the tesseract binary not on PATH,
+`perceive(screenshot=True)` did not undercount, it **threw `TesseractNotFoundError` and
+crashed the whole perceive** — the factory probed only the Python bindings, not the binary,
+so it returned a real backend whose first `detect()` blew up. Fixed: the constructor now
+probes the binary (so the factory falls back to Null and perception keeps working, thinner),
+and `detect` degrades to empty if the binary disappears mid-session. Two regression tests.
+
+**Live-verified both directions:** OCR present -> `bySource {uia:53, ocr:16}`, no warning.
+OCR binary hidden -> `perceive` returns 53 UIA elements, `ocrAvailable:false`, and a warning
+naming the undercount risk — no crash.

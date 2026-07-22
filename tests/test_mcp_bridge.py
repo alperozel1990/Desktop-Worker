@@ -541,3 +541,81 @@ def test_settle_ms_is_honoured_on_click(tmp_path):
     elapsed_ms = (time.perf_counter() - started) * 1000
 
     assert elapsed_ms >= 100, f"settle was not honoured (took {elapsed_ms:.0f} ms)"
+
+
+# --- DW-OCR-PREFLIGHT: perceive warns when a thin read may be an undercount ---
+
+
+def test_status_reports_ocr_health(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    st = bridge.status()
+    assert "ocr" in st
+    assert set(st["ocr"]) == {"available", "backend", "version", "missing", "reason"}
+
+
+def test_perceive_warns_when_ocr_absent_and_no_ocr_elements(tmp_path, monkeypatch):
+    """A UIA-only read on a real screenshot, with OCR unavailable, is exactly the
+    silent-undercount case (KiCad: 46 vs 193)."""
+    import desktop_worker.perception as perc
+
+    monkeypatch.setattr(perc, "ocr_status",
+                        lambda: {"available": False, "backend": "null", "version": None,
+                                 "missing": ["tesseract-binary"],
+                                 "reason": "tesseract not on PATH"})
+    el = Element(id="a:1", type="button", bounds=(0, 0, 10, 10), source="uia",
+                 text="X", confidence=0.9)
+    bridge = _bridge_with(tmp_path, [el])
+
+    out = bridge.perceive(screenshot=True)
+
+    assert out["perception"]["ocrAvailable"] is False
+    assert "undercount" in out["perception"]["ocrWarning"]
+    assert out["perception"]["bySource"] == {"uia": 1}
+
+
+def test_perceive_does_not_warn_when_ocr_contributed(tmp_path, monkeypatch):
+    """If OCR elements are present, the read is not OCR-starved — no warning."""
+    import desktop_worker.perception as perc
+
+    monkeypatch.setattr(perc, "ocr_status",
+                        lambda: {"available": False, "backend": "null", "version": None,
+                                 "missing": ["tesseract-binary"], "reason": "x"})
+    els = [
+        Element(id="a:1", type="button", bounds=(0, 0, 10, 10), source="uia",
+                text="X", confidence=0.9),
+        Element(id="ocr-1", type="text", bounds=(0, 0, 10, 10), source="ocr",
+                text="Y", confidence=0.5),
+    ]
+    bridge = _bridge_with(tmp_path, els)
+
+    out = bridge.perceive(screenshot=True)
+    assert "ocrWarning" not in out["perception"]
+
+
+def test_perceive_does_not_warn_when_ocr_is_available(tmp_path, monkeypatch):
+    import desktop_worker.perception as perc
+
+    monkeypatch.setattr(perc, "ocr_status",
+                        lambda: {"available": True, "backend": "tesseract",
+                                 "version": "5.4.0", "missing": [], "reason": "ready"})
+    el = Element(id="a:1", type="button", bounds=(0, 0, 10, 10), source="uia",
+                 text="X", confidence=0.9)
+    bridge = _bridge_with(tmp_path, [el])
+
+    out = bridge.perceive(screenshot=True)
+    assert "ocrWarning" not in out["perception"]
+
+
+def test_perceive_without_screenshot_never_warns_about_ocr(tmp_path, monkeypatch):
+    """OCR only runs on a real screenshot, so a UIA-only perceive is not a miss."""
+    import desktop_worker.perception as perc
+
+    monkeypatch.setattr(perc, "ocr_status",
+                        lambda: {"available": False, "backend": "null", "version": None,
+                                 "missing": ["pytesseract"], "reason": "x"})
+    el = Element(id="a:1", type="button", bounds=(0, 0, 10, 10), source="uia",
+                 text="X", confidence=0.9)
+    bridge = _bridge_with(tmp_path, [el])
+
+    out = bridge.perceive(screenshot=False)
+    assert "ocrWarning" not in out["perception"]

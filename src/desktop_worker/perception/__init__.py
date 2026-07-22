@@ -15,6 +15,7 @@ from desktop_worker.perception.backends import (
     OcrBackend,
     data_to_elements,
     get_ocr_backend,
+    ocr_status,
 )
 from desktop_worker.perception.perceiver import Perceiver
 from desktop_worker.perception.uia_backend import (
@@ -30,6 +31,7 @@ __all__ = [
     "NullOcrBackend",
     "data_to_elements",
     "get_ocr_backend",
+    "ocr_status",
     "Perceiver",
     "UiaBackend",
     "NullUiaBackend",
