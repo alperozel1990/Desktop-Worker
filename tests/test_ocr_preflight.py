@@ -7,6 +7,7 @@ So these tests pin that the health is REPORTED, honestly, in every direction.
 """
 
 import builtins
+import os
 import shutil
 
 import pytest
@@ -176,6 +177,40 @@ def test_resolve_tesseract_cmd_returns_none_when_nothing_found(tmp_path, monkeyp
     # well-known dirs point at real env vars but the exe is absent there
     monkeypatch.setenv("ProgramFiles", str(tmp_path / "nope"))
     assert resolve_tesseract_cmd() is None
+
+
+def test_resolve_tesseract_cmd_sanitized_env_derives_from_system_drive(tmp_path, monkeypatch):
+    """Autonom's managed worker spawn passes a sanitized child env containing
+    ONLY SystemRoot, SystemDrive, PATHEXT, COMSPEC, TEMP, TMP, USERPROFILE --
+    no ProgramFiles, no PATH. Resolution must still find the binary by
+    deriving "Program Files" from SystemDrive."""
+    from desktop_worker.perception.backends import resolve_tesseract_cmd
+
+    # SystemDrive is normally a bare drive letter ("C:"); the resolver only
+    # ever Path-joins it, so a tmp_path stand-in exercises the real code path
+    # without touching the real C:\Program Files.
+    sanitized_env = {
+        "SystemRoot": r"C:\Windows",
+        "SystemDrive": str(tmp_path),
+        "PATHEXT": ".COM;.EXE;.BAT",
+        "COMSPEC": r"C:\Windows\System32\cmd.exe",
+        "TEMP": str(tmp_path),
+        "TMP": str(tmp_path),
+        "USERPROFILE": str(tmp_path),
+    }
+    monkeypatch.setattr(os, "environ", sanitized_env)
+    monkeypatch.setattr(shutil, "which", lambda name: None)  # no PATH at all
+
+    tesseract_dir = tmp_path / "Program Files" / "Tesseract-OCR"
+    tesseract_dir.mkdir(parents=True)
+    exe = tesseract_dir / "tesseract.exe"
+    exe.write_bytes(b"")
+
+    assert set(os.environ.keys()) == {
+        "SystemRoot", "SystemDrive", "PATHEXT", "COMSPEC", "TEMP", "TMP", "USERPROFILE",
+    }
+    result = resolve_tesseract_cmd()
+    assert result == str(exe)
 
 
 def test_construction_sets_tesseract_cmd_from_resolution(monkeypatch):

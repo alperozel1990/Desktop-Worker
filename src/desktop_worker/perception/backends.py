@@ -75,12 +75,28 @@ def data_to_elements(data: dict[str, Any], *, min_confidence: float = 0.0) -> li
 
 def _well_known_tesseract_dirs() -> list[Path]:
     """Default install locations the tesseract installer commonly writes to,
-    checked when neither TESSERACT_CMD nor PATH resolve the binary."""
+    checked when neither TESSERACT_CMD nor PATH resolve the binary.
+
+    Prefers the ``ProgramFiles`` / ``ProgramFiles(x86)`` env vars when present,
+    but a child process spawned with a sanitized/minimal environment (e.g.
+    Autonom's managed worker spawn, which passes only SystemRoot, SystemDrive,
+    PATHEXT, COMSPEC, TEMP, TMP, USERPROFILE) carries neither. In that case
+    derive the same default roots from ``SystemDrive``, since "Program Files"
+    lives there on any standard Windows install.
+    """
     dirs: list[Path] = []
-    for var in ("ProgramFiles", "ProgramFiles(x86)"):
+    program_files_vars = ("ProgramFiles", "ProgramFiles(x86)")
+    for var in program_files_vars:
         base = os.environ.get(var)
         if base:
             dirs.append(Path(base) / "Tesseract-OCR")
+
+    if not any(os.environ.get(var) for var in program_files_vars):
+        system_drive = os.environ.get("SystemDrive")
+        if system_drive:
+            for suffix in ("Program Files", "Program Files (x86)"):
+                dirs.append(Path(system_drive) / suffix / "Tesseract-OCR")
+
     local_app_data = os.environ.get("LOCALAPPDATA")
     if local_app_data:
         dirs.append(Path(local_app_data) / "Programs" / "Tesseract-OCR")
