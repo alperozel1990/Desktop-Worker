@@ -292,6 +292,7 @@ class AgentBridge:
             "activeWindow": d.get("activeWindow"),
             "screen": d.get("screen"),
             "screenshotRef": d.get("screenshotRef"),
+            "screenshotError": d.get("screenshotError"),
             "elements": elements,
             # Truncation is reported unconditionally, even when False, so an agent
             # can rely on the field being there rather than inferring from a count.
@@ -416,13 +417,19 @@ class AgentBridge:
         want the payload.
         """
         obs = self.session.observer.observe("mcp", screenshot=True)
-        out: dict[str, Any] = {"ok": True, "path": obs.screenshotRef}
-        if not inline:
-            return out
-
         ref = obs.screenshotRef
         if not ref:
-            out["inlineError"] = "no screenshot reference was produced"
+            # A failed capture must never look like success: ok=False with a
+            # machine-readable reason, not ok=True with a null path.
+            return {
+                "ok": False,
+                "path": None,
+                "error": getattr(obs, "screenshotError", None)
+                or "no screenshot reference was produced",
+            }
+
+        out: dict[str, Any] = {"ok": True, "path": ref}
+        if not inline:
             return out
 
         try:

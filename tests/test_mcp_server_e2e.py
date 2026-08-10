@@ -20,7 +20,7 @@ from desktop_worker.mcp_server.bridge import build_agent_bridge
 from desktop_worker.mcp_server.server import SERVER_NAME, register
 
 
-def _server(tmp_path):
+def _server_and_bridge(tmp_path):
     from mcp.server.fastmcp import FastMCP
 
     # Isolate BOTH artifacts and the emergency-stop sentinel under tmp.
@@ -29,7 +29,11 @@ def _server(tmp_path):
     bridge = build_agent_bridge(real=False, config=cfg)  # Null backends
     server = FastMCP(SERVER_NAME)
     register(server, bridge)
-    return server
+    return server, bridge
+
+
+def _server(tmp_path):
+    return _server_and_bridge(tmp_path)[0]
 
 
 def _val(result):
@@ -83,3 +87,61 @@ def test_emergency_stop_halts_then_clear_resumes_through_server(tmp_path):
     assert halted["ok"] is False and "halt" in (halted["error"] or "").lower()
     assert _call(server, "clear_stop")["stopped"] is False
     assert _call(server, "click", {"x": 1, "y": 1})["ok"] is True
+
+
+def _png_bytes(width=2, height=2):
+    import struct
+    import zlib
+
+    raw = b"".join(b"\x00" + b"\xff\x00\x00" * width for _ in range(height))
+
+    def chunk(tag, data):
+        body = tag + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw))
+            + chunk(b"IEND", b""))
+
+
+class _ShotObserver:
+    """Observer stand-in reporting a real, decodable PNG at a path we control."""
+
+    def __init__(self, ref):
+        self._ref = ref
+
+    def observe(self, agent, screenshot=True):
+        class _Obs:
+            screenshotRef = self._ref
+            screenshotError = None
+
+            def to_dict(_self):
+                return {"screenshotRef": self._ref, "screenshotError": None}
+
+        return _Obs()
+
+
+def test_screenshot_wire_response_keeps_the_path_alongside_the_image(tmp_path):
+    """A successful inline capture used to hand the SDK's Image object back on
+    its own, silently dropping `path`/`ok` off the wire (a real capture with
+    no evidence of its own path — UQC-BL-1's second layer). The tool must now
+    return the metadata as one content block and the image as another."""
+    shot = tmp_path / "shot.png"
+    shot.write_bytes(_png_bytes())
+    server, bridge = _server_and_bridge(tmp_path)
+    bridge.session.observer = _ShotObserver(str(shot))
+
+    result = asyncio.run(server.call_tool("screenshot", {}))
+    content = result[0] if isinstance(result, tuple) else result
+
+    types = [item.type for item in content]
+    assert "text" in types and "image" in types
+
+    meta = json.loads(next(item.text for item in content if item.type == "text"))
+    assert meta["ok"] is True
+    assert meta["path"] == str(shot)
+    assert "image" not in meta  # not duplicated into the text block
+
+    image_block = next(item for item in content if item.type == "image")
+    assert image_block.data  # non-empty base64 image payload

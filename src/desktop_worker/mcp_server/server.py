@@ -49,18 +49,27 @@ def register(server: Any, bridge: AgentBridge) -> Any:
         image_b64 = result.get("image")
         if not image_b64:
             return result
-        # Hand the client a real image block when the SDK offers one; fall back to
-        # the base64 dict otherwise. Imported lazily so register() stays SDK-free
-        # and testable against a fake server.
+        # Hand the client a real image block when the SDK offers one, WITHOUT
+        # dropping `path`/`ok` off the wire: an SDK Image object replacing the
+        # whole result used to discard them, so a caller reading content for a
+        # path (audit/replay, or any client that does not special-case image
+        # blocks) saw nothing even on a fully successful capture. Returning a
+        # list keeps both: the metadata as a JSON text block plus the image.
+        # Imported lazily so register() stays SDK-free and testable against a
+        # fake server.
         try:
             import base64
 
             from mcp.server.fastmcp import Image
 
-            return Image(
-                data=base64.b64decode(image_b64),
-                format=result.get("mediaType", "image/png").split("/")[-1],
-            )
+            metadata = {k: v for k, v in result.items() if k != "image"}
+            return [
+                metadata,
+                Image(
+                    data=base64.b64decode(image_b64),
+                    format=result.get("mediaType", "image/png").split("/")[-1],
+                ),
+            ]
         except Exception:
             return result
 

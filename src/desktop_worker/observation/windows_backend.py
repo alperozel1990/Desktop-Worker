@@ -30,6 +30,10 @@ class WindowsDesktopBackend:
         import ctypes  # noqa: F401
 
         self._ctypes = ctypes
+        # Machine-readable reason the last capture_screenshot() returned None.
+        # A screenshot failure must never look identical to a screenshot that
+        # was simply never requested — see capture_screenshot below.
+        self.last_screenshot_error: Optional[str] = None
 
     # --- screen --------------------------------------------------------
     def screen(self) -> Screen:
@@ -83,17 +87,34 @@ class WindowsDesktopBackend:
         return tuple(titles)
 
     def capture_screenshot(self, dest: Path) -> Optional[str]:
+        """Save a screenshot to ``dest`` and return the path, or None on failure.
+
+        A capture failure (missing dependency or an error during the grab) is
+        never allowed to look like "no screenshot was requested": the reason
+        is always recorded on ``last_screenshot_error`` before returning None,
+        so callers (Observer, AgentBridge) can surface it instead of quietly
+        reporting success with a null path.
+        """
+        self.last_screenshot_error = None
         try:
             import mss  # type: ignore
             import mss.tools  # type: ignore
-        except Exception:
+        except Exception as exc:
+            self.last_screenshot_error = (
+                f"missing_dependency: {type(exc).__name__}: {exc} "
+                "(install the desktop-worker[windows] extra)"
+            )
             return None
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        with mss.mss() as sct:
-            monitor = sct.monitors[1]  # primary monitor (single-monitor MVP)
-            img = sct.grab(monitor)
-            mss.tools.to_png(img.rgb, img.size, output=str(dest))
-        return str(dest)
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with mss.mss() as sct:
+                monitor = sct.monitors[1]  # primary monitor (single-monitor MVP)
+                img = sct.grab(monitor)
+                mss.tools.to_png(img.rgb, img.size, output=str(dest))
+            return str(dest)
+        except Exception as exc:
+            self.last_screenshot_error = f"capture_failed: {type(exc).__name__}: {exc}"
+            return None
 
     # --- helpers -------------------------------------------------------
     def _window_title(self, hwnd) -> str:

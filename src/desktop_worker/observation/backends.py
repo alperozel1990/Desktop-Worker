@@ -19,17 +19,30 @@ from desktop_worker.schema.observations import ActiveWindow, Cursor, Screen
 class DesktopBackend(Protocol):
     """Capabilities required to observe the desktop."""
 
+    #: Machine-readable reason the most recent ``capture_screenshot`` call
+    #: returned ``None``, or ``None`` if it has not failed. A backend must set
+    #: this whenever it returns ``None`` so a caller never has to infer "why"
+    #: from silence — see ``Observer.observe`` and ``AgentBridge.screenshot``.
+    last_screenshot_error: Optional[str]
+
     def screen(self) -> Screen: ...
     def cursor(self) -> Cursor: ...
     def active_window(self) -> Optional[ActiveWindow]: ...
     def visible_windows(self) -> tuple[str, ...]: ...
     def capture_screenshot(self, dest: Path) -> Optional[str]:
-        """Save a screenshot to ``dest`` and return the path, or None."""
+        """Save a screenshot to ``dest`` and return the path, or None on failure.
+
+        On ``None``, ``last_screenshot_error`` carries the machine-readable
+        reason (e.g. ``"missing_dependency: ..."`` or ``"capture_failed: ..."``).
+        """
         ...
 
 
 class NullDesktopBackend:
     """Deterministic, dependency-free backend for tests and dry runs."""
+
+    #: Always None: the Null backend's capture never fails.
+    last_screenshot_error: Optional[str] = None
 
     def __init__(
         self,

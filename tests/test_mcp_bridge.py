@@ -293,15 +293,17 @@ def _png_bytes(width=8, height=6):
 class _ShotObserver:
     """Observer stand-in that reports a screenshot at a path we control."""
 
-    def __init__(self, ref):
+    def __init__(self, ref, error=None):
         self._ref = ref
+        self._error = error
 
     def observe(self, agent, screenshot=True):
         class _Obs:
             screenshotRef = self._ref
+            screenshotError = self._error
 
             def to_dict(_self):
-                return {"screenshotRef": self._ref}
+                return {"screenshotRef": self._ref, "screenshotError": self._error}
 
         return _Obs()
 
@@ -334,6 +336,35 @@ def test_screenshot_inline_false_keeps_the_old_path_only_shape(tmp_path):
     out = bridge.screenshot(inline=False)
     assert out["path"] == str(shot)
     assert "image" not in out
+
+
+def test_screenshot_reports_ok_false_with_a_reason_when_capture_fails(tmp_path):
+    """UQC-BL-1: a failed capture must never look like success.
+
+    A missing screenshotRef used to come back as ok=True/path=None with no
+    way to tell "capture failed" from "not requested" apart. It must now be
+    ok=False with the backend's machine-readable reason, for both inline
+    values (the caller never gets far enough to hit the inline-encode step).
+    """
+    bridge, session = _bridge(tmp_path)
+    session.observer = _ShotObserver(None, error="missing_dependency: ModuleNotFoundError: mss")
+
+    for inline in (True, False):
+        out = bridge.screenshot(inline=inline)
+        assert out["ok"] is False
+        assert out["path"] is None
+        assert out["error"] == "missing_dependency: ModuleNotFoundError: mss"
+        assert "image" not in out
+
+
+def test_screenshot_falls_back_to_a_generic_reason_when_backend_gives_none(tmp_path):
+    bridge, session = _bridge(tmp_path)
+    session.observer = _ShotObserver(None)
+
+    out = bridge.screenshot()
+    assert out["ok"] is False
+    assert out["path"] is None
+    assert out["error"]
 
 
 def test_screenshot_reports_why_it_could_not_inline_a_placeholder(tmp_path):

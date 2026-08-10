@@ -78,6 +78,11 @@ class Observation:
     cursor: Cursor
     activeWindow: Optional[ActiveWindow] = None
     screenshotRef: Optional[str] = None
+    # Machine-readable reason a requested screenshot has no screenshotRef (e.g.
+    # "missing_dependency: ..." or "capture_failed: ..."). None when a screenshot
+    # was not requested or was captured successfully — never left to a bare
+    # None-with-no-explanation on failure.
+    screenshotError: Optional[str] = None
     timestamp: str = field(default_factory=utc_now_iso)
     # Visible windows (title list) — single-monitor MVP keeps this simple.
     windows: tuple[str, ...] = ()
@@ -92,6 +97,7 @@ class Observation:
             "cursor": self.cursor.to_dict(),
             "activeWindow": self.activeWindow.to_dict() if self.activeWindow else None,
             "screenshotRef": self.screenshotRef,
+            "screenshotError": self.screenshotError,
             "windows": list(self.windows),
             "elements": [e.to_dict() for e in self.elements],
         }

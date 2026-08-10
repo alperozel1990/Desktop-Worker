@@ -34,9 +34,18 @@ class Observer:
         n = self._counter
 
         screenshot_ref: Optional[str] = None
+        screenshot_error: Optional[str] = None
         if screenshot and self.screenshots_dir is not None:
             dest = self.screenshots_dir / f"{label}-{n:04d}.png"
             screenshot_ref = self.backend.capture_screenshot(dest)
+            if screenshot_ref is None:
+                # A requested screenshot that produced no path is a failure, not
+                # a no-op: carry the backend's reason so it is never silently
+                # indistinguishable from "screenshot not requested".
+                screenshot_error = (
+                    getattr(self.backend, "last_screenshot_error", None)
+                    or "capture_screenshot returned no path"
+                )
 
         obs = Observation(
             screen=self.backend.screen(),
@@ -44,6 +53,7 @@ class Observer:
             activeWindow=self.backend.active_window(),
             windows=self.backend.visible_windows(),
             screenshotRef=screenshot_ref,
+            screenshotError=screenshot_error,
         )
 
         if self.observations_dir is not None:
