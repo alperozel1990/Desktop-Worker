@@ -7,6 +7,7 @@ So these tests pin that the health is REPORTED, honestly, in every direction.
 """
 
 import builtins
+import shutil
 
 import pytest
 
@@ -118,3 +119,93 @@ def test_detect_returns_empty_when_binary_vanishes_mid_session(tmp_path, monkeyp
 
     monkeypatch.setattr(pytesseract, "image_to_data", boom)
     assert backend.detect(img) == []  # degraded, not crashed
+
+
+# --- regression: resolve the binary without relying on inherited PATH -------
+#
+# A child process spawned with a minimal/sanitized environment (e.g. the MCP
+# server under a headless launcher) may have NO PATH at all, so
+# pytesseract.get_tesseract_version() -- which shells out to a bare
+# "tesseract" -- fails even though the binary is installed. These tests pin
+# the resolution precedence: TESSERACT_CMD env var > shutil.which > well-known
+# install dirs > None (fail closed).
+
+
+def _clear_tesseract_env(monkeypatch):
+    for var in ("TESSERACT_CMD", "ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_resolve_tesseract_cmd_env_var_wins(monkeypatch):
+    from desktop_worker.perception.backends import resolve_tesseract_cmd
+
+    _clear_tesseract_env(monkeypatch)
+    monkeypatch.setenv("TESSERACT_CMD", r"C:\custom\tesseract.exe")
+    # even if PATH would resolve something else, the explicit override wins
+    monkeypatch.setattr(shutil, "which", lambda name: r"C:\path\tesseract.exe")
+    assert resolve_tesseract_cmd() == r"C:\custom\tesseract.exe"
+
+
+def test_resolve_tesseract_cmd_falls_back_to_which(monkeypatch):
+    from desktop_worker.perception.backends import resolve_tesseract_cmd
+
+    _clear_tesseract_env(monkeypatch)
+    monkeypatch.setattr(shutil, "which", lambda name: r"C:\path\tesseract.exe")
+    assert resolve_tesseract_cmd() == r"C:\path\tesseract.exe"
+
+
+def test_resolve_tesseract_cmd_falls_back_to_well_known_dir(tmp_path, monkeypatch):
+    from desktop_worker.perception.backends import resolve_tesseract_cmd
+
+    _clear_tesseract_env(monkeypatch)
+    monkeypatch.setattr(shutil, "which", lambda name: None)  # not on PATH
+    program_files = tmp_path / "Program Files"
+    tesseract_dir = program_files / "Tesseract-OCR"
+    tesseract_dir.mkdir(parents=True)
+    exe = tesseract_dir / "tesseract.exe"
+    exe.write_bytes(b"")
+    monkeypatch.setenv("ProgramFiles", str(program_files))
+    assert resolve_tesseract_cmd() == str(exe)
+
+
+def test_resolve_tesseract_cmd_returns_none_when_nothing_found(tmp_path, monkeypatch):
+    from desktop_worker.perception.backends import resolve_tesseract_cmd
+
+    _clear_tesseract_env(monkeypatch)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    # well-known dirs point at real env vars but the exe is absent there
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "nope"))
+    assert resolve_tesseract_cmd() is None
+
+
+def test_construction_sets_tesseract_cmd_from_resolution(monkeypatch):
+    """The constructor must set pytesseract.pytesseract.tesseract_cmd from the
+    resolved path BEFORE probing the version, so the probe itself is PATH-free."""
+    pytest.importorskip("pytesseract")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    _clear_tesseract_env(monkeypatch)
+    monkeypatch.setenv("TESSERACT_CMD", r"C:\resolved\tesseract.exe")
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    TesseractOcrBackend()
+    assert pytesseract.pytesseract.tesseract_cmd == r"C:\resolved\tesseract.exe"
+
+
+def test_construction_falls_back_to_null_when_resolution_finds_nothing(monkeypatch):
+    """Genuinely absent binary must still degrade to Null -- resolution failing
+    must not change the existing fail-closed factory behaviour."""
+    pytest.importorskip("pytesseract")
+    import pytesseract
+
+    from desktop_worker.perception.backends import NullOcrBackend, get_ocr_backend
+
+    _clear_tesseract_env(monkeypatch)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+
+    def boom(*a, **k):
+        raise pytesseract.TesseractNotFoundError()
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", boom)
+    assert isinstance(get_ocr_backend(True), NullOcrBackend)

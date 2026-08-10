@@ -8,6 +8,8 @@ the parsing logic is fully unit-testable without Tesseract installed. The real
 
 from __future__ import annotations
 
+import os
+import shutil
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -71,6 +73,53 @@ def data_to_elements(data: dict[str, Any], *, min_confidence: float = 0.0) -> li
     return elements
 
 
+def _well_known_tesseract_dirs() -> list[Path]:
+    """Default install locations the tesseract installer commonly writes to,
+    checked when neither TESSERACT_CMD nor PATH resolve the binary."""
+    dirs: list[Path] = []
+    for var in ("ProgramFiles", "ProgramFiles(x86)"):
+        base = os.environ.get(var)
+        if base:
+            dirs.append(Path(base) / "Tesseract-OCR")
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        dirs.append(Path(local_app_data) / "Programs" / "Tesseract-OCR")
+    return dirs
+
+
+def resolve_tesseract_cmd() -> str | None:
+    """Resolve the tesseract binary path without relying on an inherited PATH.
+
+    A child process spawned with a minimal/sanitized environment (e.g. the MCP
+    server under a headless launcher) may have NO PATH at all, so
+    ``pytesseract.get_tesseract_version()`` — which shells out to a bare
+    ``tesseract`` — fails even though the binary is installed. Resolve it
+    ourselves first, in order of trust:
+
+    1. ``TESSERACT_CMD`` env var, if set (explicit operator override; used
+       verbatim so a bad value fails loudly rather than being silently
+       skipped).
+    2. ``shutil.which('tesseract')`` (works whenever PATH IS present).
+    3. Well-known default install directories the Windows installer uses.
+
+    Returns ``None`` when nothing is found, so the caller can fail closed.
+    """
+    explicit = os.environ.get("TESSERACT_CMD")
+    if explicit:
+        return explicit
+
+    found = shutil.which("tesseract")
+    if found:
+        return found
+
+    for d in _well_known_tesseract_dirs():
+        candidate = d / "tesseract.exe"
+        if candidate.is_file():
+            return str(candidate)
+
+    return None
+
+
 class TesseractOcrBackend:
     """Real OCR via pytesseract + Pillow. Construct only when both are present.
 
@@ -84,6 +133,10 @@ class TesseractOcrBackend:
     def __init__(self, *, min_confidence: float = 0.3) -> None:
         import pytesseract
         from PIL import Image  # noqa: F401
+
+        cmd = resolve_tesseract_cmd()
+        if cmd:
+            pytesseract.pytesseract.tesseract_cmd = cmd
 
         # Fail construction (not detect) when the binary is missing, so the factory
         # can fall back to Null and perception keeps working, just thinner.
@@ -146,6 +199,9 @@ def ocr_status() -> dict[str, Any]:
         try:
             import pytesseract
 
+            cmd = resolve_tesseract_cmd()
+            if cmd:
+                pytesseract.pytesseract.tesseract_cmd = cmd
             version = str(pytesseract.get_tesseract_version())
         except Exception:
             # The binding is installed but the tesseract EXE is not on PATH — the
