@@ -213,6 +213,22 @@ def test_resolve_tesseract_cmd_sanitized_env_derives_from_system_drive(tmp_path,
     assert result == str(exe)
 
 
+def test_well_known_tesseract_dirs_absolute_with_bare_system_drive(monkeypatch):
+    """SystemDrive is normally a BARE drive letter with no trailing slash
+    ("C:", not "C:\\"). Path("C:") / "Program Files" is drive-RELATIVE on
+    Windows pathlib -- it silently resolves against that drive's current
+    working directory instead of its root, so .is_file() lookups miss the
+    real install even when it exists. Every derived root must be absolute."""
+    from desktop_worker.perception.backends import _well_known_tesseract_dirs
+
+    _clear_tesseract_env(monkeypatch)
+    monkeypatch.setenv("SystemDrive", "C:")
+
+    dirs = _well_known_tesseract_dirs()
+    assert dirs, "expected at least one candidate dir derived from SystemDrive"
+    assert all(d.is_absolute() for d in dirs)
+
+
 def test_construction_sets_tesseract_cmd_from_resolution(monkeypatch):
     """The constructor must set pytesseract.pytesseract.tesseract_cmd from the
     resolved path BEFORE probing the version, so the probe itself is PATH-free."""

@@ -94,8 +94,12 @@ def _well_known_tesseract_dirs() -> list[Path]:
     if not any(os.environ.get(var) for var in program_files_vars):
         system_drive = os.environ.get("SystemDrive")
         if system_drive:
+            # Path(system_drive) alone (e.g. "C:") is drive-RELATIVE on
+            # Windows pathlib -- it resolves against that drive's CWD, not
+            # its root. Appending os.sep forces an absolute anchor ("C:\\").
+            drive_root = Path(system_drive + os.sep)
             for suffix in ("Program Files", "Program Files (x86)"):
-                dirs.append(Path(system_drive) / suffix / "Tesseract-OCR")
+                dirs.append(drive_root / suffix / "Tesseract-OCR")
 
     local_app_data = os.environ.get("LOCALAPPDATA")
     if local_app_data:
