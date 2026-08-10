@@ -769,3 +769,241 @@ def test_tesseract_tiled_pass_runs_on_crop_path_when_crop_merge_is_still_sparse(
     elements = backend.detect_with_crop(img_path, window_bounds=(0, 0, 303, 204))
     words = [e.text for e in elements if e.source == "ocr"]
     assert "TileOnly" in words
+
+
+# --- fixed-threshold grayscale OCR pass (UQC-OCR-thresh) --------------------
+#
+# Measured live on the DND home screenshot: Otsu's per-image auto-threshold
+# (what plain/dual-polarity/tiled OCR all rely on) lumps a mid-luminance
+# solid UI block (a blue "New Run" button) together with its own white text
+# and erases it -- the full pass, dual-polarity pass, PSM 11, and the tiled
+# pass ALL missed "New Run" and "Settings". A simple grayscale binarization
+# at ANY fixed threshold in ~100..200 reads those buttons cleanly, because it
+# does not adapt (wrongly) to the rest of the image. TesseractOcrBackend now
+# runs a fixed two-level threshold pass, gated by the existing sparse gate,
+# BEFORE the (expensive) tile pass -- the tile pass remains the last resort.
+
+
+def test_threshold_pass_default_levels_are_120_and_170():
+    from desktop_worker.perception.backends import DEFAULT_THRESHOLD_LEVELS
+
+    assert DEFAULT_THRESHOLD_LEVELS == (120, 170)
+
+
+def test_threshold_pass_runs_before_tile_pass_and_satisfies_sparse_gate(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    # sparse gate counts word+line elements together (2 for a single word) --
+    # sparse_threshold=3 keeps a single-word full pass (2 < 3) sparse, and the
+    # post-threshold-merge count (4, two words) satisfies it so tile is skipped.
+    backend = TesseractOcrBackend(sparse_threshold=3, tile_grid=(3, 2), tile_overlap=0.1)
+
+    from PIL import Image
+
+    img_path = tmp_path / "shot.png"
+    Image.new("RGB", (200, 150), (255, 255, 255)).save(img_path)
+
+    empty = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+    sparse_full = {
+        "text": ["Lone"], "conf": ["90"],
+        "left": [0], "top": [0], "width": [20], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+
+    def fake_dual_polarity(img):
+        return dict(sparse_full)
+
+    tile_calls = []
+
+    def fake_tiled_data(self, img):
+        tile_calls.append(img.size)
+        return dict(empty)
+
+    threshold_data = {
+        "text": ["New Run"], "conf": ["92"],
+        "left": [30], "top": [30], "width": [60], "height": [15],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+
+    def fake_binarized_data(img, level):
+        # Both threshold levels find the button text -- returning it at the
+        # FIRST level checked is enough to satisfy the sparse gate before the
+        # tile pass would ever run.
+        return dict(threshold_data)
+
+    monkeypatch.setattr(TesseractOcrBackend, "_dual_polarity_data", staticmethod(fake_dual_polarity))
+    monkeypatch.setattr(TesseractOcrBackend, "_tiled_data", fake_tiled_data)
+    monkeypatch.setattr(TesseractOcrBackend, "_binarized_data", staticmethod(fake_binarized_data))
+
+    elements = backend.detect(img_path)
+    words = [e.text for e in elements if e.source == "ocr"]
+    assert "Lone" in words
+    assert "New Run" in words
+    assert tile_calls == []  # threshold pass alone satisfied the gate -> tile pass never ran
+
+
+def test_threshold_pass_skipped_when_full_pass_is_dense(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend(sparse_threshold=3)
+
+    from PIL import Image
+
+    img_path = tmp_path / "shot.png"
+    Image.new("RGB", (200, 150), (255, 255, 255)).save(img_path)
+
+    dense_data = {
+        "text": ["One", "Two", "Three"], "conf": ["90", "90", "90"],
+        "left": [0, 40, 80], "top": [0, 0, 0], "width": [30, 30, 30], "height": [10, 10, 10],
+        "block_num": [1, 1, 1], "par_num": [1, 1, 1], "line_num": [1, 1, 1],
+    }
+
+    threshold_calls = []
+
+    def fake_binarized_data(img, level):
+        threshold_calls.append(level)
+        return {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+
+    monkeypatch.setattr(TesseractOcrBackend, "_dual_polarity_data", staticmethod(lambda img: dict(dense_data)))
+    monkeypatch.setattr(TesseractOcrBackend, "_binarized_data", staticmethod(fake_binarized_data))
+
+    elements = backend.detect(img_path)
+    words = [e.text for e in elements if e.source == "ocr"]
+    assert sorted(words) == ["One", "Three", "Two"]
+    assert threshold_calls == []  # dense full pass -> threshold pass never called
+
+
+def test_threshold_pass_falls_back_to_tile_pass_when_still_sparse(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend(sparse_threshold=5, tile_grid=(3, 2), tile_overlap=0.1)
+
+    from PIL import Image
+
+    img_path = tmp_path / "shot.png"
+    Image.new("RGB", (200, 150), (255, 255, 255)).save(img_path)
+
+    empty = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+
+    monkeypatch.setattr(TesseractOcrBackend, "_dual_polarity_data", staticmethod(lambda img: dict(empty)))
+    # Threshold pass also finds nothing -> still sparse -> tile pass must fire.
+    monkeypatch.setattr(TesseractOcrBackend, "_binarized_data", staticmethod(lambda img, level: dict(empty)))
+
+    tile_data = {
+        "text": ["FromTile"], "conf": ["90"],
+        "left": [1], "top": [1], "width": [30], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    monkeypatch.setattr(TesseractOcrBackend, "_tiled_data", lambda self, img: dict(tile_data))
+
+    elements = backend.detect(img_path)
+    words = [e.text for e in elements if e.source == "ocr"]
+    assert words == ["FromTile"]  # last-resort tile fallback recovered it
+
+
+def test_threshold_pass_data_merges_both_levels_deduping_overlap(monkeypatch):
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    backend = object.__new__(TesseractOcrBackend)
+    backend.threshold_levels = (120, 170)
+
+    data_120 = {
+        "text": ["New Run"], "conf": ["80"],
+        "left": [10], "top": [10], "width": [60], "height": [15],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    data_170 = {
+        "text": ["New Run"], "conf": ["94"],  # same word/spot, higher confidence
+        "left": [11], "top": [10], "width": [60], "height": [15],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    calls = []
+
+    def fake_binarized(img, level):
+        calls.append(level)
+        return data_120 if level == 120 else data_170
+
+    monkeypatch.setattr(TesseractOcrBackend, "_binarized_data", staticmethod(fake_binarized))
+    merged = backend._threshold_pass_data(object())
+
+    assert calls == [120, 170]
+    words = [e for e in data_to_elements(merged) if e.source == "ocr"]
+    assert len(words) == 1  # duplicate across the two levels collapsed
+    assert words[0].confidence == 0.94  # higher-confidence level wins
+
+
+def test_binarized_data_applies_grayscale_threshold_point(monkeypatch):
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    img = Image.new("RGB", (2, 1))
+    img.putpixel((0, 0), (100, 100, 100))  # below level 120 -> should binarize to 0
+    img.putpixel((1, 0), (200, 200, 200))  # above level 120 -> should binarize to 255
+
+    seen = {}
+
+    def fake_image_to_data(binarized, output_type=None):
+        seen["pixels"] = [binarized.getpixel((x, 0)) for x in range(binarized.width)]
+        return {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+
+    import pytesseract
+
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_image_to_data)
+
+    TesseractOcrBackend._binarized_data(img, 120)
+    assert seen["pixels"] == [0, 255]
+
+
+def _dnd_evidence_png_path():
+    return Path(
+        r"C:\dev\CLAUDE_FULL_AUTONOM\automation\outbox\uqc_calibration\dnd\screenshots"
+        r"\0004_dnd-frozen-baseline-s1-home-region-nonempty_post_evidence.png"
+    )
+
+
+def test_real_detect_finds_new_run_and_settings_on_dnd_home_screenshot():
+    """Real-file regression (UQC-OCR-thresh): the measured failure case.
+
+    On this exact screenshot, plain OCR, dual-polarity, PSM 11, and the tiled
+    pass all previously missed the white-on-blue "New Run" / "Settings"
+    buttons because Otsu's auto-threshold lumped the blue button fill together
+    with its own white text. The fixed-threshold pass added here reads both
+    words. Skips cleanly (not a failure) when Tesseract or the evidence PNG
+    is unavailable in the current environment.
+    """
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+
+    png_path = _dnd_evidence_png_path()
+    if not png_path.exists():
+        pytest.skip(f"evidence PNG not found at {png_path}")
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    try:
+        backend = TesseractOcrBackend()
+    except Exception as exc:
+        pytest.skip(f"tesseract binary unavailable: {exc}")
+
+    elements = backend.detect(png_path)
+    texts = [e.text for e in elements if e.source in ("ocr", "ocr-line")]
+
+    assert any("New Run" in t for t in texts), f"'New Run' not found; got: {sorted(set(texts))}"
+    assert any("Settings" in t for t in texts), f"'Settings' not found; got: {sorted(set(texts))}"

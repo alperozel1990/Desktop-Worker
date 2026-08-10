@@ -285,6 +285,7 @@ def _offset_ocr_data(data: dict[str, Any], dx: int, dy: int) -> dict[str, Any]:
 DEFAULT_SPARSE_THRESHOLD = 20
 DEFAULT_TILE_GRID: tuple[int, int] = (3, 2)
 DEFAULT_TILE_OVERLAP = 0.1
+DEFAULT_THRESHOLD_LEVELS: tuple[int, ...] = (120, 170)
 
 
 def _tile_boxes(
@@ -411,6 +412,7 @@ class TesseractOcrBackend:
         sparse_threshold: int = DEFAULT_SPARSE_THRESHOLD,
         tile_grid: tuple[int, int] = DEFAULT_TILE_GRID,
         tile_overlap: float = DEFAULT_TILE_OVERLAP,
+        threshold_levels: tuple[int, ...] = DEFAULT_THRESHOLD_LEVELS,
     ) -> None:
         import pytesseract
         from PIL import Image  # noqa: F401
@@ -426,6 +428,7 @@ class TesseractOcrBackend:
         self.sparse_threshold = sparse_threshold
         self.tile_grid = tile_grid
         self.tile_overlap = tile_overlap
+        self.threshold_levels = threshold_levels
 
     @staticmethod
     def _dual_polarity_data(img: Any) -> dict[str, Any]:
@@ -484,18 +487,80 @@ class TesseractOcrBackend:
             merged_tiles = merge_ocr_passes(merged_tiles, _offset_ocr_data(tile_data, left, top))
         return merged_tiles
 
-    def _maybe_add_tile_pass(self, img: Any, merged: dict[str, Any]) -> dict[str, Any]:
-        """Add the tiled OCR pass to `merged` ONLY when `merged` is sparse.
+    @staticmethod
+    def _binarized_data(img: Any, level: int) -> dict[str, Any]:
+        """OCR a single fixed-threshold binarization of `img` at `level` (0..255).
 
-        Gates the (expensive: grid-size many dual-polarity calls) tile pass
-        behind `sparse_threshold` OCR words -- a dense screen already reads
-        fine at full-image scale, so tiling it would just burn OCR calls for
-        no new elements. Fails closed: any error running the tile pass
-        leaves `merged` untouched rather than raising.
+        Otsu's per-image auto-threshold (what plain/dual-polarity OCR relies
+        on) picks ONE split point for the whole image; a mid-luminance solid
+        UI block with white text on it (e.g. a blue "New Run" button) often
+        lands on the wrong side of that split and gets lumped in with its own
+        text, erasing it -- proven live on the DND home screen, where the
+        full pass, dual-polarity pass, PSM 11, and the tiled pass all missed
+        "New Run" and "Settings". A simple grayscale binarization at ANY
+        fixed level in roughly 100..200 reads those buttons cleanly, because
+        the fixed level does not adapt (wrongly) to the rest of the image the
+        way Otsu does. This is a generic fix (any mid-luminance block, not
+        this specific screenshot) precisely because no single Otsu split can
+        be right for every block color on a screen -- a fixed level sidesteps
+        the adaptivity that causes the failure.
+        """
+        import pytesseract
+
+        gray = img.convert("L")
+        binarized = gray.point(lambda p, _level=level: 255 if p > _level else 0)
+        return pytesseract.image_to_data(binarized, output_type=pytesseract.Output.DICT)
+
+    def _threshold_pass_data(self, img: Any) -> dict[str, Any]:
+        """Run `_binarized_data` at each of `self.threshold_levels`, merged.
+
+        Two fixed levels (default 120 and 170) bracket the "any threshold in
+        100..200 works" band measured live, so between them they cover
+        mid-luminance blocks of either a slightly darker or slightly lighter
+        shade without needing per-image calibration. A level whose OCR call
+        raises is skipped -- one bad binarization must never blank out the
+        whole pass.
+        """
+        merged: dict[str, Any] = {
+            "text": [], "conf": [], "left": [], "top": [], "width": [], "height": [],
+            "block_num": [], "par_num": [], "line_num": [],
+        }
+        for level in self.threshold_levels:
+            try:
+                data = self._binarized_data(img, level)
+            except Exception:
+                continue
+            merged = merge_ocr_passes(merged, data)
+        return merged
+
+    def _maybe_add_sparse_passes(self, img: Any, merged: dict[str, Any]) -> dict[str, Any]:
+        """Recover a sparse `merged` result with cheaper-first fallback passes.
+
+        Reuses the `sparse_threshold` gate: a dense screen already reads fine
+        at full-image scale, so neither fallback pass runs and no extra OCR
+        calls are burned. When sparse, tries the fixed-threshold pass FIRST
+        (see `_threshold_pass_data`) -- it is cheap (2 `image_to_data` calls,
+        vs the tile pass's grid-size many dual-polarity calls) and is exactly
+        what recovers a mid-luminance UI block Otsu lumped away. Only if the
+        result is STILL sparse after that does the expensive tiled pass run,
+        as the last-resort fallback. Fails closed at every step: any error
+        running either pass leaves `merged` (or the threshold-enriched
+        `merged`) untouched rather than raising.
         """
         word_count = len(data_to_elements(merged, min_confidence=self.min_confidence))
         if word_count >= self.sparse_threshold:
             return merged
+
+        try:
+            threshold_data = self._threshold_pass_data(img)
+            merged = merge_ocr_passes(merged, threshold_data)
+        except Exception:
+            pass
+
+        word_count = len(data_to_elements(merged, min_confidence=self.min_confidence))
+        if word_count >= self.sparse_threshold:
+            return merged
+
         try:
             tile_data = self._tiled_data(img)
         except Exception:
@@ -504,7 +569,8 @@ class TesseractOcrBackend:
 
     def detect(self, image_path: Path) -> list[Element]:
         """Run the dual-polarity full-screenshot OCR pass (see `_dual_polarity_data`),
-        then the tiled pass (see `_maybe_add_tile_pass`) when that pass is sparse."""
+        then the sparse fallback passes -- threshold, then tile (see
+        `_maybe_add_sparse_passes`) -- when that pass is sparse."""
         import pytesseract
         from PIL import Image
 
@@ -514,7 +580,7 @@ class TesseractOcrBackend:
         try:
             with Image.open(image_path) as img:
                 merged = self._dual_polarity_data(img)
-                merged = self._maybe_add_tile_pass(img, merged)
+                merged = self._maybe_add_sparse_passes(img, merged)
         except pytesseract.TesseractNotFoundError:
             # The binary disappeared after construction (PATH changed mid-session).
             # A missing OCR binary must never crash perceive — degrade to no OCR.
@@ -542,11 +608,12 @@ class TesseractOcrBackend:
         cropping or OCR-ing the crop, is swallowed and this degrades to the
         plain `detect()` result -- a crop-pass failure must never break perceive.
 
-        The tiled pass (see `_maybe_add_tile_pass`) also applies here, gated
-        on the result AFTER the crop merge: when the active window IS the
-        full screen (a fullscreen game/app), the crop pass covers the same
-        pixels as the full-image pass and adds nothing, so the tiled pass is
-        exactly what recovers a sparse fullscreen UI's missed text.
+        The sparse fallback passes (see `_maybe_add_sparse_passes`) also apply
+        here, gated on the result AFTER the crop merge: when the active
+        window IS the full screen (a fullscreen game/app), the crop pass
+        covers the same pixels as the full-image pass and adds nothing, so
+        the threshold/tile passes are exactly what recovers a sparse
+        fullscreen UI's missed text.
         """
         import pytesseract
         from PIL import Image
@@ -567,7 +634,7 @@ class TesseractOcrBackend:
                         merged = merge_ocr_passes(merged, _offset_ocr_data(data_crop, left, top))
                     except Exception:
                         pass
-                merged = self._maybe_add_tile_pass(img, merged)
+                merged = self._maybe_add_sparse_passes(img, merged)
         except pytesseract.TesseractNotFoundError:
             return []
         return data_to_elements(merged, min_confidence=self.min_confidence)
