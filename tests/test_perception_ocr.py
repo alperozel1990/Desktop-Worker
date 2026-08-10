@@ -1,5 +1,8 @@
 """DW-PERCEPTION-OCR — structured OCR elements + observation enrichment (req §7)."""
 
+import dataclasses
+from pathlib import Path
+
 import pytest
 
 from desktop_worker.observation.backends import NullDesktopBackend
@@ -12,7 +15,7 @@ from desktop_worker.perception import (
     get_ocr_backend,
 )
 from desktop_worker.perception.backends import merge_ocr_passes
-from desktop_worker.schema.observations import Cursor, Element, Observation, Screen
+from desktop_worker.schema.observations import ActiveWindow, Cursor, Element, Observation, Screen
 
 
 def _perceiver(ocr):
@@ -38,6 +41,12 @@ def _obs_with_image(tmp_path):
     img.write_bytes(b"")  # exists with an image suffix; FakeOcr ignores content
     return Observation(screen=Screen(800, 600), cursor=Cursor(0, 0),
                        screenshotRef=str(img))
+
+
+def _with_active_window(obs, *, bounds):
+    return dataclasses.replace(
+        obs, activeWindow=ActiveWindow(title="t", process="p", bounds=bounds)
+    )
 
 
 def test_perceiver_enriches_observation_with_elements(tmp_path):
@@ -363,3 +372,166 @@ def test_detect_single_polarity_behavior_is_unchanged(tmp_path, monkeypatch):
     assert [e.text for e in words] == ["Only"]
     assert words[0].confidence == 0.77
     assert words[0].bounds == (1, 1, 31, 11)
+
+
+# --- active-window crop OCR pass (UQC-OCR-cropwin) --------------------------
+#
+# Tesseract's page segmentation is tuned for page-scale layouts, not a small
+# window on a huge screen: proven live on a 1920x1200 evidence screenshot
+# where the full-screen pass found NONE of a small window's text, while the
+# SAME image cropped to that window's bounds read every line verbatim.
+# TesseractOcrBackend.detect_with_crop ADDITIONALLY OCRs a crop of the known
+# activeWindow bounds and merges it into the full-screen dual-polarity pass.
+
+
+def test_detect_with_crop_merges_full_and_crop_passes_with_screen_offset(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend()
+
+    full_data = {
+        "text": ["FullScreenWord"], "conf": ["90"],
+        "left": [5], "top": [5], "width": [40], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    # Coordinates here are RELATIVE TO THE CROP -- the word sits 3px from the
+    # crop's own top-left, which is itself offset from the full image.
+    crop_data = {
+        "text": ["SmallWindowWord"], "conf": ["85"],
+        "left": [3], "top": [3], "width": [50], "height": [12],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+
+    def fake_image_to_data(img, output_type=None):
+        # The full-screen passes (normal + inverted) run on the 200x200
+        # image; the crop pass runs on the smaller cropped region.
+        if img.size == (200, 200):
+            return full_data
+        return crop_data
+
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_image_to_data)
+
+    from PIL import Image
+
+    img_path = tmp_path / "shot.png"
+    Image.new("RGB", (200, 200), (255, 255, 255)).save(img_path)
+
+    # Window bounds in screen/image coordinates; padded (8px) + clamped crop
+    # box starts at (100-8, 100-8) = (92, 92).
+    elements = backend.detect_with_crop(img_path, window_bounds=(100, 100, 150, 130))
+    words = {e.text: e for e in elements if e.source == "ocr"}
+
+    assert "FullScreenWord" in words
+    assert "SmallWindowWord" in words
+    # Crop-pass bounds are offset back to full-image/screen coordinates:
+    # crop origin (92, 92) + local (3, 3) = (95, 95).
+    crop_word = words["SmallWindowWord"]
+    assert crop_word.bounds == (95, 95, 145, 107)
+
+
+def test_detect_with_crop_skips_degenerate_bounds_fail_closed(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend()
+
+    full_data = {
+        "text": ["FullScreenWord"], "conf": ["90"],
+        "left": [5], "top": [5], "width": [40], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    calls = []
+
+    def fake_image_to_data(img, output_type=None):
+        calls.append(img.size)
+        return full_data
+
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_image_to_data)
+
+    from PIL import Image
+
+    img_path = tmp_path / "shot.png"
+    Image.new("RGB", (200, 200), (255, 255, 255)).save(img_path)
+
+    # Zero-area bounds (right == left, bottom == top) are degenerate -> skip.
+    elements = backend.detect_with_crop(img_path, window_bounds=(100, 100, 100, 100))
+    words = [e.text for e in elements if e.source == "ocr"]
+    assert words == ["FullScreenWord"]
+    # Only the two full-screen passes ran (normal + inverted) -- no crop call.
+    assert len(calls) == 2
+
+    calls.clear()
+    # Missing bounds must also fail closed, never raise.
+    elements = backend.detect_with_crop(img_path, window_bounds=None)
+    words = [e.text for e in elements if e.source == "ocr"]
+    assert words == ["FullScreenWord"]
+    assert len(calls) == 2
+
+
+class FakeCropOcrBackend:
+    """OCR backend exposing the additive `detect_with_crop` capability."""
+
+    def __init__(self):
+        self.detect_calls = []
+        self.crop_calls = []
+
+    def detect(self, image_path):
+        self.detect_calls.append(image_path)
+        return [Element(id="ocr-full", type="text", text="FullOnly",
+                        bounds=(0, 0, 50, 20), confidence=0.9, source="ocr")]
+
+    def detect_with_crop(self, image_path, window_bounds):
+        self.crop_calls.append((image_path, window_bounds))
+        return [
+            Element(id="ocr-full", type="text", text="FullOnly",
+                    bounds=(0, 0, 50, 20), confidence=0.9, source="ocr"),
+            Element(id="ocr-crop", type="text", text="CroppedOnly",
+                    bounds=(130, 130, 180, 150), confidence=0.8, source="ocr"),
+        ]
+
+
+def test_perceiver_uses_crop_pass_when_active_window_bounds_present(tmp_path):
+    backend = FakeCropOcrBackend()
+    obs = _obs_with_image(tmp_path)
+    obs = _with_active_window(obs, bounds=(100, 100, 200, 150))
+
+    enriched = _perceiver(backend).perceive(obs)
+
+    texts = {e.text for e in enriched.elements}
+    assert "FullOnly" in texts
+    assert "CroppedOnly" in texts
+    assert backend.crop_calls == [(Path(obs.screenshotRef), (100, 100, 200, 150))]
+    assert backend.detect_calls == []  # crop-capable backend takes the crop path
+
+
+def test_perceiver_falls_back_to_plain_detect_without_active_window(tmp_path):
+    backend = FakeCropOcrBackend()
+    obs = _obs_with_image(tmp_path)  # no activeWindow -> no bounds to crop with
+
+    enriched = _perceiver(backend).perceive(obs)
+
+    assert backend.detect_calls
+    assert backend.crop_calls == []
+    assert {e.text for e in enriched.elements} == {"FullOnly"}
+
+
+def test_perceiver_backward_compatible_with_backend_lacking_crop_support(tmp_path):
+    # A backend implementing ONLY detect() (the pre-existing protocol) must keep
+    # working unchanged even when activeWindow bounds ARE present.
+    backend = FakeOcrBackend()
+    obs = _obs_with_image(tmp_path)
+    obs = _with_active_window(obs, bounds=(10, 10, 50, 50))
+
+    enriched = _perceiver(backend).perceive(obs)
+
+    assert enriched.elements[0].text == "Submit"
+    assert backend.calls  # plain detect still invoked, no AttributeError

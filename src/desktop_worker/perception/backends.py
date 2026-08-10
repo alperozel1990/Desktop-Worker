@@ -239,6 +239,49 @@ def merge_ocr_passes(data_normal: dict[str, Any], data_inverted: dict[str, Any])
     }
 
 
+def _resolve_crop_box(
+    image_size: tuple[int, int],
+    window_bounds: tuple[int, int, int, int] | None,
+    *,
+    pad: int = 8,
+) -> tuple[int, int, int, int] | None:
+    """Pad and clamp `window_bounds` into a valid PIL crop box within `image_size`.
+
+    Returns ``None`` (never raises) when `window_bounds` is missing or
+    degenerate -- not a 4-tuple, non-numeric, zero/negative width or height,
+    or a box that clamps to zero area (e.g. bounds entirely outside the
+    screenshot) -- so the caller can fail closed and skip the crop pass.
+    """
+    if not window_bounds or len(window_bounds) != 4:
+        return None
+    try:
+        left, top, right, bottom = (int(v) for v in window_bounds)
+    except (TypeError, ValueError):
+        return None
+    if right <= left or bottom <= top:
+        return None
+    img_w, img_h = image_size
+    left = max(0, left - pad)
+    top = max(0, top - pad)
+    right = min(img_w, right + pad)
+    bottom = min(img_h, bottom + pad)
+    if right <= left or bottom <= top:
+        return None
+    return left, top, right, bottom
+
+
+def _offset_ocr_data(data: dict[str, Any], dx: int, dy: int) -> dict[str, Any]:
+    """Return a copy of `data` with `left`/`top` shifted by `(dx, dy)`.
+
+    Used to translate a crop-region OCR pass's coordinates (relative to the
+    crop) back into full-screenshot/screen coordinates before merging.
+    """
+    shifted = dict(data)
+    shifted["left"] = [int(v) + dx for v in data.get("left", [])]
+    shifted["top"] = [int(v) + dy for v in data.get("top", [])]
+    return shifted
+
+
 def _well_known_tesseract_dirs() -> list[Path]:
     """Default install locations the tesseract installer commonly writes to,
     checked when neither TESSERACT_CMD nor PATH resolve the binary.
@@ -329,8 +372,9 @@ class TesseractOcrBackend:
         pytesseract.get_tesseract_version()
         self.min_confidence = min_confidence
 
-    def detect(self, image_path: Path) -> list[Element]:
-        """Run OCR on the image AND an inverted copy, then merge the two passes.
+    @staticmethod
+    def _dual_polarity_data(img: Any) -> dict[str, Any]:
+        """Run OCR on `img` AND an inverted copy, merged via `merge_ocr_passes`.
 
         Tesseract binarizes per image, not per region: a small light-on-dark
         (or dark-on-light) island inside a screen that is mostly the opposite
@@ -345,21 +389,72 @@ class TesseractOcrBackend:
         is ever called in a tight loop.
         """
         import pytesseract
-        from PIL import Image, ImageOps
+        from PIL import ImageOps
+
+        data_normal = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+        inverted = ImageOps.invert(img.convert("RGB"))
+        data_inverted = pytesseract.image_to_data(inverted, output_type=pytesseract.Output.DICT)
+        return merge_ocr_passes(data_normal, data_inverted)
+
+    def detect(self, image_path: Path) -> list[Element]:
+        """Run the dual-polarity full-screenshot OCR pass (see `_dual_polarity_data`)."""
+        import pytesseract
+        from PIL import Image
 
         image_path = Path(image_path)
         if not image_path.exists():
             return []
         try:
             with Image.open(image_path) as img:
-                data_normal = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
-                inverted = ImageOps.invert(img.convert("RGB"))
-                data_inverted = pytesseract.image_to_data(inverted, output_type=pytesseract.Output.DICT)
+                merged = self._dual_polarity_data(img)
         except pytesseract.TesseractNotFoundError:
             # The binary disappeared after construction (PATH changed mid-session).
             # A missing OCR binary must never crash perceive — degrade to no OCR.
             return []
-        merged = merge_ocr_passes(data_normal, data_inverted)
+        return data_to_elements(merged, min_confidence=self.min_confidence)
+
+    def detect_with_crop(
+        self, image_path: Path, window_bounds: tuple[int, int, int, int] | None
+    ) -> list[Element]:
+        """Like `detect()`, but ADDITIONALLY OCRs a crop of the image at
+        `window_bounds` and merges it into the full-screenshot dual-polarity pass.
+
+        Full-page OCR drowns a small text island on a huge screen: proven live
+        on a 1920x1200 evidence screenshot where the full-screen pass found
+        NONE of a small window's text, while the SAME image cropped to that
+        window's bounds read every line verbatim -- tesseract's page
+        segmentation is tuned for page-scale layouts, not a 300x200 window on
+        a 1920x1200 canvas. Cropping to the already-known active-window bounds
+        (padded a few px, clamped to the image) recovers that text; the crop
+        pass's `left`/`top` are offset back to full-image/screen coordinates
+        before merging with `merge_ocr_passes` so bounds line up with the
+        full-screen pass and with UIA elements.
+
+        Fails closed: missing/degenerate `window_bounds`, or any error while
+        cropping or OCR-ing the crop, is swallowed and this degrades to the
+        plain `detect()` result -- a crop-pass failure must never break perceive.
+        """
+        import pytesseract
+        from PIL import Image
+
+        image_path = Path(image_path)
+        if not image_path.exists():
+            return []
+        try:
+            with Image.open(image_path) as img:
+                merged = self._dual_polarity_data(img)
+                crop_box = _resolve_crop_box(img.size, window_bounds)
+                if crop_box is not None:
+                    try:
+                        left, top, _right, _bottom = crop_box
+                        data_crop = pytesseract.image_to_data(
+                            img.crop(crop_box), output_type=pytesseract.Output.DICT
+                        )
+                        merged = merge_ocr_passes(merged, _offset_ocr_data(data_crop, left, top))
+                    except Exception:
+                        pass
+        except pytesseract.TesseractNotFoundError:
+            return []
         return data_to_elements(merged, min_confidence=self.min_confidence)
 
 

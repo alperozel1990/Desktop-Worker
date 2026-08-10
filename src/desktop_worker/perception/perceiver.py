@@ -76,7 +76,19 @@ class Perceiver:
             # The Null desktop backend writes a .txt placeholder, not a real
             # image; only OCR actual images so we never feed junk to Tesseract.
             if path.exists() and path.suffix.lower() in _IMAGE_SUFFIXES:
-                ocr_elements = list(self.ocr.detect(path))
+                window_bounds = (
+                    observation.activeWindow.bounds if observation.activeWindow else None
+                )
+                # `detect_with_crop` is an ADDITIVE capability (like the UIA
+                # backend's `detect_detailed`): only backends that support it
+                # (TesseractOcrBackend) take the crop-and-merge path, so a
+                # plain `detect(image_path)`-only backend keeps working
+                # unchanged even when activeWindow bounds are available.
+                crop_detect = getattr(self.ocr, "detect_with_crop", None)
+                if window_bounds and callable(crop_detect):
+                    ocr_elements = list(crop_detect(path, window_bounds))
+                else:
+                    ocr_elements = list(self.ocr.detect(path))
 
         if not uia_elements and not ocr_elements:
             return observation
