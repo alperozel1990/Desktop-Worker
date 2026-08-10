@@ -38,6 +38,16 @@ def data_to_elements(data: dict[str, Any], *, min_confidence: float = 0.0) -> li
     ``width``, ``height``. Blank text and entries below ``min_confidence`` (0..1)
     are dropped. Tesseract reports confidence as 0..100 (or -1 for "no text");
     we normalize to 0..1.
+
+    OCR words are single-token, so any multi-word or phrase-anchored selector
+    ('New Run', a window title, ...) can never match a word element. To make
+    those selectors matchable, surviving words are ALSO grouped by their
+    ``(block_num, par_num, line_num)`` (the line-grouping keys pytesseract
+    already reports per row) into line-level elements: text is the words
+    joined in reading order, bounds is the union of the word bounds, and
+    confidence is the mean of the word confidences. Line elements are
+    appended after the word elements (source ``"ocr-line"`` vs ``"ocr"``) so
+    callers that rely on the existing word list are unaffected.
     """
     texts = data.get("text", [])
     confs = data.get("conf", [])
@@ -45,8 +55,13 @@ def data_to_elements(data: dict[str, Any], *, min_confidence: float = 0.0) -> li
     tops = data.get("top", [])
     widths = data.get("width", [])
     heights = data.get("height", [])
+    block_nums = data.get("block_num", [])
+    par_nums = data.get("par_num", [])
+    line_nums = data.get("line_num", [])
 
     elements: list[Element] = []
+    line_order: list[tuple[int, int, int]] = []
+    line_words: dict[tuple[int, int, int], list[tuple[str, float, int, int, int, int]]] = {}
     n = min(len(texts), len(confs), len(lefts), len(tops), len(widths), len(heights))
     for i in range(n):
         text = (texts[i] or "").strip()
@@ -70,7 +85,35 @@ def data_to_elements(data: dict[str, Any], *, min_confidence: float = 0.0) -> li
             bounds=(left, top, right, bottom),
             source="ocr", confidence=round(confidence, 3),
         ))
-    return elements
+
+        # Rows missing block/par/line_num (hand-built dicts) fall back to a
+        # single shared line (0, 0, 0), so they still group deterministically.
+        line_key = (
+            int(block_nums[i]) if i < len(block_nums) else 0,
+            int(par_nums[i]) if i < len(par_nums) else 0,
+            int(line_nums[i]) if i < len(line_nums) else 0,
+        )
+        if line_key not in line_words:
+            line_words[line_key] = []
+            line_order.append(line_key)
+        line_words[line_key].append((text, confidence, left, top, right, bottom))
+
+    line_elements: list[Element] = []
+    for line_key in line_order:
+        words = line_words[line_key]
+        line_text = " ".join(w[0] for w in words)
+        line_confidence = sum(w[1] for w in words) / len(words)
+        line_left = min(w[2] for w in words)
+        line_top = min(w[3] for w in words)
+        line_right = max(w[4] for w in words)
+        line_bottom = max(w[5] for w in words)
+        line_elements.append(Element(
+            id=f"ocr-line-{len(line_elements)}", type="text", text=line_text,
+            bounds=(line_left, line_top, line_right, line_bottom),
+            source="ocr-line", confidence=round(line_confidence, 3),
+        ))
+
+    return elements + line_elements
 
 
 def _well_known_tesseract_dirs() -> list[Path]:
