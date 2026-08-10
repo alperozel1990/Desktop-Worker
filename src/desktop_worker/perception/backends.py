@@ -116,6 +116,129 @@ def data_to_elements(data: dict[str, Any], *, min_confidence: float = 0.0) -> li
     return elements + line_elements
 
 
+def _ocr_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Explode a pytesseract DICT into row dicts, index-aligned like `data_to_elements`.
+
+    Missing block/par/line_num fall back to 0, matching `data_to_elements`'s
+    single-shared-line fallback for hand-built dicts.
+    """
+    texts = data.get("text", [])
+    confs = data.get("conf", [])
+    lefts = data.get("left", [])
+    tops = data.get("top", [])
+    widths = data.get("width", [])
+    heights = data.get("height", [])
+    block_nums = data.get("block_num", [])
+    par_nums = data.get("par_num", [])
+    line_nums = data.get("line_num", [])
+    n = min(len(texts), len(confs), len(lefts), len(tops), len(widths), len(heights))
+    rows = []
+    for i in range(n):
+        rows.append({
+            "text": texts[i], "conf": confs[i],
+            "left": lefts[i], "top": tops[i], "width": widths[i], "height": heights[i],
+            "block_num": int(block_nums[i]) if i < len(block_nums) else 0,
+            "par_num": int(par_nums[i]) if i < len(par_nums) else 0,
+            "line_num": int(line_nums[i]) if i < len(line_nums) else 0,
+        })
+    return rows
+
+
+def _row_text_conf_bounds(row: dict[str, Any]) -> tuple[str, float, tuple[int, int, int, int]]:
+    text = (row["text"] or "").strip()
+    try:
+        conf = float(row["conf"])
+    except (TypeError, ValueError):
+        conf = -1.0
+    left, top = int(row["left"]), int(row["top"])
+    right, bottom = left + int(row["width"]), top + int(row["height"])
+    return text, conf, (left, top, right, bottom)
+
+
+def _bounds_overlap(
+    a: tuple[int, int, int, int], b: tuple[int, int, int, int], *,
+    iou_threshold: float = 0.3, center_distance_ratio: float = 0.5,
+) -> bool:
+    """True if two boxes are "the same word" spatially: IoU above threshold, OR
+    (fallback, for slightly mismatched OCR boxes around the same glyphs) their
+    centers are close relative to the larger box's size."""
+    ax0, ay0, ax1, ay1 = a
+    bx0, by0, bx1, by1 = b
+    inter_w = max(0, min(ax1, bx1) - max(ax0, bx0))
+    inter_h = max(0, min(ay1, by1) - max(ay0, by0))
+    inter_area = inter_w * inter_h
+    area_a = max(0, ax1 - ax0) * max(0, ay1 - ay0)
+    area_b = max(0, bx1 - bx0) * max(0, by1 - by0)
+    union = area_a + area_b - inter_area
+    if union > 0 and inter_area / union >= iou_threshold:
+        return True
+    ax_c, ay_c = (ax0 + ax1) / 2, (ay0 + ay1) / 2
+    bx_c, by_c = (bx0 + bx1) / 2, (by0 + by1) / 2
+    dist = ((ax_c - bx_c) ** 2 + (ay_c - by_c) ** 2) ** 0.5
+    max_dim = max(ax1 - ax0, ay1 - ay0, bx1 - bx0, by1 - by0, 1)
+    return dist <= max_dim * center_distance_ratio
+
+
+def merge_ocr_passes(data_normal: dict[str, Any], data_inverted: dict[str, Any]) -> dict[str, Any]:
+    """Merge a normal-polarity and an inverted-polarity `image_to_data` DICT.
+
+    A word from the inverted pass is dropped as a duplicate of a normal-pass
+    word when both are non-blank, case-insensitively equal text AND spatially
+    overlapping (`_bounds_overlap`); the lower-confidence side of the pair is
+    dropped, the other kept as-is. Everything else from both passes survives
+    untouched. The inverted pass's `block_num` is offset past the normal
+    pass's range first, so `data_to_elements`'s (block, par, line) line
+    grouping never accidentally fuses a normal-pass line with an
+    inverted-pass line that happens to share the same raw numbering.
+
+    When one pass is empty (e.g. hand-built single-polarity test dicts, or a
+    real pass that found nothing), the merge is a no-op that reproduces the
+    other pass's rows unchanged -- single-polarity callers see no behavior
+    change.
+    """
+    rows_a = _ocr_rows(data_normal)
+    rows_b = _ocr_rows(data_inverted)
+
+    block_offset = max((r["block_num"] for r in rows_a), default=-1) + 1
+    for row in rows_b:
+        row["block_num"] += block_offset
+
+    infos_a = [_row_text_conf_bounds(r) for r in rows_a]
+    dropped_a: set[int] = set()
+    kept_b: list[dict[str, Any]] = []
+    for row_b in rows_b:
+        text_b, conf_b, bounds_b = _row_text_conf_bounds(row_b)
+        dup_index = None
+        if text_b:
+            for idx, (text_a, _conf_a, bounds_a) in enumerate(infos_a):
+                if idx in dropped_a or not text_a or text_a.lower() != text_b.lower():
+                    continue
+                if _bounds_overlap(bounds_a, bounds_b):
+                    dup_index = idx
+                    break
+        if dup_index is None:
+            kept_b.append(row_b)
+            continue
+        conf_a = infos_a[dup_index][1]
+        if conf_b > conf_a:
+            dropped_a.add(dup_index)
+            kept_b.append(row_b)
+        # else: pass A's row wins and is kept below; this pass B row is dropped.
+
+    merged_rows = [r for i, r in enumerate(rows_a) if i not in dropped_a] + kept_b
+    return {
+        "text": [r["text"] for r in merged_rows],
+        "conf": [r["conf"] for r in merged_rows],
+        "left": [r["left"] for r in merged_rows],
+        "top": [r["top"] for r in merged_rows],
+        "width": [r["width"] for r in merged_rows],
+        "height": [r["height"] for r in merged_rows],
+        "block_num": [r["block_num"] for r in merged_rows],
+        "par_num": [r["par_num"] for r in merged_rows],
+        "line_num": [r["line_num"] for r in merged_rows],
+    }
+
+
 def _well_known_tesseract_dirs() -> list[Path]:
     """Default install locations the tesseract installer commonly writes to,
     checked when neither TESSERACT_CMD nor PATH resolve the binary.
@@ -207,20 +330,37 @@ class TesseractOcrBackend:
         self.min_confidence = min_confidence
 
     def detect(self, image_path: Path) -> list[Element]:
+        """Run OCR on the image AND an inverted copy, then merge the two passes.
+
+        Tesseract binarizes per image, not per region: a small light-on-dark
+        (or dark-on-light) island inside a screen that is mostly the opposite
+        polarity is often read as noise and dropped entirely, even though it
+        is clearly legible (proven live: a light tkinter window on a dark
+        terminal returned zero words from inside the window). Running a
+        second pass on `ImageOps.invert`-ed RGB recovers those words;
+        `merge_ocr_passes` dedupes anything both passes already agree on.
+        This roughly DOUBLES OCR cost per screenshot (two full
+        `image_to_data` calls) -- acceptable here since perceive already
+        pays for a screenshot + UIA walk, but worth knowing if this backend
+        is ever called in a tight loop.
+        """
         import pytesseract
-        from PIL import Image
+        from PIL import Image, ImageOps
 
         image_path = Path(image_path)
         if not image_path.exists():
             return []
         try:
             with Image.open(image_path) as img:
-                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+                data_normal = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+                inverted = ImageOps.invert(img.convert("RGB"))
+                data_inverted = pytesseract.image_to_data(inverted, output_type=pytesseract.Output.DICT)
         except pytesseract.TesseractNotFoundError:
             # The binary disappeared after construction (PATH changed mid-session).
             # A missing OCR binary must never crash perceive — degrade to no OCR.
             return []
-        return data_to_elements(data, min_confidence=self.min_confidence)
+        merged = merge_ocr_passes(data_normal, data_inverted)
+        return data_to_elements(merged, min_confidence=self.min_confidence)
 
 
 def get_ocr_backend(prefer_real: bool = True) -> OcrBackend:

@@ -1,5 +1,7 @@
 """DW-PERCEPTION-OCR — structured OCR elements + observation enrichment (req §7)."""
 
+import pytest
+
 from desktop_worker.observation.backends import NullDesktopBackend
 from desktop_worker.observation.observer import Observer
 from desktop_worker.perception import (
@@ -9,6 +11,7 @@ from desktop_worker.perception import (
     data_to_elements,
     get_ocr_backend,
 )
+from desktop_worker.perception.backends import merge_ocr_passes
 from desktop_worker.schema.observations import Cursor, Element, Observation, Screen
 
 
@@ -185,3 +188,178 @@ def test_data_to_elements_separates_distinct_lines_and_blocks():
 
 def test_data_to_elements_empty_dict_is_safe():
     assert data_to_elements({}) == []
+
+
+# --- dual-polarity OCR merge (UQC-OCR-dualpol) ------------------------------
+#
+# Tesseract binarizes per image, not per region: a small light-on-dark (or
+# dark-on-light) island inside a screen that is mostly the opposite polarity
+# is often read as noise and dropped entirely -- proven live on a light
+# tkinter window sitting on a dark terminal: zero words came back from
+# inside the clearly-legible window. TesseractOcrBackend.detect now runs a
+# second OCR pass on an inverted copy and merges it in via merge_ocr_passes.
+
+
+def test_merge_ocr_passes_keeps_both_polarities_words_exactly_once():
+    data_normal = {
+        "text": ["TerminalWord"], "conf": ["90"],
+        "left": [0], "top": [0], "width": [80], "height": [20],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    data_inverted = {
+        "text": ["WindowWord"], "conf": ["88"],
+        "left": [200], "top": [200], "width": [80], "height": [20],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    merged = merge_ocr_passes(data_normal, data_inverted)
+    words = [e for e in data_to_elements(merged) if e.source == "ocr"]
+    assert sorted(e.text for e in words) == ["TerminalWord", "WindowWord"]
+    assert len(words) == 2  # each polarity's word survives exactly once
+
+
+def test_merge_ocr_passes_dedupes_overlapping_same_text_keeps_higher_confidence():
+    data_normal = {
+        "text": ["Submit"], "conf": ["40"],  # low-confidence normal-pass read
+        "left": [10], "top": [10], "width": [60], "height": [20],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    data_inverted = {
+        "text": ["submit"], "conf": ["93"],  # same word/spot, case differs, higher conf
+        "left": [11], "top": [10], "width": [60], "height": [20],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    merged = merge_ocr_passes(data_normal, data_inverted)
+    words = [e for e in data_to_elements(merged) if e.source == "ocr"]
+    assert len(words) == 1  # duplicate collapsed, not two entries
+    assert words[0].text.lower() == "submit"
+    assert words[0].confidence == 0.93  # the higher-confidence side wins
+
+
+def test_merge_ocr_passes_non_overlapping_same_text_are_not_deduped():
+    # Same word text appearing twice on screen at different locations must
+    # NOT be collapsed into one -- dedupe is text AND spatial overlap.
+    data_normal = {
+        "text": ["OK"], "conf": ["90"],
+        "left": [0], "top": [0], "width": [20], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    data_inverted = {
+        "text": ["OK"], "conf": ["85"],
+        "left": [500], "top": [500], "width": [20], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    merged = merge_ocr_passes(data_normal, data_inverted)
+    words = [e for e in data_to_elements(merged) if e.source == "ocr"]
+    assert len(words) == 2
+
+
+def test_merge_ocr_passes_one_empty_pass_leaves_the_other_unchanged():
+    data_normal = {
+        "text": ["New", "Run"], "conf": ["90", "80"],
+        "left": [10, 60], "top": [20, 22], "width": [40, 30], "height": [15, 18],
+        "block_num": [1, 1], "par_num": [1, 1], "line_num": [1, 1],
+    }
+    baseline = data_to_elements(data_normal)
+
+    merged_vs_empty_dict = merge_ocr_passes(data_normal, {})
+    assert data_to_elements(merged_vs_empty_dict) == baseline
+
+    empty_words = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+    merged_vs_empty_words = merge_ocr_passes(data_normal, empty_words)
+    assert data_to_elements(merged_vs_empty_words) == baseline
+
+    # symmetric: normal pass empty, inverted pass carries the words
+    merged_reversed = merge_ocr_passes({}, data_normal)
+    assert data_to_elements(merged_reversed) == baseline
+
+
+def test_merge_ocr_passes_offsets_block_num_to_avoid_cross_pass_line_fusion():
+    # Both passes independently report (block=1, par=1, line=1); without an
+    # offset the two unrelated lines would wrongly fuse into one line element.
+    data_normal = {
+        "text": ["Alpha"], "conf": ["90"],
+        "left": [0], "top": [0], "width": [40], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    data_inverted = {
+        "text": ["Beta"], "conf": ["90"],
+        "left": [500], "top": [500], "width": [40], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    merged = merge_ocr_passes(data_normal, data_inverted)
+    lines = [e for e in data_to_elements(merged) if e.source == "ocr-line"]
+    assert sorted(e.text for e in lines) == ["Alpha", "Beta"]  # two distinct lines, not fused
+
+
+def _solid_image_path(tmp_path, color):
+    from PIL import Image
+
+    img = tmp_path / f"shot_{'-'.join(str(c) for c in color)}.png"
+    Image.new("RGB", (40, 40), color).save(img)
+    return img
+
+
+def test_detect_merges_normal_and_inverted_polarity_passes(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend()
+
+    data_normal_polarity = {
+        "text": ["TerminalWord"], "conf": ["90"],
+        "left": [0], "top": [0], "width": [80], "height": [20],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+    data_inverted_polarity = {
+        "text": ["WindowWord"], "conf": ["88"],
+        "left": [5], "top": [5], "width": [30], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+
+    def fake_image_to_data(img, output_type=None):
+        # detect() calls image_to_data once on the original image and once on
+        # ImageOps.invert(img.convert("RGB")) -- distinguish passes by pixel color,
+        # exactly like a real light-window-on-dark-terminal screenshot would differ.
+        pixel = img.convert("RGB").getpixel((0, 0))
+        return data_normal_polarity if pixel == (255, 255, 255) else data_inverted_polarity
+
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_image_to_data)
+
+    img_path = _solid_image_path(tmp_path, (255, 255, 255))
+    elements = backend.detect(img_path)
+    words = [e for e in elements if e.source == "ocr"]
+    assert sorted(e.text for e in words) == ["TerminalWord", "WindowWord"]
+
+
+def test_detect_single_polarity_behavior_is_unchanged(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend()
+
+    data_normal_polarity = {
+        "text": ["Only"], "conf": ["77"],
+        "left": [1], "top": [1], "width": [30], "height": [10],
+        "block_num": [1], "par_num": [1], "line_num": [1],
+    }
+
+    def fake_image_to_data(img, output_type=None):
+        pixel = img.convert("RGB").getpixel((0, 0))
+        return data_normal_polarity if pixel == (255, 255, 255) else {}
+
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_image_to_data)
+
+    img_path = _solid_image_path(tmp_path, (255, 255, 255))
+    elements = backend.detect(img_path)
+    words = [e for e in elements if e.source == "ocr"]
+    assert [e.text for e in words] == ["Only"]
+    assert words[0].confidence == 0.77
+    assert words[0].bounds == (1, 1, 31, 11)
