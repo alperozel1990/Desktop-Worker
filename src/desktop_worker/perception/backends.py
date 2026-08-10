@@ -282,6 +282,51 @@ def _offset_ocr_data(data: dict[str, Any], dx: int, dy: int) -> dict[str, Any]:
     return shifted
 
 
+DEFAULT_SPARSE_THRESHOLD = 20
+DEFAULT_TILE_GRID: tuple[int, int] = (3, 2)
+DEFAULT_TILE_OVERLAP = 0.1
+
+
+def _tile_boxes(
+    image_size: tuple[int, int],
+    *,
+    grid: tuple[int, int] = DEFAULT_TILE_GRID,
+    overlap: float = DEFAULT_TILE_OVERLAP,
+) -> list[tuple[int, int, int, int]]:
+    """Compute a grid of overlapping tile boxes covering `image_size`.
+
+    `grid` is `(cols, rows)`. Each cell of the base grid is expanded by
+    `overlap` (a fraction of that cell's own width/height) on every side,
+    then clamped into the image -- so tiles bordering the same seam share a
+    strip of pixels wide enough that a word straddling the base grid line
+    lands whole inside at least one tile. Boxes are returned row-major
+    (all of row 0 left-to-right, then row 1, ...).
+
+    Returns an empty list for a degenerate `image_size` or `grid` (<=0 in
+    any dimension) so callers can skip the pass rather than OCR-ing
+    zero-area crops.
+    """
+    img_w, img_h = image_size
+    cols, rows = grid
+    if img_w <= 0 or img_h <= 0 or cols <= 0 or rows <= 0:
+        return []
+    base_w = img_w / cols
+    base_h = img_h / rows
+    pad_w = base_w * overlap
+    pad_h = base_h * overlap
+    boxes: list[tuple[int, int, int, int]] = []
+    for r in range(rows):
+        for c in range(cols):
+            left = max(0, c * base_w - pad_w)
+            top = max(0, r * base_h - pad_h)
+            right = min(img_w, (c + 1) * base_w + pad_w)
+            bottom = min(img_h, (r + 1) * base_h + pad_h)
+            box = (int(left), int(top), int(right), int(bottom))
+            if box[2] > box[0] and box[3] > box[1]:
+                boxes.append(box)
+    return boxes
+
+
 def _well_known_tesseract_dirs() -> list[Path]:
     """Default install locations the tesseract installer commonly writes to,
     checked when neither TESSERACT_CMD nor PATH resolve the binary.
@@ -359,7 +404,14 @@ class TesseractOcrBackend:
     crash the whole perceive — turning a degraded read into a hard failure.
     """
 
-    def __init__(self, *, min_confidence: float = 0.3) -> None:
+    def __init__(
+        self,
+        *,
+        min_confidence: float = 0.3,
+        sparse_threshold: int = DEFAULT_SPARSE_THRESHOLD,
+        tile_grid: tuple[int, int] = DEFAULT_TILE_GRID,
+        tile_overlap: float = DEFAULT_TILE_OVERLAP,
+    ) -> None:
         import pytesseract
         from PIL import Image  # noqa: F401
 
@@ -371,6 +423,9 @@ class TesseractOcrBackend:
         # can fall back to Null and perception keeps working, just thinner.
         pytesseract.get_tesseract_version()
         self.min_confidence = min_confidence
+        self.sparse_threshold = sparse_threshold
+        self.tile_grid = tile_grid
+        self.tile_overlap = tile_overlap
 
     @staticmethod
     def _dual_polarity_data(img: Any) -> dict[str, Any]:
@@ -396,8 +451,60 @@ class TesseractOcrBackend:
         data_inverted = pytesseract.image_to_data(inverted, output_type=pytesseract.Output.DICT)
         return merge_ocr_passes(data_normal, data_inverted)
 
+    def _tiled_data(self, img: Any) -> dict[str, Any]:
+        """Run the dual-polarity pass on each tile of an overlapping grid over `img`.
+
+        Tesseract's page segmentation is tuned for page-scale layouts: on a
+        sparse fullscreen UI (mostly one flat color, a few small text
+        islands) it under-segments and drops legible text that a smaller
+        crop would read cleanly -- proven live on a 1920x1200 dark game
+        screen where two large, clearly-legible buttons were missed by both
+        the full-screen pass and a crop of the (identical, fullscreen)
+        active window. Splitting into overlapping tiles gives each text
+        island a page-scale-relative context small enough to segment
+        correctly. Each tile reuses `_dual_polarity_data` (normal + inverted)
+        so a light-on-dark button inside a tile still gets both polarities.
+        Tile results are merged pairwise via `merge_ocr_passes`, which both
+        offsets away any (block, par, line) collisions between tiles AND
+        dedupes words that land in more than one tile's overlap region
+        (keeping the higher-confidence read). A tile whose OCR call raises
+        is skipped -- one bad crop must never blank out the whole pass.
+        """
+        merged_tiles: dict[str, Any] = {
+            "text": [], "conf": [], "left": [], "top": [], "width": [], "height": [],
+            "block_num": [], "par_num": [], "line_num": [],
+        }
+        for left, top, right, bottom in _tile_boxes(
+            img.size, grid=self.tile_grid, overlap=self.tile_overlap
+        ):
+            try:
+                tile_data = self._dual_polarity_data(img.crop((left, top, right, bottom)))
+            except Exception:
+                continue
+            merged_tiles = merge_ocr_passes(merged_tiles, _offset_ocr_data(tile_data, left, top))
+        return merged_tiles
+
+    def _maybe_add_tile_pass(self, img: Any, merged: dict[str, Any]) -> dict[str, Any]:
+        """Add the tiled OCR pass to `merged` ONLY when `merged` is sparse.
+
+        Gates the (expensive: grid-size many dual-polarity calls) tile pass
+        behind `sparse_threshold` OCR words -- a dense screen already reads
+        fine at full-image scale, so tiling it would just burn OCR calls for
+        no new elements. Fails closed: any error running the tile pass
+        leaves `merged` untouched rather than raising.
+        """
+        word_count = len(data_to_elements(merged, min_confidence=self.min_confidence))
+        if word_count >= self.sparse_threshold:
+            return merged
+        try:
+            tile_data = self._tiled_data(img)
+        except Exception:
+            return merged
+        return merge_ocr_passes(merged, tile_data)
+
     def detect(self, image_path: Path) -> list[Element]:
-        """Run the dual-polarity full-screenshot OCR pass (see `_dual_polarity_data`)."""
+        """Run the dual-polarity full-screenshot OCR pass (see `_dual_polarity_data`),
+        then the tiled pass (see `_maybe_add_tile_pass`) when that pass is sparse."""
         import pytesseract
         from PIL import Image
 
@@ -407,6 +514,7 @@ class TesseractOcrBackend:
         try:
             with Image.open(image_path) as img:
                 merged = self._dual_polarity_data(img)
+                merged = self._maybe_add_tile_pass(img, merged)
         except pytesseract.TesseractNotFoundError:
             # The binary disappeared after construction (PATH changed mid-session).
             # A missing OCR binary must never crash perceive — degrade to no OCR.
@@ -433,6 +541,12 @@ class TesseractOcrBackend:
         Fails closed: missing/degenerate `window_bounds`, or any error while
         cropping or OCR-ing the crop, is swallowed and this degrades to the
         plain `detect()` result -- a crop-pass failure must never break perceive.
+
+        The tiled pass (see `_maybe_add_tile_pass`) also applies here, gated
+        on the result AFTER the crop merge: when the active window IS the
+        full screen (a fullscreen game/app), the crop pass covers the same
+        pixels as the full-image pass and adds nothing, so the tiled pass is
+        exactly what recovers a sparse fullscreen UI's missed text.
         """
         import pytesseract
         from PIL import Image
@@ -453,6 +567,7 @@ class TesseractOcrBackend:
                         merged = merge_ocr_passes(merged, _offset_ocr_data(data_crop, left, top))
                     except Exception:
                         pass
+                merged = self._maybe_add_tile_pass(img, merged)
         except pytesseract.TesseractNotFoundError:
             return []
         return data_to_elements(merged, min_confidence=self.min_confidence)

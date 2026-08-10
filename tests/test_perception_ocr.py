@@ -316,7 +316,9 @@ def test_detect_merges_normal_and_inverted_polarity_passes(tmp_path, monkeypatch
     from desktop_worker.perception.backends import TesseractOcrBackend
 
     monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
-    backend = TesseractOcrBackend()
+    # sparse_threshold=0 disables the tiled pass (tested separately below) so
+    # this test's polarity-only fake isn't also asked to answer for tile crops.
+    backend = TesseractOcrBackend(sparse_threshold=0)
 
     data_normal_polarity = {
         "text": ["TerminalWord"], "conf": ["90"],
@@ -352,7 +354,9 @@ def test_detect_single_polarity_behavior_is_unchanged(tmp_path, monkeypatch):
     from desktop_worker.perception.backends import TesseractOcrBackend
 
     monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
-    backend = TesseractOcrBackend()
+    # sparse_threshold=0 disables the tiled pass (tested separately below) so
+    # this test's polarity-only fake isn't also asked to answer for tile crops.
+    backend = TesseractOcrBackend(sparse_threshold=0)
 
     data_normal_polarity = {
         "text": ["Only"], "conf": ["77"],
@@ -392,7 +396,9 @@ def test_detect_with_crop_merges_full_and_crop_passes_with_screen_offset(tmp_pat
     from desktop_worker.perception.backends import TesseractOcrBackend
 
     monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
-    backend = TesseractOcrBackend()
+    # sparse_threshold=0 disables the tiled pass (tested separately below) so
+    # this test's size-keyed fake isn't also asked to answer for tile crops.
+    backend = TesseractOcrBackend(sparse_threshold=0)
 
     full_data = {
         "text": ["FullScreenWord"], "conf": ["90"],
@@ -442,7 +448,9 @@ def test_detect_with_crop_skips_degenerate_bounds_fail_closed(tmp_path, monkeypa
     from desktop_worker.perception.backends import TesseractOcrBackend
 
     monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
-    backend = TesseractOcrBackend()
+    # sparse_threshold=0 disables the tiled pass (tested separately below) so
+    # `calls` only reflects the full-screen + crop passes this test targets.
+    backend = TesseractOcrBackend(sparse_threshold=0)
 
     full_data = {
         "text": ["FullScreenWord"], "conf": ["90"],
@@ -535,3 +543,229 @@ def test_perceiver_backward_compatible_with_backend_lacking_crop_support(tmp_pat
 
     assert enriched.elements[0].text == "Submit"
     assert backend.calls  # plain detect still invoked, no AttributeError
+
+
+# --- tiled OCR pass for sparse fullscreen UIs (UQC-OCR-tiles) ---------------
+#
+# Proven live on the DiceNDecks home screen (1920x1200, mostly dark): the
+# full-screen pass AND the active-window crop pass (identical to full-screen,
+# since the window IS the screen) both missed two large, clearly-legible
+# buttons. Tesseract's page segmentation assumes page-scale layouts and
+# under-segments a screen that is mostly flat color with a few small text
+# islands. TesseractOcrBackend now runs a GENERIC overlapping tile grid pass
+# -- reusing the existing dual-polarity-per-tile primitive -- gated behind a
+# sparse_threshold so dense screens (which already read fine) skip the extra
+# cost.
+
+
+def test_tile_boxes_covers_image_with_overlapping_seams():
+    from desktop_worker.perception.backends import _tile_boxes
+
+    boxes = _tile_boxes((300, 200), grid=(3, 2), overlap=0.1)
+    assert len(boxes) == 6
+    assert min(b[0] for b in boxes) == 0
+    assert max(b[2] for b in boxes) == 300
+    assert min(b[1] for b in boxes) == 0
+    assert max(b[3] for b in boxes) == 200
+    # adjacent tiles in row 0 share a strip of pixels (right edge of the left
+    # tile lands past the left edge of its neighbour) -- proves the overlap.
+    row0 = sorted((b for b in boxes if b[1] == 0), key=lambda b: b[0])
+    assert row0[0][2] > row0[1][0]
+
+
+def test_tile_boxes_degenerate_image_size_returns_no_tiles():
+    from desktop_worker.perception.backends import _tile_boxes
+
+    assert _tile_boxes((0, 200), grid=(3, 2), overlap=0.1) == []
+    assert _tile_boxes((300, 0), grid=(3, 2), overlap=0.1) == []
+
+
+def test_tesseract_backend_default_sparse_threshold_is_20(monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import (
+        DEFAULT_SPARSE_THRESHOLD,
+        TesseractOcrBackend,
+    )
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend()
+    assert DEFAULT_SPARSE_THRESHOLD == 20
+    assert backend.sparse_threshold == 20
+
+
+def test_tesseract_tiled_pass_offsets_tile_words_to_screen_coordinates(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend, _tile_boxes
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    # sparse_threshold=5 so a fake full-image pass returning 0 words is sparse.
+    backend = TesseractOcrBackend(sparse_threshold=5, tile_grid=(3, 2), tile_overlap=0.1)
+
+    from PIL import Image
+
+    img_path = tmp_path / "shot.png"
+    Image.new("RGB", (303, 204), (255, 255, 255)).save(img_path)
+
+    boxes = _tile_boxes((303, 204), grid=(3, 2), overlap=0.1)
+    sizes = [(b[2] - b[0], b[3] - b[1]) for b in boxes]
+    target_box = boxes[4]
+    target_size = sizes[4]
+    assert sizes.count(target_size) == 1  # size alone identifies this tile
+
+    empty = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+
+    def fake_dual_polarity(img):
+        # Reuses (and proves reuse of) the existing dual-polarity primitive:
+        # detect() calls it once for the full image, then once per tile crop.
+        if img.size == target_size:
+            return {
+                "text": ["TileWord"], "conf": ["91"],
+                "left": [4], "top": [6], "width": [50], "height": [15],
+                "block_num": [1], "par_num": [1], "line_num": [1],
+            }
+        return empty
+
+    monkeypatch.setattr(TesseractOcrBackend, "_dual_polarity_data", staticmethod(fake_dual_polarity))
+
+    elements = backend.detect(img_path)
+    words = {e.text: e for e in elements if e.source == "ocr"}
+    assert "TileWord" in words
+    left, top = target_box[0], target_box[1]
+    # the tile-local (4, 6) offset by the tile's own screen-space origin.
+    assert words["TileWord"].bounds == (left + 4, top + 6, left + 4 + 50, top + 6 + 15)
+
+
+def test_tesseract_tiled_pass_dedupes_word_seen_in_two_overlapping_tiles(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend, _tile_boxes
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend(sparse_threshold=5, tile_grid=(3, 2), tile_overlap=0.1)
+
+    from PIL import Image
+
+    img_path = tmp_path / "shot.png"
+    Image.new("RGB", (303, 204), (255, 255, 255)).save(img_path)
+
+    boxes = _tile_boxes((303, 204), grid=(3, 2), overlap=0.1)
+    box_a, box_b = boxes[0], boxes[1]  # adjacent tiles in row 0 -- their seam overlaps
+    size_a = (box_a[2] - box_a[0], box_a[3] - box_a[1])
+    size_b = (box_b[2] - box_b[0], box_b[3] - box_b[1])
+    assert size_a != size_b  # distinguishable by size in the fake below
+
+    overlap_left, overlap_right = box_b[0], box_a[2]
+    assert overlap_right - overlap_left >= 18  # word fits inside the shared strip
+    word_left, word_top, word_w, word_h = overlap_left + 2, box_a[1] + 5, 15, 8
+
+    empty = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+
+    def fake_dual_polarity(img):
+        if img.size == size_a:
+            local_left, local_top = word_left - box_a[0], word_top - box_a[1]
+            return {
+                "text": ["OverlapWord"], "conf": ["80"],  # lower-confidence read
+                "left": [local_left], "top": [local_top], "width": [word_w], "height": [word_h],
+                "block_num": [1], "par_num": [1], "line_num": [1],
+            }
+        if img.size == size_b:
+            local_left, local_top = word_left - box_b[0], word_top - box_b[1]
+            return {
+                "text": ["OverlapWord"], "conf": ["95"],  # higher-confidence read, same word
+                "left": [local_left], "top": [local_top], "width": [word_w], "height": [word_h],
+                "block_num": [1], "par_num": [1], "line_num": [1],
+            }
+        return empty
+
+    monkeypatch.setattr(TesseractOcrBackend, "_dual_polarity_data", staticmethod(fake_dual_polarity))
+
+    elements = backend.detect(img_path)
+    words = [e for e in elements if e.source == "ocr" and e.text == "OverlapWord"]
+    assert len(words) == 1  # the two tiles' reads of the same word collapse to one
+    assert words[0].confidence == 0.95  # higher-confidence tile's read wins
+    assert words[0].bounds == (word_left, word_top, word_left + word_w, word_top + word_h)
+
+
+def test_tesseract_tiled_pass_skipped_when_full_pass_is_dense(tmp_path, monkeypatch):
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend(sparse_threshold=3, tile_grid=(3, 2), tile_overlap=0.1)
+
+    from PIL import Image
+
+    img_path = tmp_path / "shot.png"
+    Image.new("RGB", (303, 204), (255, 255, 255)).save(img_path)
+
+    calls = []
+    dense_data = {
+        "text": ["One", "Two", "Three"], "conf": ["90", "90", "90"],
+        "left": [0, 40, 80], "top": [0, 0, 0], "width": [30, 30, 30], "height": [10, 10, 10],
+        "block_num": [1, 1, 1], "par_num": [1, 1, 1], "line_num": [1, 1, 1],
+    }
+
+    def fake_dual_polarity(img):
+        calls.append(img.size)
+        return dense_data
+
+    monkeypatch.setattr(TesseractOcrBackend, "_dual_polarity_data", staticmethod(fake_dual_polarity))
+
+    elements = backend.detect(img_path)
+    words = [e for e in elements if e.source == "ocr"]
+    assert len(words) == 3  # 3 words >= sparse_threshold=3 -> dense, tiling skipped
+    assert calls == [(303, 204)]  # only the single full-image call ran, no tile crops
+
+
+def test_tesseract_tiled_pass_runs_on_crop_path_when_crop_merge_is_still_sparse(tmp_path, monkeypatch):
+    # The live failure this closes: a fullscreen game's active window IS the
+    # full screen, so detect_with_crop's crop pass covers identical pixels
+    # and adds nothing -- the tiled pass must still fire off the sparse
+    # full+crop merge to recover the missed text.
+    pytest.importorskip("pytesseract")
+    pytest.importorskip("PIL")
+    import pytesseract
+
+    from desktop_worker.perception.backends import TesseractOcrBackend, _tile_boxes
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", lambda *a, **k: "5.4.0")
+    backend = TesseractOcrBackend(sparse_threshold=5, tile_grid=(3, 2), tile_overlap=0.1)
+
+    from PIL import Image
+
+    img_path = tmp_path / "shot.png"
+    Image.new("RGB", (303, 204), (255, 255, 255)).save(img_path)
+
+    boxes = _tile_boxes((303, 204), grid=(3, 2), overlap=0.1)
+    target_box = boxes[3]
+    target_size = (target_box[2] - target_box[0], target_box[3] - target_box[1])
+    empty = {"text": [], "conf": [], "left": [], "top": [], "width": [], "height": []}
+
+    def fake_dual_polarity(img):
+        if img.size == target_size:
+            return {
+                "text": ["TileOnly"], "conf": ["90"],
+                "left": [2], "top": [2], "width": [40], "height": [12],
+                "block_num": [1], "par_num": [1], "line_num": [1],
+            }
+        return empty
+
+    monkeypatch.setattr(TesseractOcrBackend, "_dual_polarity_data", staticmethod(fake_dual_polarity))
+    # window_bounds == the whole image, like a fullscreen app's active window;
+    # image_to_data is only used for the (identical-to-full) crop pass here.
+    monkeypatch.setattr(pytesseract, "image_to_data", lambda img, output_type=None: dict(empty))
+
+    elements = backend.detect_with_crop(img_path, window_bounds=(0, 0, 303, 204))
+    words = [e.text for e in elements if e.source == "ocr"]
+    assert "TileOnly" in words
