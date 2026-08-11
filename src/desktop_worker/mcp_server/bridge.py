@@ -460,6 +460,16 @@ class AgentBridge:
     def status(self) -> dict:
         from desktop_worker.perception import ocr_status
 
+        # Surfaced so a caller can see, before trusting mouse.move coordinates,
+        # that this process is actually per-monitor DPI aware rather than
+        # DPI-virtualized (DW-DPI-aware) — the desktop and input backends each
+        # decide/cache this independently (whichever constructs first), but
+        # both resolve to the same process-wide result.
+        dpi_awareness = (
+            getattr(self.session.desktop_backend, "dpi_awareness", None)
+            or getattr(self.session.input_backend, "dpi_awareness", None)
+            or "not_applicable"
+        )
         return {
             "ok": True,
             "backends": self.session.backend_names(),
@@ -469,6 +479,7 @@ class AgentBridge:
             # Surfaced so an agent can see, before it trusts a thin perceive, that
             # OCR is off — on OCR-heavy apps that means a silent undercount.
             "ocr": ocr_status(),
+            "dpiAwareness": dpi_awareness,
         }
 
     def emergency_stop(self, reason: str = "stop via MCP") -> dict:

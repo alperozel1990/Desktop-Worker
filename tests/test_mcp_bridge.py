@@ -584,6 +584,31 @@ def test_status_reports_ocr_health(tmp_path):
     assert set(st["ocr"]) == {"available", "backend", "version", "missing", "reason"}
 
 
+# --- DW-DPI-aware: status surfaces the achieved process DPI awareness -------
+
+
+def test_status_reports_dpi_awareness_not_applicable_for_null_backends(tmp_path):
+    """Null backends (no real Windows APIs) have nothing to report — honest,
+    not a fabricated awareness level."""
+    bridge, _ = _bridge(tmp_path)
+    st = bridge.status()
+    assert st["dpiAwareness"] == "not_applicable"
+
+
+def test_status_reports_dpi_awareness_from_desktop_backend(tmp_path):
+    bridge, session = _bridge(tmp_path)
+    session.desktop_backend.dpi_awareness = "per_monitor_v2"
+    st = bridge.status()
+    assert st["dpiAwareness"] == "per_monitor_v2"
+
+
+def test_status_falls_back_to_input_backend_dpi_awareness(tmp_path):
+    bridge, session = _bridge(tmp_path)
+    session.input_backend.dpi_awareness = "system"
+    st = bridge.status()
+    assert st["dpiAwareness"] == "system"
+
+
 def test_perceive_warns_when_ocr_absent_and_no_ocr_elements(tmp_path, monkeypatch):
     """A UIA-only read on a real screenshot, with OCR unavailable, is exactly the
     silent-undercount case (KiCad: 46 vs 193)."""

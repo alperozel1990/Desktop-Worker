@@ -110,6 +110,14 @@ class WindowsInputBackend:
 
         if not sys.platform.startswith("win"):
             raise RuntimeError("WindowsInputBackend requires Windows")
+        # Decide process DPI awareness FIRST, before SetCursorPos/SendInput or any
+        # other Win32 API is touched — see dpi_awareness.py. This backend is the
+        # one that actually calls SetCursorPos/SendInput, so it must not rely on
+        # some other backend (e.g. a screenshot) having run first to get physical
+        # coordinates.
+        from desktop_worker.dpi_awareness import set_process_dpi_awareness
+
+        self.dpi_awareness = set_process_dpi_awareness()
         import ctypes
 
         self.ctypes = ctypes

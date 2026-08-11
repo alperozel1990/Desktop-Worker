@@ -26,6 +26,12 @@ class WindowsDesktopBackend:
 
         if not sys.platform.startswith("win"):
             raise RuntimeError("WindowsDesktopBackend requires Windows")
+        # Decide process DPI awareness FIRST, before any other Win32 API (incl.
+        # the ctypes probe below) is touched — see dpi_awareness.py for why this
+        # must happen deterministically at construction rather than lazily.
+        from desktop_worker.dpi_awareness import set_process_dpi_awareness
+
+        self.dpi_awareness = set_process_dpi_awareness()
         # Probe imports eagerly so the factory can fall back if missing.
         import ctypes  # noqa: F401
 
@@ -38,10 +44,6 @@ class WindowsDesktopBackend:
     # --- screen --------------------------------------------------------
     def screen(self) -> Screen:
         user32 = self._ctypes.windll.user32
-        try:
-            user32.SetProcessDPIAware()
-        except Exception:
-            pass
         width = user32.GetSystemMetrics(0)
         height = user32.GetSystemMetrics(1)
         return Screen(width=int(width), height=int(height), scaleFactor=1.0)
